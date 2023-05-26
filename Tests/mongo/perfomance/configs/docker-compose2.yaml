@@ -1,0 +1,47 @@
+version: '2'
+services:
+  mongo0:
+    hostname: mongo0
+    container_name: mongo0
+    image: mongo:4.4
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --oplogSize 128 --bind_ip 0.0.0.0
+    ports:
+      - 27017:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.2
+    environment:
+      TERM: xterm
+    volumes:
+      - ./start2.sh:/rs-init.sh
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/2/data0:/data/db
+  mongo1:
+    hostname: mongo1
+    container_name: mongo1
+    image: mongo:4.4
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --oplogSize 128 --bind_ip 0.0.0.0
+    ports:
+      - 27018:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.3
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/2/data1:/data/db
+
+networks:
+  db:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.19.0.0/24

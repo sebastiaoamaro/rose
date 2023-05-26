@@ -1,0 +1,47 @@
+#imports
+
+
+MAP_WITH_FAULTS_TO_INJECT
+
+int main(){
+
+    //INJECT PROGRAMS AND PASS HANDLE_EVENT
+    inject_programs(handle_event);
+
+    while(true){
+        sleep(1);
+    }
+}
+
+int handle_event(struct event){
+    
+    char* property_name = event.name;
+
+    int value = event.value;
+
+    bool run = false;
+
+    struct fault_to_inject;
+    for fault in MAP_WITH_FAULTS_TO_INJECT{
+        if fault.properties[property_name].value == event.value{
+            fault.properties[property_name].ready = true;
+            for property in fault.properties{
+                if property{
+                    run = true;
+                }
+                else{
+                    run = false;
+                }
+            }
+
+            if run{
+                inject(fault_to_inject);
+            }
+        }
+    }   
+
+}
+
+int inject(struct fault){
+    INJECT_FAULT_MAP.change(fault.syscallname,true);
+}
