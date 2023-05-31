@@ -144,12 +144,15 @@ static inline int get_file_path(struct path *path, struct event_path_t *event_pa
     return 0;
 }
 
-static void get_file_name(struct file *file, char *buf, size_t size)
-{
-	struct qstr dname;
-
-	dname = BPF_CORE_READ(file, f_path.dentry, d_name);
-	bpf_probe_read_kernel(buf, size, dname.name);
+static inline bool equal_to_true(char *str,char *str2) {
+    char comparand[FILENAME_MAX];
+    char comparand2[FILENAME_MAX];
+    bpf_probe_read(&comparand, sizeof(comparand), str);
+    bpf_probe_read(&comparand2, sizeof(comparand2), str2);
+    for (int i = 0; i < FILENAME_MAX; ++i)
+    if (comparand[i] != comparand2[i])
+        return false;
+    return true;
 }
 
 
@@ -194,7 +197,9 @@ int handle_exit_open(struct trace_event_raw_sys_exit *ctx){
 
         bpf_probe_read(&fi.file_type, sizeof(fi.file_type), &inode->i_mode);
 
-        //if (get_file_path(&path, &event_path, &fi) != 0) return 2;
+        if (get_file_path(&path, &event_path, &fi) != 0) return 2;
+
+        
 
     }
 

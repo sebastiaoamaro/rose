@@ -31,6 +31,13 @@ struct {
 } blocked_ips SEC(".maps");
 
 struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 8192);
+	__type(key, int);
+	__type(value, char[FILENAME_MAX]);
+} files_opened SEC(".maps");
+
+struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 256 * 1024);
 } rb SEC(".maps");

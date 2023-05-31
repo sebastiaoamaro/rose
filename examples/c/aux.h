@@ -3,10 +3,12 @@
 
 #define MAX_ENTRIES 10240
 #define PATH_MAX	4096
-#define STATE_PROPERTIES_COUNT 6
+#define STATE_PROPERTIES_COUNT 7
 #define MAX_IPS_BLOCKED 16
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 127
+
+#include "fs.h"
 
 struct aux_bpf* start_aux_maps();
 int get_interface_index(char*);
@@ -17,6 +19,7 @@ struct fault {
     int *conditions_match;
     __be32 ips_blocked[MAX_IPS_BLOCKED];
     char *veth;
+    char file_open[FILENAME_MAX];
 };
 
 //syscall to fail
@@ -35,14 +38,21 @@ enum stateinfo{
     PROCESSES_CLOSED = 1,
     FILES_OPENED = 2,
     FILES_CLOSED = 3,
-    WRITES = 4
+    FILES_OPENED_ANY = 4,
+    FILES_CLOSED_ANY = 5,
+    WRITES = 6
 };
 
 //To process different types of events in userspace
 enum eventype{
     EXEC_EXIT = 0,
     WRITE_HOOK = 1,
-    TC = 2
+    TC = 2,
+    FSYS = 3
+};
+
+enum generic{
+    ANY_PID = 411
 };
 
 struct event {
