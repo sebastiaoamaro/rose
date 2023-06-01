@@ -154,9 +154,16 @@ static u64 reads_blocked = 0;
 
 
 SEC("kprobe/__x64_sys_write")
-int BPF_KPROBE(__x64_sys_write)
+int handle_write(struct syscall_trace_enter *ctx)
 {
 	//safe so if other ebpf runs it does not change this value
+
+	u64 pid;
+
+	pid = bpf_get_current_pid_tgid();
+
+	bpf_printk("%u \n",pid);
+
 	int writes_now = writes;
 
 	int write_syscall = WRITE;
@@ -166,9 +173,9 @@ int BPF_KPROBE(__x64_sys_write)
 	if (inject){
 		if (*inject){
 			if (writes_blocked < 10){
-				bpf_override_return(ctx, -1);
-				bpf_printk("Blocked write \n");
+				bpf_printk("Blocked write %d \n",writes_blocked);
 				writes_blocked+=1;
+				bpf_override_return((struct pt_regs *) ctx, -1);
 			}
 		}
 	}
@@ -222,9 +229,9 @@ int BPF_KPROBE(__x64_sys_read)
 	if (inject){
 		if (*inject){
 			if (reads_blocked < 10){
-				bpf_override_return(ctx, -1);
 				bpf_printk("Blocked read \n");
 				reads_blocked+=1;
+				bpf_override_return(ctx, -1);
 			}
 		}
 	}

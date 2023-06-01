@@ -141,7 +141,7 @@ $(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT)
 OFILES=$(patsubst %,$(OUTPUT)/%.o,$(APPS))
 
 # Build main binary .o
-$(MAIN): %: main/%.c $(APPS) $(LIBBPF_OBJ)| $(OUTPUT)
+$(MAIN): %: main/%.c $(APPS) $(LIBBPF_OBJ) | $(OUTPUT)
 	$(call msg,BINARY,$@)
 	$(call msg,BINARY,$^)
 	$(call msg,BINARY,$(OFILES))

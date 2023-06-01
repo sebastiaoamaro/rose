@@ -8,8 +8,8 @@
 #include <linux/in.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
-#include "tc.h"
 #include "aux.h"
+#include "tc.h"
 #include "maps.bpf.h"
 
 

@@ -4,6 +4,7 @@ workload_size=1_00_000
 #maindirectory=/home/sebasamaro/phd/torefidevel/examples/c/main/main
 maindirectory=/vagrant/examples/c/main/main
 currentdevices=$(ls -A /sys/class/net | wc -l)
+timestamp=$(date +%s)
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 #cd /home/sebasamaro/phd/torefidevel/examples/c
@@ -32,7 +33,7 @@ do
     echo Starting Workload
     for run in 1 2 3 4 5
     do
-            /usr/bin/time -ao stats/times.txt -f "$run:v:$topology:%e" python3 workload.py $workload_size
+            /usr/bin/time -ao stats/times$timestamp.txt -f "$run:v:$topology:%e" python3 workload.py $workload_size
     done
     docker compose -f configs/docker-compose$topology.yaml down
 
@@ -64,7 +65,7 @@ do
     echo Starting Workload
     for run in 1 2 3 4 5
     do
-        /usr/bin/time -ao stats/times.txt -f "$run:e:$topology:%e" python3 workload.py $workload_size
+        /usr/bin/time -ao stats/times$timestamp.txt -f "$run:e:$topology:%e" python3 workload.py $workload_size
     done
     kill $ebpf_PID
     docker compose -f configs/docker-compose$topology.yaml down
@@ -74,5 +75,4 @@ cd stats
 ./generate_graphs.sh perfomance
 
 #cleanup
-rm times.txt
-#rm times.data
+rm times.data

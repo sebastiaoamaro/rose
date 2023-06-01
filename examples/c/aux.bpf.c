@@ -3,6 +3,7 @@
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
 #include "aux.h"
+#include "fs.h"
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
@@ -34,8 +35,8 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
 	__type(key, int);
-	__type(value, char[FILENAME_MAX]);
-} files_opened SEC(".maps");
+	__type(value,struct file_info_simple);
+} files SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);

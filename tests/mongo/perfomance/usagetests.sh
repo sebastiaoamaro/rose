@@ -76,5 +76,3 @@ cd stats
 #cleanup
 rm stats*.txt
 rm stats*.csv
-rm times.txt
-rm stats/cpu_usage.data

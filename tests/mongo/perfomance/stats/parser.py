@@ -5,6 +5,8 @@ from os import listdir
 from os.path import isfile
 from statistics import mean
 
+from datetime import datetime
+
 def parse_usages():
     files = [f for f in listdir(".") if isfile(f)]
 
@@ -17,6 +19,11 @@ def parse_usages():
 
     #Workloads may vary on time
     max_len_collected = -1
+
+    now = datetime.now()
+
+    current_time = now.strftime("%H:%M:%S")
+
 
     for filename in statfiles:
 
@@ -52,7 +59,7 @@ def parse_usages():
         # print(result)
 
 
-    file_cpu_usage = open("cpu_usage.data","w")
+    file_cpu_usage = open("cpu_usage" + str(current_time) + ".data","w")
 
     line = 0
     file_cpu_usage.write("time ")

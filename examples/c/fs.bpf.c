@@ -6,6 +6,19 @@
 #include "aux.h"
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 8192);
+	__type(key, int);
+	__type(value, struct file_info_simple);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} files SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 256 * 1024);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} rb SEC(".maps");
 
 static inline struct file* get_file_from_fd(int32_t fd)
 {
@@ -137,22 +150,36 @@ static inline int get_file_path(struct path *path, struct event_path_t *event_pa
         // get parent dentry name
         dentry = parent;
     }
-    fi->n_ref = event_path->n_ref;
     fi->offset = last_position;
     if (last_position == MAX_FILE_OFFSET) fi->size = MAX_FILE_OFFSET - last_position;
     else fi->size = MAX_FILE_OFFSET - last_position - 1;
     return 0;
 }
 
-static inline bool equal_to_true(char *str,char *str2) {
+static inline bool equal_to_true(struct file_info_simple *file_info,char *str2,uint32_t size) {
     char comparand[FILENAME_MAX];
     char comparand2[FILENAME_MAX];
-    bpf_probe_read(&comparand, sizeof(comparand), str);
+    bpf_probe_read(&comparand, sizeof(comparand), file_info->filename);
     bpf_probe_read(&comparand2, sizeof(comparand2), str2);
-    for (int i = 0; i < FILENAME_MAX; ++i)
-    if (comparand[i] != comparand2[i])
-        return false;
-    return true;
+
+    int str_len = file_info->size;
+
+    int count = 0;
+    #pragma unroll
+    for (int i = 0; i < FILENAME_MAX; ++i){
+        if (comparand[count] == comparand2[i] ){
+            count++;
+            continue;
+        }
+        if(str_len == count){
+            return true; 
+        }
+        else{
+            count = 0;
+        }
+    }
+
+    return false;
 }
 
 
@@ -199,7 +226,30 @@ int handle_exit_open(struct trace_event_raw_sys_exit *ctx){
 
         if (get_file_path(&path, &event_path, &fi) != 0) return 2;
 
-        
+
+        int files_open = ANY_PID;
+
+        struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&files_open);
+
+        if(file_open){
+            //bpf_printk("%s and %s and str_len is %d \n",&file_open->filename,&(fi.filename[fi.offset]),file_open->size);
+
+            if(equal_to_true(file_open,&(fi.filename[fi.offset]),fi.offset)){
+                
+                struct event *e;
+
+				/* reserve sample from BPF ringbuf */
+				e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+				if (!e)
+					return 0;
+                bpf_probe_read(e->filename, sizeof(fi.filename), &(fi.filename[fi.offset]));
+
+				e->type = FSYS;
+				bpf_ringbuf_submit(e, 0);
+
+                
+            }
+        }
 
     }
 

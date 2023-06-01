@@ -9,7 +9,9 @@ if sys.argv[1] == "limit":
     
 start = time.time()
 for i in range (0,100_000_000):
-    file_test.write("Line " + str(i))
+    #file_test.write("Line " + str(i))
+    file_test = open("test.txt","a")
+    file_test.close()
 end = time.time()
 
 print("Done in " + str(end-start) + " seconds")

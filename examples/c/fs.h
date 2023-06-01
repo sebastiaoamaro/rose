@@ -11,6 +11,11 @@
 
 struct fs_bpf* monitor_fs();
 
+struct file_info_simple {
+	int size;
+	char filename[FILENAME_MAX];
+};
+
 typedef struct file_fd_key_t {
 	uint32_t dev;
     uint32_t ino;

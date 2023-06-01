@@ -6,9 +6,7 @@
 #define STATE_PROPERTIES_COUNT 7
 #define MAX_IPS_BLOCKED 16
 #define TASK_COMM_LEN 16
-#define MAX_FILENAME_LEN 127
-
-#include "fs.h"
+#define MAX_FILENAME_LEN 128
 
 struct aux_bpf* start_aux_maps();
 int get_interface_index(char*);
@@ -19,7 +17,8 @@ struct fault {
     int *conditions_match;
     __be32 ips_blocked[MAX_IPS_BLOCKED];
     char *veth;
-    char file_open[FILENAME_MAX];
+    char file_open[64];
+    int done;
 };
 
 //syscall to fail

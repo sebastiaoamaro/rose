@@ -33,7 +33,7 @@ void process_write(const struct event*);
 int process_tc(const struct event*);
 void process_fs(const struct event*);
 
-void inject_fault(int syscall);
+void inject_fault(int syscall,int fault_id);
 
 const char *argp_program_version = "Tool for FI 0.0";
 const char *argp_program_bug_address = "sebastiao.amaro@ŧecnico.ulisboa.pt";
@@ -53,7 +53,7 @@ static struct env {
 	int syscalls_to_fail_fd;
 	int relevant_state_info_fd;
 	int blocked_ips;
-	int files_opened;
+	int files;
 } env;
 
 static struct fault *faults;
@@ -130,7 +130,8 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 		}
 		//printf("run is %d, relevant_conditions is %d \n",run,relevant_conditions);
 		if (run == relevant_conditions)
-			inject_fault(faults[i].syscall);
+			if (!faults[i].done)
+				inject_fault(faults[i].syscall,i);
 	}
  
 	return 0;
@@ -178,37 +179,33 @@ int process_tc(const struct event *event){
 	if (!if_indextoname(event->ifindex, ifname))
 		return 0;
 
-	// printf("interface: %s\tprotocol: %s\t %s:%d(src) -> %s:%d(dst) \n",
-	// 	ifname,
-	// 	ipproto_mapping[event->ip_proto],
-	// 	inet_ntoa((struct in_addr){event->src_addr}),
-	// 	0,
-	// 	inet_ntoa((struct in_addr){event->dst_addr}),
-	// 	0	
-	// 	);
 	return 0;
 }
 
 void process_fs(const struct event *event){
-	printf("Got event filename is %s\n",event->filename);
+	//printf("Got event filename is %s\n",event->filename);
 }
 
 
 //Tells eBPF via Maps to start a fault
-void inject_fault(int syscall){
+void inject_fault(int syscall,int fault_id){
+
+	printf("Injecting fault in %d \n",syscall);
 
 	int error;
 	int inject = 1;
-	printf("Injecting fault in %d \n",syscall);
 	error = bpf_map_update_elem(env.syscalls_to_fail_fd,&syscall,&inject,BPF_ANY);
 	if (error)
 		printf("Error of update is %d, syscall->%d / value-> %d \n",error,syscall,inject);
+
+	faults[fault_id].done = 1;
 
 }
 
 //Temporary way of creating faults
 void build_faults(){
 	//BUILD FAULT 1
+	faults[0].done = 0;
 	faults[0].syscall = TEMP_EMPTY;
 	faults[0].fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
 	faults[0].conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
@@ -221,8 +218,8 @@ void build_faults(){
 
 	faults[0].fault_type_conditions[PROCESSES_OPENED] = 0;
 	faults[0].fault_type_conditions[PROCESSES_CLOSED] = 0;
-	faults[0].fault_type_conditions[WRITES] = 5;
-	faults[0].fault_type_conditions[FILES_OPENED_ANY] = ANY_PID;
+	faults[0].fault_type_conditions[WRITES] = 300;
+	//faults[0].fault_type_conditions[FILES_OPENED_ANY] = ANY_PID;
  
 
 	//Weird
@@ -243,7 +240,7 @@ void build_faults(){
 	// strcpy(faults[0].veth,if_name);	
 
 
-	char file_name[256] = "test.txt";
+	char file_name[256] = "proc";
 
 	strcpy(faults[0].file_open,file_name);
 
@@ -320,7 +317,7 @@ int main(int argc, char **argv)
 	env.relevant_state_info_fd = bpf_map__fd(aux_bpf->maps.relevant_state_info);
 	env.syscalls_to_fail_fd = bpf_map__fd(aux_bpf->maps.syscalls_to_fail);
 	env.blocked_ips = bpf_map__fd(aux_bpf->maps.blocked_ips);
-	env.files_opened = bpf_map__fd(aux_bpf->maps.files_opened);
+	env.files = bpf_map__fd(aux_bpf->maps.files);
 	
 
 	//Insert general properties in MAPS, mostly counters
@@ -361,7 +358,12 @@ int main(int argc, char **argv)
 			int error;
 			int value = ANY_PID;
 			printf("Fault %i has file open %s \n",i,faults[i].file_open);
-			error = bpf_map_update_elem(env.files_opened,&value,faults[i].file_open,BPF_ANY);
+
+			struct file_info_simple file_info = {};
+			strcpy(file_info.filename,faults[i].file_open);
+			file_info.size = strlen(file_info.filename);
+
+			error = bpf_map_update_elem(env.files,&value,&file_info,BPF_ANY);
 			if (error){
 				printf("Error of update in files_opened is %d, key->%s \n",error,faults[i].file_open);	
 			}	
@@ -385,7 +387,7 @@ int main(int argc, char **argv)
 
 	/* Walk through linked list, maintaining head pointer so we
         can free list later. */
-		printf("Getting if names \n");
+	//printf("Getting if names \n");
 
     for (struct ifaddrs *ifa = ifaddr; ifa != NULL && count_devices < DEVICE_COUNT; ifa = ifa->ifa_next) {
 		
