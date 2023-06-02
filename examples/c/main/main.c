@@ -44,6 +44,7 @@ const char argp_program_doc[] = "eBPF Fault Injection Tool.\n"
 static const struct argp_option opts[] = {
 	{ "faultcount", 'f', "FAULTCOUNT", 0, "Number of faults" },
 	{ "devicecount", 'd', "DEVICECOUNT", 0, "Number of network devices" },
+	{ NULL, 'h', NULL, OPTION_HIDDEN, "Show the full help" },
 	{},
 };
 
@@ -119,9 +120,9 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 		int relevant_conditions = 0;
 		for (j=0;j<STATE_PROPERTIES_COUNT;j++){
 			//Check if condition matches and if it is relevant
-			if (faults[i].fault_type_conditions[j]){
+			if (faults[i].initial->fault_type_conditions[j]){
 				relevant_conditions+=1;
-				if (faults[i].conditions_match[j]){
+				if (faults[i].initial->conditions_match[j]){
 					run+=1;
 				}
 				else
@@ -142,14 +143,14 @@ void process_exec_exit(const struct event *event){
 	int i = 0;
 
 	for (i=0; i<FAULT_COUNT;i++){
-		if (faults[i].fault_type_conditions[PROCESSES_OPENED]){
-			if (event->processes_created == faults[i].fault_type_conditions[PROCESSES_OPENED]){
-				faults[i].conditions_match[PROCESSES_OPENED] = 1;
+		if (faults[i].initial->fault_type_conditions[PROCESSES_OPENED]){
+			if (event->processes_created == faults[i].initial->fault_type_conditions[PROCESSES_OPENED]){
+				faults[i].initial->conditions_match[PROCESSES_OPENED] = 1;
 			}
 		}
-		if (faults[i].fault_type_conditions[PROCESSES_CLOSED]){
-			if (event->processes_closed == faults[i].fault_type_conditions[PROCESSES_CLOSED]){
-				faults[i].conditions_match[PROCESSES_CLOSED] = 1;
+		if (faults[i].initial->fault_type_conditions[PROCESSES_CLOSED]){
+			if (event->processes_closed == faults[i].initial->fault_type_conditions[PROCESSES_CLOSED]){
+				faults[i].initial->conditions_match[PROCESSES_CLOSED] = 1;
 			}
 		}
 	}
@@ -159,10 +160,10 @@ void process_exec_exit(const struct event *event){
 //Handles the writes_syscall
 void process_write(const struct event *event){
 	for (int i=0; i<FAULT_COUNT;i++){
-		if (faults[i].fault_type_conditions[WRITES]){
+		if (faults[i].initial->fault_type_conditions[WRITES]){
 			//printf("Write count is %d \n",event->writes);
-			if (event->writes == faults[i].fault_type_conditions[WRITES]){
-				faults[i].conditions_match[WRITES] = 1;
+			if (event->writes == faults[i].initial->fault_type_conditions[WRITES]){
+				faults[i].initial->conditions_match[WRITES] = 1;
 			}
 		}
 	}
@@ -207,19 +208,22 @@ void build_faults(){
 	//BUILD FAULT 1
 	faults[0].done = 0;
 	faults[0].syscall = TEMP_EMPTY;
-	faults[0].fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
-	faults[0].conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
+	faults[0].initial = (struct faultstate*)malloc(sizeof(struct faultstate));
+	faults[0].end = (struct faultstate*)malloc(sizeof(struct faultstate));
+
+	faults[0].initial->fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
+	faults[0].initial->conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
 	for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
-		faults[0].conditions_match[i] = 0;
+		faults[0].initial->conditions_match[i] = 0;
 	}
 	for (int j=0; j < STATE_PROPERTIES_COUNT;j++){
-		faults[0].fault_type_conditions[j] = 0;
+		faults[0].initial->fault_type_conditions[j] = 0;
 	}
 
-	faults[0].fault_type_conditions[PROCESSES_OPENED] = 0;
-	faults[0].fault_type_conditions[PROCESSES_CLOSED] = 0;
-	faults[0].fault_type_conditions[WRITES] = 300;
-	//faults[0].fault_type_conditions[FILES_OPENED_ANY] = ANY_PID;
+	faults[0].initial->fault_type_conditions[PROCESSES_OPENED] = 0;
+	faults[0].initial->fault_type_conditions[PROCESSES_CLOSED] = 0;
+	faults[0].initial->fault_type_conditions[WRITES] = 5;
+	//faults[0].initial->fault_type_conditions[FILES_OPENED_ANY] = ANY_PID;
  
 
 	//Weird
@@ -264,17 +268,24 @@ void build_faults(){
 
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
+
 	switch (key) {
-	case 'f':
-		FAULT_COUNT = strtol(arg,NULL,10);
-		faults = (struct fault*)malloc(FAULT_COUNT*sizeof(struct fault));
-		break;
-	case 'd':
-		DEVICE_COUNT = strtol(arg,NULL,10);
-		break;
-		
-	default:
-		return ARGP_ERR_UNKNOWN;
+		case 'f':
+			FAULT_COUNT = strtol(arg,NULL,10);
+			faults = (struct fault*)malloc(FAULT_COUNT*sizeof(struct fault));
+			break;
+		case 'd':
+			DEVICE_COUNT = strtol(arg,NULL,10);
+			break;
+		case 'h':
+			argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
+		case ARGP_KEY_END:
+			if (state->arg_num < 2)
+				/* Not enough arguments. */
+				argp_usage (state);
+			break;
+		default:
+			return ARGP_ERR_UNKNOWN;
 	}
 	return 0;
 }
@@ -296,7 +307,6 @@ int main(int argc, char **argv)
 	err_args = argp_parse(&argp, argc, argv, 0, NULL, NULL);
 	if (err_args)
 		return err_args;
-
 	/* Bump RLIMIT_MEMLOCK to create BPF maps */
 	//bump_memlock_rlimit();
 
@@ -329,9 +339,9 @@ int main(int argc, char **argv)
 		//Count amount of faults that have a specific condition
 		int relevant_state_info_counter = 0;
 		for (int i = 0; i <FAULT_COUNT; i++){
-			if (faults[i].fault_type_conditions[j] != 0){
+			if (faults[i].initial->fault_type_conditions[j] != 0){
 				relevant_state_info_counter+=1;				
-				relevant_state_info[i] = faults[i].fault_type_conditions[j];
+				relevant_state_info[i] = faults[i].initial->fault_type_conditions[j];
 				printf("FAULT %d state info pos[%d] is %llu \n",i,j,relevant_state_info[i]);
 
 			}
@@ -445,7 +455,8 @@ int main(int argc, char **argv)
 		}
 
 		struct tc_bpf* tc_prog;
-		tc_prog = traffic_control(index_in_unsigned,i+handle,FAULT_COUNT);
+		//handle must be different than 0 so add 1
+		tc_prog = traffic_control(index_in_unsigned,i,i+handle,FAULT_COUNT);
 
 		if (!tc_prog){
 			printf("Error in creating tc_prog with interface %s \n",faults[i].veth);
@@ -463,7 +474,8 @@ int main(int argc, char **argv)
 
 		struct tc_bpf* tc_prog;
 
-		tc_prog = traffic_control(index_in_unsigned,i+FAULT_COUNT+handle,FAULT_COUNT);
+		//handle must be different than 0 so add 1
+		tc_prog = traffic_control(index_in_unsigned,i+FAULT_COUNT,i+FAULT_COUNT+handle,FAULT_COUNT);
 
 		if (!tc_prog){
 			printf("Error in creating tc_prog_tracking with interface %s \n",device_names[i]);

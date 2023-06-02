@@ -3,7 +3,6 @@
 workload_size=500_000
 #maindirectory=/home/sebasamaro/phd/torefidevel/examples/c/main/main
 maindirectory=/vagrant/examples/c/main/main
-currentdevices=$(ls -A /sys/class/net | wc -l)
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 #cd /home/sebasamaro/phd/torefidevel/examples/c
@@ -43,8 +42,9 @@ do
     #Tracing active
     docker compose -f configs/docker-compose$topology.yaml up -d
 
-    let devices=$currentdevices+$topology
-    $maindirectory -f 0 -d $devices &
+    currentdevices=$(ls -A /sys/class/net | wc -l)
+    
+    $maindirectory -f 0 -d $currentdevices &
     ebpf_PID=$!
     echo $ebpf_PID
 

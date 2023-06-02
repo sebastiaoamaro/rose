@@ -34,18 +34,18 @@ void init_tc(int devicecount){
 	tc_opts_handle = (struct bpf_tc_opts*)malloc(devicecount*sizeof(struct bpf_tc_opts));
 	
 }
-struct tc_bpf* traffic_control(__u32 index,int fault,int faults)
+struct tc_bpf* traffic_control(__u32 index,int pos,int handle,int faults)
 {	
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, tc_hook,
 		.ifindex = index, .attach_point = BPF_TC_INGRESS);
 	DECLARE_LIBBPF_OPTS(bpf_tc_opts, tc_opts,
-		.handle = fault, .priority = 4);
+		.handle = handle, .priority = 5);
 	bool hook_created = false;
 	struct tc_bpf *skel;
 	int err;
 
-	tc_hook_handle[fault] = tc_hook;
-	tc_opts_handle[fault] = tc_opts;
+	tc_hook_handle[pos] = tc_hook;
+	tc_opts_handle[pos] = tc_opts;
 
 	//libbpf_set_print(libbpf_print_fn);
 

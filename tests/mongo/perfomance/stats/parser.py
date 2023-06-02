@@ -100,8 +100,8 @@ def parse_usages():
     
 
 
-def parse_perfomance():
-    times = open("times.txt")
+def parse_perfomance(filename):
+    times = open(filename)
     times_data = open("times.data","w")
 
     times_lines = times.readlines()
@@ -125,9 +125,9 @@ def parse_perfomance():
 
     for key,value in dict_times.items():
         if key[0] == "v":
-            output_arrays[int(key[1])-1][0] = mean(value)
+            output_arrays[int(key[1:])-1][0] = mean(value)
         else:
-            output_arrays[int(key[1])-1][1] = mean(value)
+            output_arrays[int(key[1:])-1][1] = mean(value)
 
 
     times_data.write(" " + "vanilla" + " " + "eBPF" + "\n")
@@ -147,7 +147,7 @@ def main():
     if sys.argv[1] == "usage":
         parse_usages()
     if sys.argv[1] == "perfomance":
-        parse_perfomance()
+        parse_perfomance(sys.argv[2])
     
 if __name__ == "__main__":
     main()

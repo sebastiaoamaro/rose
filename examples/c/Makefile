@@ -24,7 +24,7 @@ INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
 CFLAGS := -g -Wall
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
-APPS = process tc aux faultinject fs block
+APPS = process tc aux faultinject fs block uprobes
 MAIN = main
 
 CARGO ?= $(shell which cargo)
@@ -36,6 +36,12 @@ APPS += $(BZS_APPS)
 # Required by libblazesym
 ALL_LDFLAGS += -lrt -ldl -lpthread -lm
 endif
+
+COMMON_OBJ = \
+	$(OUTPUT)/trace_helpers.o \
+	$(OUTPUT)/map_helpers.o \
+	$(OUTPUT)/uprobe_helpers.o \
+	$(OUTPUT)/btf_helpers.o \
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
 # to the includes list when compiling with `-target bpf` because otherwise some
@@ -68,6 +74,7 @@ endef
 
 $(call allow-override,CC,$(CROSS_COMPILE)cc)
 $(call allow-override,LD,$(CROSS_COMPILE)ld)
+
 
 .PHONY: all
 all: $(APPS) $(MAIN) 
@@ -116,9 +123,10 @@ $(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(VMLINUX) | $(OUTPUT) 
 	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 
 # Generate BPF skeletons
-$(OUTPUT)/%.skel.h: $(OUTPUT)/%.bpf.o | $(OUTPUT) $(BPFTOOL)
+$(OUTPUT)/%.skel.h: $(OUTPUT)/%.bpf.o *.h | $(OUTPUT) $(BPFTOOL)
 	$(call msg,GEN-SKEL,$@)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
+
 
 # Build user-space code
 $(patsubst %,$(OUTPUT)/%.o,$(APPS)): %.o: %.skel.h
@@ -133,20 +141,21 @@ $(patsubst %,$(OUTPUT)/%.o,$(BZS_APPS)): $(LIBBLAZESYM_HEADER)
 $(BZS_APPS): $(LIBBLAZESYM_OBJ)
 
 # Build applications .o
-$(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT)
-	$(call msg,BINARY,$@)
-	$(call msg,BINARY,$^)
+$(APPS): %: $(OUTPUT)/%.o $(COMMON_OBJ) $(LIBBPF_OBJ) | $(OUTPUT)
+	$(call msg,APP,$@)
+	$(call msg,APP,$^)
 	$(Q)$(CC) -c $^ $(ALL_LDFLAGS) -lelf -lz -o $@ 
 
 OFILES=$(patsubst %,$(OUTPUT)/%.o,$(APPS))
 
 # Build main binary .o
-$(MAIN): %: main/%.c $(APPS) $(LIBBPF_OBJ) | $(OUTPUT)
+$(MAIN): %: main/%.c $(APPS) $(LIBBPF_OBJ) | $(APPS)
 	$(call msg,BINARY,$@)
 	$(call msg,BINARY,$^)
 	$(call msg,BINARY,$(OFILES))
+	$(call msg,BINARY,$(filter %.c,$^))
 	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -I .output/ -I . -c $(filter %.c,$^) -o .output/main.o
-	$(Q)$(CC) $(CFLAGS) .output/main.o $(ALL_LDFLAGS) $(OFILES) .output/libbpf.a  -lelf -lz -o main/main
+	$(Q)$(CC) $(CFLAGS) .output/main.o $(ALL_LDFLAGS) $(OFILES) $(COMMON_OBJ).output/libbpf.a  -lelf -lz -o main/main
 
 # delete failed targets
 .DELETE_ON_ERROR:

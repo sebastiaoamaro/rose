@@ -13,12 +13,18 @@ int get_interface_index(char*);
 struct fault {
     __u64 syscall;
     //array with conditions
-    __u64 *fault_type_conditions;
-    int *conditions_match;
     __be32 ips_blocked[MAX_IPS_BLOCKED];
     char *veth;
     char file_open[64];
     int done;
+    struct faultstate *initial;
+    struct faultstate *end;
+};
+
+struct faultstate{
+    char file_open[64];
+    __u64 *fault_type_conditions;
+    int *conditions_match;
 };
 
 //syscall to fail

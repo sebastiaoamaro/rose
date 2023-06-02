@@ -154,15 +154,16 @@ static u64 reads_blocked = 0;
 
 
 SEC("kprobe/__x64_sys_write")
-int handle_write(struct syscall_trace_enter *ctx)
+int handle_write(struct pt_regs *ctx)
 {
 	//safe so if other ebpf runs it does not change this value
 
+	uint fd = PT_REGS_PARM1_CORE_SYSCALL(ctx);
+
+	//bpf_printk("%u \n",fd);
 	u64 pid;
 
 	pid = bpf_get_current_pid_tgid();
-
-	bpf_printk("%u \n",pid);
 
 	int writes_now = writes;
 

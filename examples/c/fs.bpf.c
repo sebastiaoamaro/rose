@@ -195,6 +195,8 @@ int handle_exit_open(struct trace_event_raw_sys_exit *ctx){
 
     long fd = ctx->ret;
 
+    //bpf_printk("%ld \n",fd);
+
     FileFDKey fdkey = {};
 
     if (fd > 0){
