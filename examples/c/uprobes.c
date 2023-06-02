@@ -262,6 +262,9 @@ static int attach_uprobes(struct uprobes_bpf *obj)
 	long err;
 
 	binary = strdup(env.funcname);
+
+	printf("%s \n",binary);
+
 	if (!binary) {
 		warn("strdup failed");
 		return -1;
@@ -309,16 +312,7 @@ out_binary:
 	return ret;
 }
 
-static volatile bool exiting;
-
-static void sig_hand(int signr)
-{
-	exiting = true;
-}
-
-static struct sigaction sigact = {.sa_handler = sig_hand};
-
-int uprobe(int pid,char* funcname)
+struct uprobe_bpf* uprobe(int pid,char* funcname)
 {
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
 	// static const struct argp argp = {
@@ -335,16 +329,14 @@ int uprobe(int pid,char* funcname)
 	int idx, cg_map_fd;
 	int cgfd = -1;
 	bool used_fentry = false;
-
 	// err = argp_parse(&argp, argc, argv, 0, NULL, &env);
 	// if (err)
 	// 	return err;
-
+	printf("%s \n",funcname);
 	env.is_kernel_func = !strchr(funcname, ':');
+	printf("env kernel func %d \n",env.is_kernel_func);
 
-	sigaction(SIGINT, &sigact, 0);
-
-	libbpf_set_print(libbpf_print_fn);
+	//libbpf_set_print(libbpf_print_fn);
 
 	err = ensure_core_btf(&open_opts);
 	if (err) {
@@ -357,12 +349,19 @@ int uprobe(int pid,char* funcname)
 		warn("failed to open BPF object\n");
 		return 1;
 	}
+	printf("Setting vars \n");
 
-	obj->rodata->units = env.units;
+	obj->rodata->units = MSEC;
 	obj->rodata->targ_tgid = pid;
 	obj->rodata->filter_cg = 0;
 
+	env.pid = pid;
+	env.funcname = funcname;
+
+	printf("Done setting vars \n");
+
 	used_fentry = try_fentry(obj);
+	printf("Got a fentry \n");
 
 	err = uprobes_bpf__load(obj);
 	if (err) {
@@ -377,17 +376,19 @@ int uprobe(int pid,char* funcname)
 		cgfd = open(env.cgroupspath, O_RDONLY);
 		if (cgfd < 0) {
 			fprintf(stderr, "Failed opening Cgroup path: %s", env.cgroupspath);
-			goto cleanup;
+			return NULL;
 		}
 		if (bpf_map_update_elem(cg_map_fd, &idx, &cgfd, BPF_ANY)) {
 			fprintf(stderr, "Failed adding target cgroup to map");
-			goto cleanup;
+			return NULL;
 		}
 	}
 
+	printf("Loaded \n");
+
 	if (!obj->bss) {
 		warn("Memory-mapping BPF maps is supported starting from Linux 5.7, please upgrade.\n");
-		goto cleanup;
+		return NULL;
 	}
 
 	if (!used_fentry) {
@@ -396,21 +397,25 @@ int uprobe(int pid,char* funcname)
 		else
 			err = attach_uprobes(obj);
 		if (err)
-			goto cleanup;
+			return NULL;
+
 	}
+
+	printf("!Used fentry \n");
 
 	err = uprobes_bpf__attach(obj);
 	if (err) {
 		fprintf(stderr, "failed to attach BPF programs: %s\n",
 			strerror(-err));
-		goto cleanup;
+			return NULL;
 	}
+	printf("Attached \n");
 
-cleanup:
-	uprobes_bpf__destroy(obj);
-	cleanup_core_btf(&open_opts);
-	if (cgfd > 0)
-		close(cgfd);
+// cleanup:
+// 	uprobes_bpf__destroy(obj);
+// 	cleanup_core_btf(&open_opts);
+// 	if (cgfd > 0)
+// 		close(cgfd);
 
-	return err != 0;
+	return obj;
 }

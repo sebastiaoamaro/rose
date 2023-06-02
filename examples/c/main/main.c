@@ -8,6 +8,14 @@
 #include <bpf/libbpf.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <arpa/inet.h>
+#include <linux/if_packet.h>
+#include <linux/if_ether.h>
+#include <linux/in.h>
+#include <net/if.h>
+#include <ifaddrs.h>
+
+//Modules
 #include <aux.h>
 #include <aux.skel.h>
 #include <process.h>
@@ -20,13 +28,8 @@
 #include <fs.skel.h>
 #include <block.h>
 #include <block.skel.h>
-#include <arpa/inet.h>
-#include <linux/if_packet.h>
-#include <linux/if_ether.h>
-#include <linux/in.h>
-#include <net/if.h>
-#include <ifaddrs.h>
-
+#include <uprobes.h>
+#include <uprobes.skel.h>
 
 void process_exec_exit(const struct event*);
 void process_write(const struct event*);
@@ -268,7 +271,6 @@ void build_faults(){
 
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
-
 	switch (key) {
 		case 'f':
 			FAULT_COUNT = strtol(arg,NULL,10);
@@ -280,7 +282,7 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 		case 'h':
 			argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
 		case ARGP_KEY_END:
-			if (state->arg_num < 2)
+			if (state->argc < 2)
 				/* Not enough arguments. */
 				argp_usage (state);
 			break;
@@ -485,11 +487,12 @@ int main(int argc, char **argv)
 
 	}
 
-
+	char funcname[16] = ":read";
 	struct fs_bpf* fs_bpf = monitor_fs();
 	struct process_bpf* process_bpf = exec_and_exit(FAULT_COUNT);
 	struct faultinject_bpf* faultinject_bpf = fault_inject(FAULT_COUNT);
 	struct block_bpf* block_bpf = monitor_disk();
+	struct uprobe_bpf* uprobe_bpf = uprobe(139413,funcname);
 	struct ring_buffer *rb = NULL;
 
 
@@ -513,7 +516,11 @@ int main(int argc, char **argv)
 		printf("Error in creating disk monitor \n");
 		goto cleanup;
 	}
-
+	
+	if (!uprobe_bpf){
+		printf("Error in creating uprobe \n");
+		goto cleanup;
+	}
 	
 	int err;
 	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
@@ -545,6 +552,8 @@ int main(int argc, char **argv)
 		aux_bpf__destroy(aux_bpf);
 	if(!fs_bpf)
 		fs_bpf__destroy(fs_bpf);
+	if(!uprobe_bpf)
+		uprobes_bpf__destroy(uprobe_bpf);
 	if(!rb)
 		ring_buffer__free(rb);
 

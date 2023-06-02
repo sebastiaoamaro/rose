@@ -9,3 +9,5 @@ enum units {
 	USEC,
 	MSEC,
 };
+
+struct uprobe_bpf* uprobe(int pid,char* funcname);
