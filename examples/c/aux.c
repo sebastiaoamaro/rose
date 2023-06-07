@@ -108,6 +108,15 @@ struct aux_bpf* start_aux_maps(){
 
     return skel;
 
+	err = bpf_map__pin(skel->maps.funcnames, "/sys/fs/bpf/funcnames");
+	if(err) {
+		printf("[ERROR] libbpf pin API: %d\n", err);
+		return NULL;
+	}
+
+
+    return skel;
+
 }
 
 int get_interface_index(char* if_name){

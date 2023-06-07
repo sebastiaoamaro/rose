@@ -3,10 +3,13 @@
 
 #define MAX_ENTRIES 10240
 #define PATH_MAX	4096
-#define STATE_PROPERTIES_COUNT 7
+#define STATE_PROPERTIES_COUNT 10
 #define MAX_IPS_BLOCKED 16
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
+#define FUNCNAME_MAX 16
+#define MAX_FUNCTIONS 8
+#define FILENAME_MAX 64
 
 struct aux_bpf* start_aux_maps();
 int get_interface_index(char*);
@@ -15,14 +18,15 @@ struct fault {
     //array with conditions
     __be32 ips_blocked[MAX_IPS_BLOCKED];
     char *veth;
-    char file_open[64];
+    char file_open[FILENAME_MAX];
+    char func_names[8][FUNCNAME_MAX];
     int done;
     struct faultstate *initial;
     struct faultstate *end;
+    int pid;
 };
 
 struct faultstate{
-    char file_open[64];
     __u64 *fault_type_conditions;
     int *conditions_match;
 };
@@ -45,7 +49,10 @@ enum stateinfo{
     FILES_CLOSED = 3,
     FILES_OPENED_ANY = 4,
     FILES_CLOSED_ANY = 5,
-    WRITES = 6
+    WRITES = 6,
+    IPS_BLOCKED = 7,
+    FUNCNAMES = 8,
+    CALLCOUNT = 9
 };
 
 //To process different types of events in userspace

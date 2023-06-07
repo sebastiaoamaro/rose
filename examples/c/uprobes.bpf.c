@@ -6,17 +6,26 @@
 #include <bpf/bpf_tracing.h>
 #include "uprobes.h"
 #include "bits.bpf.h"
-
+#include "aux.h"
+#include "maps.bpf.h"
 const volatile pid_t targ_tgid = 0;
 const volatile int units = 0;
 const volatile bool filter_cg = false;
-
+const volatile char funcname[FUNCNAME_MAX];
 struct {
 	__uint(type, BPF_MAP_TYPE_CGROUP_ARRAY);
 	__type(key, u32);
 	__type(value, u32);
 	__uint(max_entries, 1);
 } cgroup_map SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 8192);
+	__type(key, char[FUNCNAME_MAX]);
+	__type(value,U64);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} funcnames SEC(".maps");
 
 /* key: pid.  value: start time */
 struct {
@@ -41,6 +50,23 @@ static void entry(void)
 	if (targ_tgid && targ_tgid != tgid)
 		return;
 	nsec = bpf_ktime_get_ns();
+
+	int one = 1;
+
+	int *count = bpf_map_lookup_or_try_init(&funcnames,&funcname,&one);
+
+	int new_value = 0;
+	if (!count)
+		return;
+	if (*count == 0){
+		bpf_map_update_elem(&funcnames,&funcname,&one,BPF_ANY);
+		
+	}else{
+		new_value = *count + 1;
+		bpf_map_update_elem(&funcnames,&funcname,&new_value,BPF_ANY);
+	}
+	//bpf_printk("Count is %d \n",new_value);
+
 	bpf_map_update_elem(&starts, &pid, &nsec, BPF_ANY);
 }
 
@@ -53,7 +79,7 @@ int BPF_PROG(dummy_fentry)
 
 SEC("kprobe/dummy_kprobe")
 int BPF_KPROBE(dummy_kprobe)
-{
+{	
 	entry();
 	return 0;
 }

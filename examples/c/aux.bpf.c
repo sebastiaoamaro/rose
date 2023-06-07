@@ -31,12 +31,21 @@ struct {
 	__type(value, __be32[MAX_IPS_BLOCKED]);
 } blocked_ips SEC(".maps");
 
+
+//Key is pid
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
 	__type(key, int);
 	__type(value,struct file_info_simple);
 } files SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 8192);
+	__type(key, char[FUNCNAME_MAX]);
+	__type(value,U64);
+} funcnames SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);

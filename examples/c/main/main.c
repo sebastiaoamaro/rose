@@ -38,27 +38,29 @@ void process_fs(const struct event*);
 
 void inject_fault(int syscall,int fault_id);
 
-const char *argp_program_version = "Tool for FI 0.0";
+const char *argp_program_version = "Tool for FI 0.01";
 const char *argp_program_bug_address = "sebastiao.amaro@ŧecnico.ulisboa.pt";
 const char argp_program_doc[] = "eBPF Fault Injection Tool.\n"
 				"\n"
-				"USAGE: ./main/main [-f fault count] [-d network device count]\n";
+				"USAGE: ./main/main [-f fault count] [-d network device count] [-p process ids] \n";
 
 static const struct argp_option opts[] = {
 	{ "faultcount", 'f', "FAULTCOUNT", 0, "Number of faults" },
 	{ "devicecount", 'd', "DEVICECOUNT", 0, "Number of network devices" },
+	{ "devicecount", 'p', "PID", 0, "Process ID put in order of faults" },
 	{ NULL, 'h', NULL, OPTION_HIDDEN, "Show the full help" },
 	{},
 };
 
-static struct env {
+static struct constants {
 	bool verbose;
 	long min_duration_ms;
 	int syscalls_to_fail_fd;
 	int relevant_state_info_fd;
 	int blocked_ips;
 	int files;
-} env;
+	int pid;
+} constants;
 
 static struct fault *faults;
 static int FAULT_COUNT = 0;
@@ -67,7 +69,7 @@ static int DEVICE_COUNT = 0;
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
-	if (level == LIBBPF_DEBUG && !env.verbose)
+	if (level == LIBBPF_DEBUG && !constants.verbose)
 		return 0;
 	return vfprintf(stderr, format, args);
 }
@@ -198,7 +200,7 @@ void inject_fault(int syscall,int fault_id){
 
 	int error;
 	int inject = 1;
-	error = bpf_map_update_elem(env.syscalls_to_fail_fd,&syscall,&inject,BPF_ANY);
+	error = bpf_map_update_elem(constants.syscalls_to_fail_fd,&syscall,&inject,BPF_ANY);
 	if (error)
 		printf("Error of update is %d, syscall->%d / value-> %d \n",error,syscall,inject);
 
@@ -211,6 +213,7 @@ void build_faults(){
 	//BUILD FAULT 1
 	faults[0].done = 0;
 	faults[0].syscall = TEMP_EMPTY;
+	faults[0].pid = constants.pid;
 	faults[0].initial = (struct faultstate*)malloc(sizeof(struct faultstate));
 	faults[0].end = (struct faultstate*)malloc(sizeof(struct faultstate));
 
@@ -226,30 +229,50 @@ void build_faults(){
 	faults[0].initial->fault_type_conditions[PROCESSES_OPENED] = 0;
 	faults[0].initial->fault_type_conditions[PROCESSES_CLOSED] = 0;
 	faults[0].initial->fault_type_conditions[WRITES] = 5;
+	faults[0].initial->fault_type_conditions[IPS_BLOCKED] = 1;
+	faults[0].initial->fault_type_conditions[FUNCNAMES] = 1;
 	//faults[0].initial->fault_type_conditions[FILES_OPENED_ANY] = ANY_PID;
  
-
-	//Weird
+	for(int i=0;i<MAX_FUNCTIONS;i++){
+		char string[FUNCNAME_MAX] = "empty";
+		strcpy(faults[0].func_names[i],string);
+	}
 	char string_ips[1][32] = {"172.19.0.2"};
 
-	for (int i = 0;i < 3;i++){
+	for (int i = 0;i < MAX_IPS_BLOCKED;i++){
+
+		if (strlen(string_ips[i]) == 0)
+			break;
 
 		struct sockaddr_in sa;
 
 		inet_pton(AF_INET,string_ips[i],&(sa.sin_addr));
 
 		faults[0].ips_blocked[i] = sa.sin_addr.s_addr;
+
+		//printf("Ip is %s \n",faults[0].ips_blocked[i]);
 	}
 
-	// char if_name[32] = "veth0c5f1ea";
+	char if_name[32] = "lo";
 
-	// faults[0].veth = (char*)malloc(sizeof(char)*32);
-	// strcpy(faults[0].veth,if_name);	
+	faults[0].veth = (char*)malloc(sizeof(char)*32);
+	strcpy(faults[0].veth,if_name);	
 
 
-	char file_name[256] = "proc";
+	char file_name[FILENAME_MAX] = "proc";
 
 	strcpy(faults[0].file_open,file_name);
+
+	char func_names[8][FUNCNAME_MAX] = {":rocksdb_put",":rocksdb_get"};
+
+	for (int i = 0; i<8;i++){
+		if (strlen(func_names[i]) == 0)
+			break;
+		printf("Inserting %s in func_names in pos %d \n",func_names[i],i);
+		strcpy(faults[0].func_names[i],func_names[i]);
+
+		//printf("Funcname is %s \n",faults[0].func_names[i]);
+	}
 
  	//BUILD FAULT 2
 	// faults[1].syscall = TEMP_EMPTY;
@@ -278,6 +301,9 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 			break;
 		case 'd':
 			DEVICE_COUNT = strtol(arg,NULL,10);
+			break;
+		case 'p':
+			constants.pid = strtol(arg,NULL,10);
 			break;
 		case 'h':
 			argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
@@ -312,13 +338,14 @@ int main(int argc, char **argv)
 	/* Bump RLIMIT_MEMLOCK to create BPF maps */
 	//bump_memlock_rlimit();
 
-	//env.verbose = true;
+	//constants.verbose = true;
 	
 	/* Cleaner handling of Ctrl-C */
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
-
+	printf("Building faults \n");
 	build_faults();
+	printf("Faults built \n");
 	struct aux_bpf *aux_bpf = start_aux_maps();
 
 	if(!aux_bpf){
@@ -326,10 +353,10 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	env.relevant_state_info_fd = bpf_map__fd(aux_bpf->maps.relevant_state_info);
-	env.syscalls_to_fail_fd = bpf_map__fd(aux_bpf->maps.syscalls_to_fail);
-	env.blocked_ips = bpf_map__fd(aux_bpf->maps.blocked_ips);
-	env.files = bpf_map__fd(aux_bpf->maps.files);
+	constants.relevant_state_info_fd = bpf_map__fd(aux_bpf->maps.relevant_state_info);
+	constants.syscalls_to_fail_fd = bpf_map__fd(aux_bpf->maps.syscalls_to_fail);
+	constants.blocked_ips = bpf_map__fd(aux_bpf->maps.blocked_ips);
+	constants.files = bpf_map__fd(aux_bpf->maps.files);
 	
 
 	//Insert general properties in MAPS, mostly counters
@@ -356,7 +383,7 @@ int main(int argc, char **argv)
 			for(int i=0;i<relevant_state_info_counter;i++){
 				printf("Relevant value %llu \n",relevant_state_info[i]);
 			}
-			error = bpf_map_update_elem(env.relevant_state_info_fd,&state_condition,relevant_state_info,BPF_ANY);
+			error = bpf_map_update_elem(constants.relevant_state_info_fd,&state_condition,relevant_state_info,BPF_ANY);
 		
 			if (error){
 				printf("Error of update is %d, key->%llu \n",error,state_condition);	
@@ -375,13 +402,18 @@ int main(int argc, char **argv)
 			strcpy(file_info.filename,faults[i].file_open);
 			file_info.size = strlen(file_info.filename);
 
-			error = bpf_map_update_elem(env.files,&value,&file_info,BPF_ANY);
+			error = bpf_map_update_elem(constants.files,&value,&file_info,BPF_ANY);
 			if (error){
 				printf("Error of update in files_opened is %d, key->%s \n",error,faults[i].file_open);	
 			}	
 		}
 	}
 
+	struct uprobe_bpf *uprobes[FAULT_COUNT][MAX_FUNCTIONS];
+
+	for (int i = 0;i<FAULT_COUNT;i++)
+		for (int j = 0;j<MAX_FUNCTIONS;j++)
+			uprobes[i][j] = NULL;
 
 	//Add to all networkdevices
 	struct ifaddrs *ifaddr;
@@ -397,8 +429,7 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	/* Walk through linked list, maintaining head pointer so we
-        can free list later. */
+	/* Walk through linked list, maintaining head pointer so we can free list later. */
 	//printf("Getting if names \n");
 
     for (struct ifaddrs *ifa = ifaddr; ifa != NULL && count_devices < DEVICE_COUNT; ifa = ifa->ifa_next) {
@@ -417,19 +448,27 @@ int main(int argc, char **argv)
 
 	init_tc(FAULT_COUNT+DEVICE_COUNT);
 
+	struct tc_bpf *tc_ebpf_progs[FAULT_COUNT];
 	struct tc_bpf *tc_ebpf_progs_tracking[DEVICE_COUNT];
 
 	//We have different progs for different network devices
-	struct tc_bpf *tc_ebpf_progs[FAULT_COUNT];
+
+	for (int i = 0;i<FAULT_COUNT;i++)
+		tc_ebpf_progs[i] = NULL;
+	
+	for (int i = 0;i<DEVICE_COUNT;i++)
+		tc_ebpf_progs_tracking[i] = NULL;
+		
+
 
 	int handle = 1;
 	//Insert IPS to block in a network device, key->if_index value->list of ips
 	for (int i =0; i<FAULT_COUNT;i++){
 
-		if(!faults[i].veth){
+		if(!faults[i].initial->fault_type_conditions[IPS_BLOCKED] && !faults[i].initial->fault_type_conditions[NETWORK_ISOLATION]){
 			continue;
 		}
-		printf("Interface is %s and i is %d \n",faults[i].veth,i);
+
 		int index = get_interface_index(faults[i].veth);
 
 		__be32 ips_to_block[MAX_IPS_BLOCKED] = {0};
@@ -451,12 +490,14 @@ int main(int argc, char **argv)
 		}
 
 		__u32 index_in_unsigned = (__u32)index;
-		int error = bpf_map_update_elem(env.blocked_ips,&index_in_unsigned,&ips_to_block,BPF_ANY);
+		int error = bpf_map_update_elem(constants.blocked_ips,&index_in_unsigned,&ips_to_block,BPF_ANY);
 		if (error){
 			printf("Error of update in blocked_ips is %d, key->%d \n",error,index);	
 		}
 
 		struct tc_bpf* tc_prog;
+		//printf("Inserted in %s for faults \n",faults[i].veth);
+
 		//handle must be different than 0 so add 1
 		tc_prog = traffic_control(index_in_unsigned,i,i+handle,FAULT_COUNT);
 
@@ -470,12 +511,25 @@ int main(int argc, char **argv)
 
 	for (int i =0; i<DEVICE_COUNT;i++){
 
+		bool already_exists = false;
+
+		for (int j=0;j<FAULT_COUNT;j++){
+			if (faults[j].veth){
+				if (strcmp(device_names[i],faults[j].veth) == 0){
+					already_exists = true;
+				}
+			}	
+		}
+		if (already_exists)
+			continue;
+
 		int index = get_interface_index(device_names[i]);
 
 		__u32 index_in_unsigned = (__u32)index;
 
 		struct tc_bpf* tc_prog;
 
+		//printf("Inserted in %s for tracking \n",device_names[i]);
 		//handle must be different than 0 so add 1
 		tc_prog = traffic_control(index_in_unsigned,i+FAULT_COUNT,i+FAULT_COUNT+handle,FAULT_COUNT);
 
@@ -486,13 +540,29 @@ int main(int argc, char **argv)
 		tc_ebpf_progs_tracking[i] = tc_prog;
 
 	}
+	free(device_names);
 
-	char funcname[16] = ":read";
+
+	for(int i = 0; i < FAULT_COUNT;i++){
+		if(!faults[i].initial->fault_type_conditions[FUNCNAMES])
+			continue;
+
+		for (int j = 0; j<MAX_FUNCTIONS;j++){
+			if (!strcmp(faults[i].func_names[j],"empty"))
+				continue;
+			printf("%s i is %d and j %d is \n",faults[i].func_names[j],i,j);
+
+			uprobes[i][j] = uprobe(faults[i].pid,faults[i].func_names[j]);
+		}
+
+
+	}
+
 	struct fs_bpf* fs_bpf = monitor_fs();
 	struct process_bpf* process_bpf = exec_and_exit(FAULT_COUNT);
 	struct faultinject_bpf* faultinject_bpf = fault_inject(FAULT_COUNT);
 	struct block_bpf* block_bpf = monitor_disk();
-	struct uprobe_bpf* uprobe_bpf = uprobe(139413,funcname);
+	//struct uprobe_bpf* uprobe_bpf = uprobe(0,funcname);
 	struct ring_buffer *rb = NULL;
 
 
@@ -517,10 +587,10 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 	
-	if (!uprobe_bpf){
-		printf("Error in creating uprobe \n");
-		goto cleanup;
-	}
+	// if (!uprobe_bpf){
+	// 	printf("Error in creating uprobe \n");
+	// 	goto cleanup;
+	// }
 	
 	int err;
 	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
@@ -552,8 +622,8 @@ int main(int argc, char **argv)
 		aux_bpf__destroy(aux_bpf);
 	if(!fs_bpf)
 		fs_bpf__destroy(fs_bpf);
-	if(!uprobe_bpf)
-		uprobes_bpf__destroy(uprobe_bpf);
+	// if(!uprobe_bpf)
+	// 	uprobes_bpf__destroy(uprobe_bpf);
 	if(!rb)
 		ring_buffer__free(rb);
 
@@ -578,17 +648,37 @@ int main(int argc, char **argv)
 	printf("Deleting tc_hooks_tracking \n");
 	for(int i=0; i<DEVICE_COUNT;i++){
 
+		if (tc_ebpf_progs_tracking[i] == NULL)
+			continue;
 		//printf("Deleting prog %d with pointer %u \n",i,tc_ebpf_progs[i]);
 		err = bpf_tc_detach(get_tc_hook(i+FAULT_COUNT), get_tc_opts(i+FAULT_COUNT));
 		if (err) {
 			fprintf(stderr, "Failed to detach TC %d: %d\n", i,err);
 		}
-
 		//printf("Deleting hook_tracking %d \n",i);
 		bpf_tc_hook_destroy(get_tc_hook(i+FAULT_COUNT));
 
 		//printf("Destroying prog_tracking %d \n",i);
 		tc_bpf__destroy(tc_ebpf_progs_tracking[i]);
+	}
+	printf("Deleting uprobes \n");
+	for (int i = 0;i<FAULT_COUNT;i++){
+		for (int j=0;j<MAX_FUNCTIONS;j++){
+			if(uprobes[i][j] != NULL)
+				uprobes_bpf__destroy(uprobes[i][j]);
+		}
+	}
+
+	printf("Freeing structures \n");
+
+	for (int i=0;i<FAULT_COUNT;i++){
+		free(faults[i].initial->fault_type_conditions);
+		free(faults[i].initial->conditions_match);
+		free(faults[i].initial);
+		free(faults[i].end->fault_type_conditions);
+		free(faults[i].end->conditions_match);
+		free(faults[i].end);
+		free(&faults[i]);
 	}
 
 	printf("Finished cleanup \n"); 

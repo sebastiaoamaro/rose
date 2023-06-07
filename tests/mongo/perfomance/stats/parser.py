@@ -3,7 +3,7 @@ import subprocess
 
 from os import listdir
 from os.path import isfile
-from statistics import mean
+from statistics import mean,stdev
 
 from datetime import datetime
 
@@ -121,16 +121,20 @@ def parse_perfomance(filename):
     output_arrays = []
 
     for i in range(0,16):
-        output_arrays.append([0]*2)
+        output_arrays.append([0]*4)
 
     for key,value in dict_times.items():
         if key[0] == "v":
             output_arrays[int(key[1:])-1][0] = mean(value)
+            output_arrays[int(key[1:])-1][1] = stdev(value)
+
         else:
-            output_arrays[int(key[1:])-1][1] = mean(value)
+            output_arrays[int(key[1:])-1][2] = mean(value)
+            output_arrays[int(key[1:])-1][3] = stdev(value)
 
 
-    times_data.write(" " + "vanilla" + " " + "eBPF" + "\n")
+
+    times_data.write("#Replicacount " + "vanilla" + " " + "eBPF" + "\n")
     line_count = 0
     print(output_arrays)
 
@@ -138,7 +142,7 @@ def parse_perfomance(filename):
         if list[0] == 0 or list[1] == 0:
             line_count+=1
             continue
-        times_data.write(str(line_count+1) + " " + str(list[0]) + " " + str(list[1]) + "\n")
+        times_data.write(str(line_count+1) + " " + str(list[0]) + " " + str(list[1]) + " " + str(list[2]) + " " + str(list[3]) + "\n")
         line_count+=1
     return
 

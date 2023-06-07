@@ -321,6 +321,7 @@ struct uprobe_bpf* uprobe(int pid,char* funcname)
 	// 	.args_doc = args_doc,
 	// 	.doc = program_doc,
 	// };
+
 	struct uprobes_bpf *obj;
 	int i, err;
 	struct tm *tm;
@@ -341,32 +342,30 @@ struct uprobe_bpf* uprobe(int pid,char* funcname)
 	err = ensure_core_btf(&open_opts);
 	if (err) {
 		fprintf(stderr, "failed to fetch necessary BTF for CO-RE: %s\n", strerror(-err));
-		return 1;
+		return NULL;
 	}
 
 	obj = uprobes_bpf__open_opts(&open_opts);
 	if (!obj) {
 		warn("failed to open BPF object\n");
-		return 1;
+		return NULL;
 	}
-	printf("Setting vars \n");
 
 	obj->rodata->units = MSEC;
 	obj->rodata->targ_tgid = pid;
 	obj->rodata->filter_cg = 0;
+	strcpy(obj->rodata->funcname,funcname);
 
 	env.pid = pid;
 	env.funcname = funcname;
 
-	printf("Done setting vars \n");
 
 	used_fentry = try_fentry(obj);
-	printf("Got a fentry \n");
 
 	err = uprobes_bpf__load(obj);
 	if (err) {
 		warn("failed to load BPF object\n");
-		return 1;
+		return NULL;
 	}
 
 /* update cgroup path fd to map */
@@ -383,8 +382,6 @@ struct uprobe_bpf* uprobe(int pid,char* funcname)
 			return NULL;
 		}
 	}
-
-	printf("Loaded \n");
 
 	if (!obj->bss) {
 		warn("Memory-mapping BPF maps is supported starting from Linux 5.7, please upgrade.\n");

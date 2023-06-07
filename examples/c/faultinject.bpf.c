@@ -152,15 +152,30 @@ static u64 reads = 0;
 static u64 writes_blocked = 0;
 static u64 reads_blocked = 0;
 
+struct data_t{
+	u64 fd;
+};
 
 SEC("kprobe/__x64_sys_write")
-int handle_write(struct pt_regs *ctx)
+int BPF_KPROBE(__x64_sys_write)
 {
 	//safe so if other ebpf runs it does not change this value
 
-	uint fd = PT_REGS_PARM1_CORE_SYSCALL(ctx);
+	// uint fd = PT_REGS_PARM1_CORE_SYSCALL(ctx);
 
-	//bpf_printk("%u \n",fd);
+	// struct data_t data = {};
+
+	// bpf_probe_read_user(data.fd,sizeof(data.fd),(void *)&PT_REGS_PARM1(ctx));
+
+	int fd = PT_REGS_PARM1(ctx);
+
+	// bpf_printk("%d \n",fd);
+
+	// if (!fd)
+	// 	return 0;
+
+	// bpf_printk("%u \n",fd);
+	
 	u64 pid;
 
 	pid = bpf_get_current_pid_tgid();
