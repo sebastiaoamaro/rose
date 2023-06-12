@@ -44,7 +44,7 @@ do
 
     currentdevices=$(ls -A /sys/class/net | wc -l)
     
-    $maindirectory -f 0 -d $currentdevices &
+    $maindirectory -f 1 -d $currentdevices &
     ebpf_PID=$!
     echo $ebpf_PID
 

@@ -21,7 +21,7 @@ struct {
 	__uint(max_entries, 8192);
 	__type(key, int);
 	__type(value, int);
-} syscalls_to_fail SEC(".maps");
+} faulttype SEC(".maps");
 
 //Key is network device index, value is array of IPS to block incoming (for now)
 struct {

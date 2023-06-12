@@ -20,7 +20,7 @@ struct {
 	__type(key, int);
 	__type(value, int);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
-} syscalls_to_fail SEC(".maps");
+} faulttype SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
@@ -152,9 +152,6 @@ static u64 reads = 0;
 static u64 writes_blocked = 0;
 static u64 reads_blocked = 0;
 
-struct data_t{
-	u64 fd;
-};
 
 SEC("kprobe/__x64_sys_write")
 int BPF_KPROBE(__x64_sys_write)
@@ -167,24 +164,25 @@ int BPF_KPROBE(__x64_sys_write)
 
 	// bpf_probe_read_user(data.fd,sizeof(data.fd),(void *)&PT_REGS_PARM1(ctx));
 
-	int fd = PT_REGS_PARM1(ctx);
-
 	// bpf_printk("%d \n",fd);
 
 	// if (!fd)
 	// 	return 0;
 
 	// bpf_printk("%u \n",fd);
-	
-	u64 pid;
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
 
-	pid = bpf_get_current_pid_tgid();
+	// if (pid == 74705)
+	// 	bpf_printk("Tid is %u and pid is %u \n",tid,pid);
+
 
 	int writes_now = writes;
 
 	int write_syscall = WRITE;
 
-	int* inject = bpf_map_lookup_elem(&syscalls_to_fail,&write_syscall);
+	int* inject = bpf_map_lookup_elem(&faulttype,&write_syscall);
 
 	if (inject){
 		if (*inject){
@@ -205,7 +203,7 @@ int BPF_KPROBE(__x64_sys_write)
 		//bpf_printk("write_state[0] is %llu and write_state[1] is %llu and writes value is %llu \n", writes_list[0],writes_list[1],writes);
 
 		for (int i=0;i<fault_count;i++){
-			if (writes_list[i] == writes && writes_list[i] != 0){
+			if (writes_list[i] == writes && writes_list[i] != 0 || (writes % writes_list[i] == 0)){
 				//bpf_printk("Sent to userspace from write with value %llu \n",writes_list[i]);
 
 				struct event *e;
@@ -217,6 +215,8 @@ int BPF_KPROBE(__x64_sys_write)
 
 				e->type = WRITE_HOOK;
 				e->writes = writes_now;
+				if (writes % writes_list[i] == 0)
+					e->writes_repeat = writes_list[i];
 				bpf_ringbuf_submit(e, 0);
 				writes+=1;
 				return 0;
@@ -240,7 +240,7 @@ int BPF_KPROBE(__x64_sys_read)
 
 	int read_syscall = READ;
 
-	int* inject = bpf_map_lookup_elem(&syscalls_to_fail,&read_syscall);
+	int* inject = bpf_map_lookup_elem(&faulttype,&read_syscall);
 
 	if (inject){
 		if (*inject){
@@ -252,7 +252,7 @@ int BPF_KPROBE(__x64_sys_read)
 		}
 	}
 
-	u64 reads_key = READ;
+	u64 reads_key = READS;
 
 	u64* reads_list = bpf_map_lookup_elem(&relevant_state_info,&reads_key);
 
@@ -261,8 +261,8 @@ int BPF_KPROBE(__x64_sys_read)
 		//bpf_printk("write_state[0] is %llu and write_state[1] is %llu and writes value is %llu \n", writes_list[0],writes_list[1],writes);
 
 		for (int i=0;i<fault_count;i++){
-			if (reads_list[i] == writes && reads_list[i] != 0){
-				//bpf_printk("Sent to userspace from write with value %llu \n",writes_list[i]);
+			if (reads_list[i] == reads && reads_list[i] != 0 || (reads % reads_list[i] == 0)) {
+				//bpf_printk("Sent to userspace from read with value %llu \n",reads_list[i]);
 
 				struct event *e;
 
@@ -271,8 +271,12 @@ int BPF_KPROBE(__x64_sys_read)
 				if (!e)
 					return 0;
 
-				e->type = WRITE_HOOK;
-				e->writes = reads_now;
+				e->type = READ_HOOK;
+				e->reads = reads_now;
+
+				if (reads % reads_list[i] == 0)
+					e->reads_repeat = reads_list[i];
+				
 				bpf_ringbuf_submit(e, 0);
 				reads+=1;
 				return 0;

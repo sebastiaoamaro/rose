@@ -36,7 +36,7 @@ void process_write(const struct event*);
 int process_tc(const struct event*);
 void process_fs(const struct event*);
 
-void inject_fault(int syscall,int fault_id);
+void inject_fault(int faulttype,int fault_id);
 
 const char *argp_program_version = "Tool for FI 0.01";
 const char *argp_program_bug_address = "sebastiao.amaro@ŧecnico.ulisboa.pt";
@@ -47,7 +47,8 @@ const char argp_program_doc[] = "eBPF Fault Injection Tool.\n"
 static const struct argp_option opts[] = {
 	{ "faultcount", 'f', "FAULTCOUNT", 0, "Number of faults" },
 	{ "devicecount", 'd', "DEVICECOUNT", 0, "Number of network devices" },
-	{ "devicecount", 'p', "PID", 0, "Process ID put in order of faults" },
+	{ "processid", 'p', "PID", 0, "Process ID" },
+	{ "inputfile", 'i', "inputfilename",0,"File with auxiliary fault information "},
 	{ NULL, 'h', NULL, OPTION_HIDDEN, "Show the full help" },
 	{},
 };
@@ -55,17 +56,18 @@ static const struct argp_option opts[] = {
 static struct constants {
 	bool verbose;
 	long min_duration_ms;
-	int syscalls_to_fail_fd;
+	int faulttype_fd;
 	int relevant_state_info_fd;
 	int blocked_ips;
 	int files;
 	int pid;
+	char *inputfilename;
 } constants;
 
 static struct fault *faults;
 static int FAULT_COUNT = 0;
 static int DEVICE_COUNT = 0;
-
+static int FAULTS_INJECTED = 0;
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
@@ -109,6 +111,9 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 		case WRITE_HOOK:
 			process_write(e);
 		break;
+		case READ_HOOK:
+			process_read(e);
+		break;
 		case TC:
 			process_tc(e);
 		break;
@@ -130,14 +135,12 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 				if (faults[i].initial->conditions_match[j]){
 					run+=1;
 				}
-				else
-					run-=1;
 			}
 		}
-		//printf("run is %d, relevant_conditions is %d \n",run,relevant_conditions);
+		printf("run is %d, relevant_conditions is %d \n",run,relevant_conditions);
 		if (run == relevant_conditions)
 			if (!faults[i].done)
-				inject_fault(faults[i].syscall,i);
+				inject_fault(faults[i].faulttype,i);
 	}
  
 	return 0;
@@ -170,6 +173,30 @@ void process_write(const struct event *event){
 			if (event->writes == faults[i].initial->fault_type_conditions[WRITES]){
 				faults[i].initial->conditions_match[WRITES] = 1;
 			}
+
+			if (faults[i].repeat){
+				if (event->writes_repeat == faults[i].initial->fault_type_conditions[WRITES]){
+					faults[i].initial->conditions_match[WRITES] = 1;
+				}
+			}
+		}
+	}
+}
+
+//Handles the read syscall
+void process_read(const struct event *event){
+	for (int i=0; i<FAULT_COUNT;i++){
+		if (faults[i].initial->fault_type_conditions[READS]){
+			//printf("Write count is %d \n",event->writes);
+			if (event->writes == faults[i].initial->fault_type_conditions[READS]){
+				faults[i].initial->conditions_match[READS] = 1;
+			}
+
+			if (faults[i].repeat){
+				if (event->reads_repeat == faults[i].initial->fault_type_conditions[READS]){
+					faults[i].initial->conditions_match[READS] = 1;
+				}
+			}
 		}
 	}
 }
@@ -194,103 +221,89 @@ void process_fs(const struct event *event){
 
 
 //Tells eBPF via Maps to start a fault
-void inject_fault(int syscall,int fault_id){
+void inject_fault(int faulttype,int fault_id){
 
-	printf("Injecting fault in %d \n",syscall);
+	printf("Injecting fault in %d \n",faulttype);
 
 	int error;
 	int inject = 1;
-	error = bpf_map_update_elem(constants.syscalls_to_fail_fd,&syscall,&inject,BPF_ANY);
+	error = bpf_map_update_elem(constants.faulttype_fd,&faulttype,&inject,BPF_ANY);
 	if (error)
-		printf("Error of update is %d, syscall->%d / value-> %d \n",error,syscall,inject);
+		printf("Error of update is %d, faulttype->%d / value-> %d \n",error,faulttype,inject);
 
 	faults[fault_id].done = 1;
+
+	//If fault is to be injected again clear conditions match
+	if (faults[fault_id].repeat){
+		faults[fault_id].done = 0;
+		for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
+			faults[fault_id].initial->conditions_match[i] = 0;
+		}
+
+	}
 
 }
 
 //Temporary way of creating faults
 void build_faults(){
-	//BUILD FAULT 1
-	faults[0].done = 0;
-	faults[0].syscall = TEMP_EMPTY;
-	faults[0].pid = constants.pid;
-	faults[0].initial = (struct faultstate*)malloc(sizeof(struct faultstate));
-	faults[0].end = (struct faultstate*)malloc(sizeof(struct faultstate));
 
-	faults[0].initial->fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
-	faults[0].initial->conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
-	for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
-		faults[0].initial->conditions_match[i] = 0;
-	}
-	for (int j=0; j < STATE_PROPERTIES_COUNT;j++){
-		faults[0].initial->fault_type_conditions[j] = 0;
-	}
+	FILE * fp;
+    char * line = NULL;
+    size_t len = 0;
+    ssize_t read;
 
-	faults[0].initial->fault_type_conditions[PROCESSES_OPENED] = 0;
-	faults[0].initial->fault_type_conditions[PROCESSES_CLOSED] = 0;
-	faults[0].initial->fault_type_conditions[WRITES] = 5;
-	faults[0].initial->fault_type_conditions[IPS_BLOCKED] = 1;
-	faults[0].initial->fault_type_conditions[FUNCNAMES] = 1;
-	//faults[0].initial->fault_type_conditions[FILES_OPENED_ANY] = ANY_PID;
- 
-	for(int i=0;i<MAX_FUNCTIONS;i++){
-		char string[FUNCNAME_MAX] = "empty";
-		strcpy(faults[0].func_names[i],string);
-	}
-	char string_ips[1][32] = {"172.19.0.2"};
+	int fault_count = 0;
+	fp = fopen(constants.inputfilename, "r");
+    if (fp == NULL)
+        exit(EXIT_FAILURE);
 
-	for (int i = 0;i < MAX_IPS_BLOCKED;i++){
+	while ((read = getline(&line, &len, fp)) != -1) {
+        printf("%s \n", line);
 
-		if (strlen(string_ips[i]) == 0)
-			break;
+		int pid;
 
-		struct sockaddr_in sa;
+		char *if_name;
 
-		inet_pton(AF_INET,string_ips[i],&(sa.sin_addr));
+		char* token = strtok(line,";");
 
-		faults[0].ips_blocked[i] = sa.sin_addr.s_addr;
+		pid = atoi(token);
 
-		//printf("Ip is %s \n",faults[0].ips_blocked[i]);
-	}
+		faults[fault_count].pid = pid;
 
-	char if_name[32] = "lo";
+		token = strtok(NULL,"");
 
-	faults[0].veth = (char*)malloc(sizeof(char)*32);
-	strcpy(faults[0].veth,if_name);	
+		set_if_name(&faults[fault_count],token);
 
+		fault_count++;
 
-	char file_name[FILENAME_MAX] = "proc";
+    }
 
-	strcpy(faults[0].file_open,file_name);
+	for(int i = 0; i< FAULT_COUNT;i++){
+		build_fault(&faults[i],1,0,DROP_PACKETS,5);
 
-	char func_names[8][FUNCNAME_MAX] = {":rocksdb_put",":rocksdb_get"};
+		//faults[0].initial->fault_type_conditions[PROCESSES_OPENED] = 1;
+		//faults[0].initial->fault_type_conditions[PROCESSES_CLOSED] = 1;
+		faults[i].initial->fault_type_conditions[WRITES] = 10000;
+		faults[i].initial->fault_type_conditions[READS] = 10000;
+		faults[i].initial->fault_type_conditions[FUNCNAMES] = 0;
+		//faults[0].initial->fault_type_conditions[FILES_OPENED_ANY] = ANY_PID;
+	
+		// char string_ips[32] = "172.19.0.2";
 
-	for (int i = 0; i<8;i++){
-		if (strlen(func_names[i]) == 0)
-			break;
-		printf("Inserting %s in func_names in pos %d \n",func_names[i],i);
-		strcpy(faults[0].func_names[i],func_names[i]);
+		// add_ip_to_block(&faults[0],string_ips,0);
 
-		//printf("Funcname is %s \n",faults[0].func_names[i]);
+		char file_name[FILENAME_MAX] = "test.txt";
+
+		strcpy(faults[i].file_open,file_name);
+
+		// char func_names[8][FUNCNAME_MAX] = {"test"};
+
+		// add_function_to_monitor(&faults[0],&func_names[0],0);
 	}
 
- 	//BUILD FAULT 2
-	// faults[1].syscall = TEMP_EMPTY;
-	// faults[1].fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
-	// faults[1].conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
-	// for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
-	// 	faults[1].conditions_match[i] = 0;
-	// }
-	// for (int j=0; j < STATE_PROPERTIES_COUNT;j++){
-	// 	faults[1].fault_type_conditions[j] = 0;
-	// }
 
-	// faults[1].fault_type_conditions[PROCESSES_OPENED] = 5;
-	// faults[1].fault_type_conditions[PROCESSES_CLOSED] = 5;
-	// faults[1].fault_type_conditions[WRITES] = 5;
+}
 
-
-}	
 
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
@@ -304,6 +317,10 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 			break;
 		case 'p':
 			constants.pid = strtol(arg,NULL,10);
+			break;
+		case 'i':
+			constants.inputfilename = (char *)malloc(sizeof(char)*strlen(arg));
+			strcpy(constants.inputfilename,arg);
 			break;
 		case 'h':
 			argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
@@ -343,9 +360,7 @@ int main(int argc, char **argv)
 	/* Cleaner handling of Ctrl-C */
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
-	printf("Building faults \n");
 	build_faults();
-	printf("Faults built \n");
 	struct aux_bpf *aux_bpf = start_aux_maps();
 
 	if(!aux_bpf){
@@ -354,7 +369,7 @@ int main(int argc, char **argv)
 	}
 
 	constants.relevant_state_info_fd = bpf_map__fd(aux_bpf->maps.relevant_state_info);
-	constants.syscalls_to_fail_fd = bpf_map__fd(aux_bpf->maps.syscalls_to_fail);
+	constants.faulttype_fd = bpf_map__fd(aux_bpf->maps.faulttype);
 	constants.blocked_ips = bpf_map__fd(aux_bpf->maps.blocked_ips);
 	constants.files = bpf_map__fd(aux_bpf->maps.files);
 	
@@ -465,7 +480,7 @@ int main(int argc, char **argv)
 	//Insert IPS to block in a network device, key->if_index value->list of ips
 	for (int i =0; i<FAULT_COUNT;i++){
 
-		if(!faults[i].initial->fault_type_conditions[IPS_BLOCKED] && !faults[i].initial->fault_type_conditions[NETWORK_ISOLATION]){
+		if(!faults[i].veth){
 			continue;
 		}
 
@@ -566,7 +581,7 @@ int main(int argc, char **argv)
 	struct ring_buffer *rb = NULL;
 
 
-	printf("Created monitor fs \n");
+	printf("Created all structs \n");
 	
 	if (!fs_bpf){
 		printf("Error in creating fs tracing\n");

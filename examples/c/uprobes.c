@@ -263,7 +263,6 @@ static int attach_uprobes(struct uprobes_bpf *obj)
 
 	binary = strdup(env.funcname);
 
-	printf("%s \n",binary);
 
 	if (!binary) {
 		warn("strdup failed");
@@ -276,6 +275,8 @@ static int attach_uprobes(struct uprobes_bpf *obj)
 	}
 	*function = '\0';
 	function++;
+
+	printf("Binary is %s \n",binary);
 
 	if (resolve_binary_path(binary, env.pid, bin_path, sizeof(bin_path)))
 		goto out_binary;
@@ -321,7 +322,8 @@ struct uprobe_bpf* uprobe(int pid,char* funcname)
 	// 	.args_doc = args_doc,
 	// 	.doc = program_doc,
 	// };
-
+	printf("In uprobe for function %s \n",funcname);
+	
 	struct uprobes_bpf *obj;
 	int i, err;
 	struct tm *tm;

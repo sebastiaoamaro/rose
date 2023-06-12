@@ -36,7 +36,7 @@ struct {
 	__type(key, int);
 	__type(value, int);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
-} syscalls_to_fail SEC(".maps");
+} faulttype SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -62,6 +62,7 @@ struct {
 
 const volatile __u32 if_index = 0;
 const volatile int fault_count = 0;
+static int packets_dropped = 0;
 
 static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff)
 {
@@ -77,12 +78,32 @@ int tc_ingress(struct __sk_buff *ctx)
 {
 	int isolation = NETWORK_ISOLATION;
 
-	int* isolate_network = bpf_map_lookup_elem(&syscalls_to_fail,&isolation);
+	int* isolate_network = bpf_map_lookup_elem(&faulttype,&isolation);
 
 	if (isolate_network){
 		if (*isolate_network){
 			bpf_printk("Blocked packet\n");
 			return TC_ACT_SHOT;
+		}
+	}
+
+	int droppackets = DROP_PACKETS;
+
+	int* droppackets_now = bpf_map_lookup_elem(&faulttype,&droppackets);
+
+	if (droppackets_now){
+		if (*droppackets_now){
+			if (packets_dropped <=  5){
+				bpf_printk("Blocked packet with packets_dropped count %d\n",packets_dropped);
+				packets_dropped++;
+				return TC_ACT_SHOT;
+			}
+			else{
+				int zero = 0;
+				packets_dropped = 0;
+				bpf_map_update_elem(&faulttype,&droppackets,&zero,BPF_ANY);
+
+			}
 		}
 	}
 
@@ -130,7 +151,7 @@ int tc_ingress(struct __sk_buff *ctx)
 	__be32* ips;
 
 	//check if we are at the state to block ips
-	int* block_ips = bpf_map_lookup_elem(&syscalls_to_fail,&block_ips_flag);
+	int* block_ips = bpf_map_lookup_elem(&faulttype,&block_ips_flag);
 	if (block_ips){
 		//bpf_printk("Time to block_ips \n");
 		if (*block_ips){

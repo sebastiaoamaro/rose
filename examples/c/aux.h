@@ -3,19 +3,18 @@
 
 #define MAX_ENTRIES 10240
 #define PATH_MAX	4096
-#define STATE_PROPERTIES_COUNT 10
+#define STATE_PROPERTIES_COUNT 11
 #define MAX_IPS_BLOCKED 16
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
 #define FUNCNAME_MAX 16
 #define MAX_FUNCTIONS 8
 #define FILENAME_MAX 64
+#define FAULTSSUPPORTED 7
 
-struct aux_bpf* start_aux_maps();
-int get_interface_index(char*);
 struct fault {
-    __u64 syscall;
-    //array with conditions
+    __u64 faulttype;
+    int *faulttype_count;
     __be32 ips_blocked[MAX_IPS_BLOCKED];
     char *veth;
     char file_open[FILENAME_MAX];
@@ -24,6 +23,7 @@ struct fault {
     struct faultstate *initial;
     struct faultstate *end;
     int pid;
+    int repeat;
 };
 
 struct faultstate{
@@ -31,14 +31,15 @@ struct faultstate{
     int *conditions_match;
 };
 
-//syscall to fail
-enum syscall{
+//syscall to fail, rename to faulttype
+enum faulttype{
     FORK = 1,
     WRITE = 2,
     READ = 3,
     NETWORK_ISOLATION = 4,
     BLOCK_IPS = 5,
-    TEMP_EMPTY = 999
+    DROP_PACKETS = 6,
+    TEMP_EMPTY = 999,
 };
 
 //Positions of array which correspond to a certain counter
@@ -50,15 +51,17 @@ enum stateinfo{
     FILES_OPENED_ANY = 4,
     FILES_CLOSED_ANY = 5,
     WRITES = 6,
-    IPS_BLOCKED = 7,
-    FUNCNAMES = 8,
-    CALLCOUNT = 9
+    READS = 7,
+    IPS_BLOCKED = 8,
+    FUNCNAMES = 9,
+    CALLCOUNT = 10    
 };
 
 //To process different types of events in userspace
 enum eventype{
     EXEC_EXIT = 0,
     WRITE_HOOK = 1,
+    READ_HOOK = 4,
     TC = 2,
     FSYS = 3
 };
@@ -78,10 +81,19 @@ struct event {
 	__u64 processes_created;
 	__u64 processes_closed;
     __u64 writes;
+    __u64 writes_repeat;
+    __u64 reads;
+    __u64 reads_repeat;
     __u32 ip_proto;
     __u32 ifindex;
 	__be32 src_addr;
 	__be32 dst_addr;
 };
 
+struct aux_bpf* start_aux_maps();
+int get_interface_index(char*);
+void build_fault(struct fault* ,int,int,int,int);
+void add_ip_to_block(struct fault*,char *,int);
+void set_if_name(struct fault*,char *);
+void add_function_to_monitor(struct fault*,char*,int);
 #endif /* __AUX_H */

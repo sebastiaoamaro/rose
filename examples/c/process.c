@@ -16,8 +16,6 @@
 static struct env {
 	bool verbose;
 	long min_duration_ms;
-	int syscalls_to_fail_fd;
-	int relevant_state_info_fd;
 } env;
 
 

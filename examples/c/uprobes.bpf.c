@@ -65,7 +65,7 @@ static void entry(void)
 		new_value = *count + 1;
 		bpf_map_update_elem(&funcnames,&funcname,&new_value,BPF_ANY);
 	}
-	//bpf_printk("Count is %d \n",new_value);
+	bpf_printk("Count is %d \n",new_value);
 
 	bpf_map_update_elem(&starts, &pid, &nsec, BPF_ANY);
 }

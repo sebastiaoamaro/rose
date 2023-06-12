@@ -11,6 +11,11 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <arpa/inet.h>
+#include <linux/if_packet.h>
+#include <linux/if_ether.h>
+#include <linux/in.h>
+#include <net/if.h>
 
 static struct env {
 	bool verbose;
@@ -55,13 +60,13 @@ struct aux_bpf* start_aux_maps(){
 		printf("[ERROR] libbpf pin API: %d\n", err);
 	}
 
-    err = bpf_map__unpin(skel->maps.syscalls_to_fail, "/sys/fs/bpf/syscalls_to_fail");
+    err = bpf_map__unpin(skel->maps.faulttype, "/sys/fs/bpf/faulttype");
 	if(err) {
 		printf("[ERROR] libbpf unpin API: %d\n", err);
 		//return NULL;
 	}
 	
-	err = bpf_map__pin(skel->maps.syscalls_to_fail, "/sys/fs/bpf/syscalls_to_fail");
+	err = bpf_map__pin(skel->maps.faulttype, "/sys/fs/bpf/faulttype");
 	if(err) {
 		printf("[ERROR] libbpf pin API: %d\n", err);
 		return NULL;
@@ -140,4 +145,56 @@ int get_interface_index(char* if_name){
 	}
 
 	return ifr.ifr_ifindex;
+}
+
+void build_fault(struct fault* fault, int repeat, int pid,int faulttype,int occurences){
+	fault->done = 0;
+	fault->repeat = repeat;
+	fault->faulttype = faulttype;
+	fault->pid = pid;
+	fault->initial = (struct faultstate*)malloc(sizeof(struct faultstate));
+	fault->end = (struct faultstate*)malloc(sizeof(struct faultstate));
+
+	fault->initial->fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
+	fault->initial->conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
+
+	fault->faulttype_count = (int*)malloc(STATE_PROPERTIES_COUNT*sizeof(int));
+
+	for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
+		fault->initial->conditions_match[i] = 0;
+	}
+	for (int i=0; i < STATE_PROPERTIES_COUNT;i++){
+		fault->initial->fault_type_conditions[i] = 0;
+	}
+
+	for (int i=0; i < FAULTSSUPPORTED;i++){
+		fault->faulttype_count[i] = 0;
+	}
+
+	if(faulttype != TEMP_EMPTY)
+		fault->faulttype_count[faulttype] = occurences;
+
+	for(int i=0;i<MAX_FUNCTIONS;i++){
+		char string[FUNCNAME_MAX] = "empty";
+		strcpy(fault->func_names[i],string);
+	}
+}
+
+void add_ip_to_block(struct fault* fault,char *string_ip,int pos){
+
+		struct sockaddr_in sa;
+
+		inet_pton(AF_INET,string_ip,&(sa.sin_addr));
+
+		fault->ips_blocked[pos] = sa.sin_addr.s_addr;
+}
+
+void set_if_name(struct fault* fault, char*if_name){
+		fault->veth = (char*)malloc(sizeof(char)*32);
+		strcpy(fault->veth,if_name);	
+}
+
+void add_function_to_monitor(struct fault* fault, char *funcname,int pos){
+	printf("Funcname in aux.c is %s \n",funcname);
+	strcpy(fault->func_names[pos],funcname);
 }
