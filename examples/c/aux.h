@@ -14,6 +14,7 @@
 
 struct fault {
     __u64 faulttype;
+    //I do not remember what this was for
     int *faulttype_count;
     __be32 ips_blocked[MAX_IPS_BLOCKED];
     char *veth;
@@ -23,6 +24,28 @@ struct fault {
     struct faultstate *initial;
     struct faultstate *end;
     int pid;
+    int repeat;
+    int occurrences;
+};
+
+struct fault_key{
+    int pid;
+    int faulttype;
+};
+
+struct fault_description{
+    int on;
+    int occurences;
+};
+
+struct info_key{
+    int pid;
+    int infotype;
+};
+
+struct info_state{
+    __u64 relevant_states[256];
+    __u64 current_value;
     int repeat;
 };
 
@@ -78,8 +101,11 @@ struct event {
 	unsigned long long duration_ns;
 	char comm[TASK_COMM_LEN];
 	char filename[MAX_FILENAME_LEN];
+    __u64 state_condition;
 	__u64 processes_created;
+    __u64 processes_created_repeat;
 	__u64 processes_closed;
+    __u64 processes_closed_repeat;
     __u64 writes;
     __u64 writes_repeat;
     __u64 reads;
@@ -92,8 +118,9 @@ struct event {
 
 struct aux_bpf* start_aux_maps();
 int get_interface_index(char*);
-void build_fault(struct fault* ,int,int,int,int);
+void build_fault(struct fault* ,int,int,int);
 void add_ip_to_block(struct fault*,char *,int);
 void set_if_name(struct fault*,char *);
 void add_function_to_monitor(struct fault*,char*,int);
+int bpf_map_lookup_or_try_init_user(int, const void *, void *,void *);
 #endif /* __AUX_H */

@@ -147,11 +147,11 @@ int get_interface_index(char* if_name){
 	return ifr.ifr_ifindex;
 }
 
-void build_fault(struct fault* fault, int repeat, int pid,int faulttype,int occurences){
+void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences){
 	fault->done = 0;
 	fault->repeat = repeat;
+	fault->pid = 0;
 	fault->faulttype = faulttype;
-	fault->pid = pid;
 	fault->initial = (struct faultstate*)malloc(sizeof(struct faultstate));
 	fault->end = (struct faultstate*)malloc(sizeof(struct faultstate));
 
@@ -171,9 +171,11 @@ void build_fault(struct fault* fault, int repeat, int pid,int faulttype,int occu
 		fault->faulttype_count[i] = 0;
 	}
 
-	if(faulttype != TEMP_EMPTY)
-		fault->faulttype_count[faulttype] = occurences;
-
+	if(faulttype != TEMP_EMPTY){
+		fault->faulttype_count[faulttype] = occurrences;
+		fault->occurrences = occurrences;
+	}
+		//I do not remember what this was for
 	for(int i=0;i<MAX_FUNCTIONS;i++){
 		char string[FUNCNAME_MAX] = "empty";
 		strcpy(fault->func_names[i],string);
@@ -197,4 +199,23 @@ void set_if_name(struct fault* fault, char*if_name){
 void add_function_to_monitor(struct fault* fault, char *funcname,int pos){
 	printf("Funcname in aux.c is %s \n",funcname);
 	strcpy(fault->func_names[pos],funcname);
+}
+
+int bpf_map_lookup_or_try_init_user(int map, const void *key, void *init,void *value)
+{
+	long err;
+	int err_lookup;
+
+	err_lookup = bpf_map_lookup_elem(map, key, value);
+	if (!err_lookup){
+		printf("It exists already in lookup and err is %d \n",err_lookup);
+		return 1;
+	}
+	else{
+		err = bpf_map_update_elem(map, key, init,BPF_ANY);
+		printf("Created and err is %d \n",err);
+		if (err && err != -EEXIST)
+			printf("Error in init \n");
+		return 0;
+	}
 }

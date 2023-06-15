@@ -12,15 +12,15 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
-	__type(key, u64);
-	__type(value, u64[512]);
+	__type(key, struct info_key);
+	__type(value, struct info_state);
 } relevant_state_info SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
-	__type(key, int);
-	__type(value, int);
+	__type(key,struct fault_key);
+	__type(value, struct fault_description);
 } faulttype SEC(".maps");
 
 //Key is network device index, value is array of IPS to block incoming (for now)

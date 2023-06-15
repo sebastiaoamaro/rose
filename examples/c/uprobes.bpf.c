@@ -37,12 +37,24 @@ struct {
 
 __u32 hist[MAX_SLOTS] = {};
 
-static void entry(void)
+static void entry(struct pt_regs *ctx)
 {
 	u64 id = bpf_get_current_pid_tgid();
 	u32 tgid = id >> 32;
 	u32 pid = id;
 	u64 nsec;
+
+	char* argument,argument2;
+
+	argument = PT_REGS_PARM1(ctx);
+
+	if(argument)
+		bpf_printk("Argument is %s \n",argument);
+
+	argument2 = PT_REGS_PARM2(ctx);
+
+	if(argument)
+		bpf_printk("Argument2 is %s \n",argument2);
 
 	if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
 		return;
@@ -73,14 +85,14 @@ static void entry(void)
 SEC("fentry/dummy_fentry")
 int BPF_PROG(dummy_fentry)
 {
-	entry();
+	entry(ctx);
 	return 0;
 }
 
 SEC("kprobe/dummy_kprobe")
 int BPF_KPROBE(dummy_kprobe)
 {	
-	entry();
+	entry(ctx);
 	return 0;
 }
 

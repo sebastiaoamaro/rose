@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 /* Copyright (c) 2022 Hengqi Chen */
-//#include <vmlinux.h>
-#include <stddef.h>
-#include <linux/bpf.h>
-#include <linux/if_ether.h>
-#include <linux/ip.h>
-#include <linux/in.h>
+#include <vmlinux.h>
+//#include <stddef.h>
+//#include <linux/bpf.h>
+//#include <linux/if_ether.h>
+//#include <linux/ip.h>
+//#include <linux/in.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+#include <bpf/bpf_tracing.h>
+#include <bpf/bpf_core_read.h>
 #include "aux.h"
 #include "tc.h"
 #include "maps.bpf.h"
@@ -19,22 +21,23 @@
 #define TC_ACT_OK	0
 #define TC_ACT_SHOT 2
 #define ETH_P_IP	0x0800		/* Internet Protocol packet	*/
+#define ETH_HLEN	14
 
 char __license[] SEC("license") = "GPL";
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
-	__type(key, __u64);
-	__type(value, __u64[512]);
+	__type(key, struct info_key);
+	__type(value, struct info_state);
 	 __uint(pinning, LIBBPF_PIN_BY_NAME);
 } relevant_state_info SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
-	__type(key, int);
-	__type(value, int);
+	__type(key, struct fault_key);
+	__type(value, struct fault_description);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } faulttype SEC(".maps");
 
@@ -76,33 +79,43 @@ static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff)
 SEC("tc")
 int tc_ingress(struct __sk_buff *ctx)
 {
-	int isolation = NETWORK_ISOLATION;
 
-	int* isolate_network = bpf_map_lookup_elem(&faulttype,&isolation);
+	struct fault_key fault_to_inject_networkiso = {
+		0,
+		NETWORK_ISOLATION,
+	};
 
-	if (isolate_network){
-		if (*isolate_network){
-			bpf_printk("Blocked packet\n");
+
+	struct fault_description *description_of_fault_netiso;
+
+	description_of_fault_netiso = bpf_map_lookup_elem(&faulttype,&fault_to_inject_networkiso);
+
+	if (description_of_fault_netiso){
+		if (description_of_fault_netiso->on){
 			return TC_ACT_SHOT;
 		}
 	}
 
-	int droppackets = DROP_PACKETS;
+	struct fault_key fault_to_inject_droppacket = {
+		0,
+		DROP_PACKETS,
+	};
 
-	int* droppackets_now = bpf_map_lookup_elem(&faulttype,&droppackets);
+	struct fault_description *description_of_fault_drop;
 
-	if (droppackets_now){
-		if (*droppackets_now){
-			if (packets_dropped <=  5){
-				bpf_printk("Blocked packet with packets_dropped count %d\n",packets_dropped);
+	description_of_fault_drop = bpf_map_lookup_elem(&faulttype,&fault_to_inject_droppacket);
+	
+
+	if (description_of_fault_drop){
+		if (description_of_fault_drop->on){
+			if (packets_dropped <= description_of_fault_drop->occurences){
 				packets_dropped++;
+				//bpf_printk("Blocked packet \n");
 				return TC_ACT_SHOT;
 			}
 			else{
-				int zero = 0;
 				packets_dropped = 0;
-				bpf_map_update_elem(&faulttype,&droppackets,&zero,BPF_ANY);
-
+				description_of_fault_drop->on = 0;
 			}
 		}
 	}
@@ -146,15 +159,22 @@ int tc_ingress(struct __sk_buff *ctx)
 
 	//bpf_printk("e->src_addr is %d and e->dst_addr is %d \n",pair.src_addr,pair.dst_addr);
 
-	int block_ips_flag = BLOCK_IPS;
+
+	struct fault_key fault_to_inject_blockips = {
+		0,
+		BLOCK_IPS,
+	};
 
 	__be32* ips;
 
 	//check if we are at the state to block ips
-	int* block_ips = bpf_map_lookup_elem(&faulttype,&block_ips_flag);
-	if (block_ips){
+	struct fault_description *description_of_fault_block;
+
+	description_of_fault_block = bpf_map_lookup_elem(&faulttype,&fault_to_inject_blockips);
+
+	if (description_of_fault_block){
 		//bpf_printk("Time to block_ips \n");
-		if (*block_ips){
+		if (description_of_fault_block->on){
 			ips = bpf_map_lookup_elem(&blocked_ips,&if_index);
 			if(ips){
 				//bpf_printk("Have list of ips \n");

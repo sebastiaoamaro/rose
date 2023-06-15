@@ -16,12 +16,13 @@ def write_to_dic(id):
 
 def write(id):
     myCol.insert_one({'id': id, 'list': []})
+    return id
     #write_to_dic(id)
     #print(f"[Write ] id:{id}")
 
 def read(id):
     one = myCol.find_one({'id': id})
-    print(f"[Read  ] id:{one['id']} list:{one['list']}")
+    #print(f"[Read  ] id:{one['id']} list:{one['list']}")
 
     return one
 
@@ -66,8 +67,9 @@ def workload0():
 
 def workload1():
     global global_i
-    write(global_i)
+    id = write(global_i)
     global_i += 1
+    return id
 
     
 def workload2(id):
@@ -75,7 +77,8 @@ def workload2(id):
 
 def workload3(num):
     for i in range(num):
-        workload1()
+        id = workload1()
+        read(id)
 
 def workload4(num):
     global global_i

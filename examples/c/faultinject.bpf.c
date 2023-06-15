@@ -17,19 +17,18 @@ struct {
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
-	__type(key, int);
-	__type(value, int);
+	__type(key, struct fault_key);
+	__type(value, struct fault_description);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } faulttype SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
-	__type(key, u64);
-	__type(value, u64[512]);
+	__type(key, struct info_key);
+	__type(value, struct info_state);
 	 __uint(pinning, LIBBPF_PIN_BY_NAME);
 } relevant_state_info SEC(".maps");
-
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, MAX_ENTRIES);
@@ -121,53 +120,74 @@ bool filter_pids()
 static __always_inline
 int fault_injection(struct pt_regs *ctx)
 {
-	int err;
-
-	// if(!filter_pids()) {
-	// 	return 0;
-	// }
-
-	// if(probability == 100) {
-	// 	err = send_event();
-	// 	if(err) {
-	// 		return -1;
-	// 	}
-    // 	bpf_override_return(ctx, -1);
-	// }
-	// else {		
-	// 	if(bpf_get_prandom_u32() < MAX_INT/100*probability) {
-	// 		err = send_event();
-	// 		if(err) {
-	// 			return -1;
-	// 		}
-	// 		bpf_override_return(ctx, -1);
-	// 	}
-	// }
 
     return 0;
 }
 
-static u64 writes = 0;
-static u64 reads = 0;
 static u64 writes_blocked = 0;
 static u64 reads_blocked = 0;
 
+static inline int process_current_state(int state_key, int type, int pid){
+
+	struct info_key information = {
+		pid,
+		state_key
+	};
+
+	struct info_state *current_state;
+
+	current_state = bpf_map_lookup_elem(&relevant_state_info,&information);
+	
+	if (current_state){
+		//bpf_printk("Found write in pid %d \n",pid);
+
+		current_state->current_value++;
+		u64 value = current_state->current_value;
+		if(current_state->relevant_states){
+			for (int i=0;i<fault_count;i++){
+				if (current_state->relevant_states[i]){
+					u64 relevant_value = current_state->relevant_states[i];
+					if (relevant_value == value && relevant_value != 0){
+
+						struct event *e;
+
+						/* reserve sample from BPF ringbuf */
+						e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+						if (!e)
+							return 0;
+
+						e->type = type;
+						e->pid = pid;
+						e->state_condition = value;
+						bpf_ringbuf_submit(e, 0);
+						return 0;
+					}
+					if(current_state->repeat && (value % relevant_value == 0)){
+						struct event *e;
+
+						/* reserve sample from BPF ringbuf */
+						e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+						if (!e)
+							return 0;
+
+						e->type = type;
+						e->pid = pid;
+						e->state_condition = relevant_value;
+						bpf_ringbuf_submit(e, 0);
+						return 0;
+					}
+					//bpf_printk("Skipped \n");
+					}
+					return 0;
+				}
+				
+		}
+	}
+}
 
 SEC("kprobe/__x64_sys_write")
 int BPF_KPROBE(__x64_sys_write)
 {
-	//safe so if other ebpf runs it does not change this value
-
-	// uint fd = PT_REGS_PARM1_CORE_SYSCALL(ctx);
-
-	// struct data_t data = {};
-
-	// bpf_probe_read_user(data.fd,sizeof(data.fd),(void *)&PT_REGS_PARM1(ctx));
-
-	// bpf_printk("%d \n",fd);
-
-	// if (!fd)
-	// 	return 0;
 
 	// bpf_printk("%u \n",fd);
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
@@ -175,59 +195,37 @@ int BPF_KPROBE(__x64_sys_write)
 	__u32 tid = (__u32)pid_tgid;
 
 	// if (pid == 74705)
-	// 	bpf_printk("Tid is %u and pid is %u \n",tid,pid);
+	//bpf_printk("Tid is %u and pid is %u \n",tid,pid);
+
+	struct fault_key fault_to_inject = {
+		pid,
+		WRITE,
+	};
+
+	struct fault_description *description_of_fault;
+
+	description_of_fault = bpf_map_lookup_elem(&faulttype,&fault_to_inject);
 
 
-	int writes_now = writes;
-
-	int write_syscall = WRITE;
-
-	int* inject = bpf_map_lookup_elem(&faulttype,&write_syscall);
-
-	if (inject){
-		if (*inject){
-			if (writes_blocked < 10){
-				bpf_printk("Blocked write %d \n",writes_blocked);
+	if (description_of_fault){
+		if (description_of_fault->on){
+			if (writes_blocked < description_of_fault->occurences){
 				writes_blocked+=1;
 				bpf_override_return((struct pt_regs *) ctx, -1);
 			}
-		}
-	}
+			else if(description_of_fault->occurences == 0){
+				bpf_override_return((struct pt_regs *) ctx, -1);
 
-	u64 writes_key = WRITES;
-
-	u64* writes_list = bpf_map_lookup_elem(&relevant_state_info,&writes_key);
-
-	
-	if (writes_list){
-		//bpf_printk("write_state[0] is %llu and write_state[1] is %llu and writes value is %llu \n", writes_list[0],writes_list[1],writes);
-
-		for (int i=0;i<fault_count;i++){
-			if (writes_list[i] == writes && writes_list[i] != 0 || (writes % writes_list[i] == 0)){
-				//bpf_printk("Sent to userspace from write with value %llu \n",writes_list[i]);
-
-				struct event *e;
-
-				/* reserve sample from BPF ringbuf */
-				e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-				if (!e)
-					return 0;
-
-				e->type = WRITE_HOOK;
-				e->writes = writes_now;
-				if (writes % writes_list[i] == 0)
-					e->writes_repeat = writes_list[i];
-				bpf_ringbuf_submit(e, 0);
-				writes+=1;
-				return 0;
 			}
-			//bpf_printk("Skipped \n");
+			else{
+				writes_blocked = 0;
+				description_of_fault->on = 0;
+			}
 		}
-		writes+=1;
-		return 0;
-		//Should track writes?
-		//bpf_map_update_elem(&exec_map, &ts, &e, BPF_ANY);
 	}
+
+	int result = process_current_state(WRITES,WRITE_HOOK,pid);
+	
 
 	return 0;
 }
@@ -235,59 +233,43 @@ int BPF_KPROBE(__x64_sys_write)
 SEC("kprobe/__x64_sys_read")
 int BPF_KPROBE(__x64_sys_read)
 {
-		//safe so if other ebpf runs it does not change this value
-	int reads_now = reads;
+	//safe so if other ebpf runs it does not change this value
 
-	int read_syscall = READ;
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
 
-	int* inject = bpf_map_lookup_elem(&faulttype,&read_syscall);
+	// if (pid == 74705)
+	//bpf_printk("Tid is %u and pid is %u \n",tid,pid);
 
-	if (inject){
-		if (*inject){
-			if (reads_blocked < 10){
-				bpf_printk("Blocked read \n");
+	struct fault_key fault_to_inject = {
+		pid,
+		READ,
+	};
+
+	struct fault_description *description_of_fault;
+
+	description_of_fault = bpf_map_lookup_elem(&faulttype,&fault_to_inject);
+
+	if (description_of_fault){
+		if (description_of_fault->on){
+			if (reads_blocked < description_of_fault->occurences){
 				reads_blocked+=1;
-				bpf_override_return(ctx, -1);
+				bpf_override_return((struct pt_regs *) ctx, -1);
+			}
+			else if(description_of_fault->occurences == 0){
+				bpf_override_return((struct pt_regs *) ctx, -1);
+
+			}
+			else{
+				reads_blocked = 0;
+				description_of_fault->on = 0;
 			}
 		}
 	}
 
-	u64 reads_key = READS;
+	int result = process_current_state(READS,READ_HOOK,pid);
 
-	u64* reads_list = bpf_map_lookup_elem(&relevant_state_info,&reads_key);
-
-	
-	if (reads_list){
-		//bpf_printk("write_state[0] is %llu and write_state[1] is %llu and writes value is %llu \n", writes_list[0],writes_list[1],writes);
-
-		for (int i=0;i<fault_count;i++){
-			if (reads_list[i] == reads && reads_list[i] != 0 || (reads % reads_list[i] == 0)) {
-				//bpf_printk("Sent to userspace from read with value %llu \n",reads_list[i]);
-
-				struct event *e;
-
-				/* reserve sample from BPF ringbuf */
-				e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-				if (!e)
-					return 0;
-
-				e->type = READ_HOOK;
-				e->reads = reads_now;
-
-				if (reads % reads_list[i] == 0)
-					e->reads_repeat = reads_list[i];
-				
-				bpf_ringbuf_submit(e, 0);
-				reads+=1;
-				return 0;
-			}
-			//bpf_printk("Skipped \n");
-		}
-		reads+=1;
-		return 0;
-		//Should track writes?
-		//bpf_map_update_elem(&exec_map, &ts, &e, BPF_ANY);
-	}
 	return 0;
 }
 

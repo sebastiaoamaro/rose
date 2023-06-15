@@ -205,7 +205,7 @@ int handle_exit_open(struct trace_event_raw_sys_exit *ctx){
         struct file *file = get_file_from_fd(fd);
 
         if(!file){
-            bpf_printk("File not found \n");
+            //bpf_printk("File not found \n");
             return 1;
         }
 
