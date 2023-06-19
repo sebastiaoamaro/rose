@@ -16,6 +16,7 @@
 #include <linux/if_ether.h>
 #include <linux/in.h>
 #include <net/if.h>
+#include <ifaddrs.h>
 
 static struct env {
 	bool verbose;
@@ -145,6 +146,30 @@ int get_interface_index(char* if_name){
 	}
 
 	return ifr.ifr_ifindex;
+}
+
+int get_interface_names(char** device_names,int device_count){
+		//Add to all networkdevices
+	struct ifaddrs *ifaddr;
+
+	int count_devices = 0;
+
+	if (getifaddrs(&ifaddr) == -1) {
+		perror("getifaddrs \n");
+		exit(EXIT_FAILURE);
+	}
+
+	/* Walk through linked list, maintaining head pointer so we can free list later. */
+
+    for (struct ifaddrs *ifa = ifaddr; ifa != NULL && count_devices < device_count; ifa = ifa->ifa_next) {
+		
+		device_names[count_devices] = malloc(32*sizeof(char));
+        sprintf(device_names[count_devices++], "%s", ifa->ifa_name);
+    }
+
+    freeifaddrs(ifaddr);
+
+	return count_devices;
 }
 
 void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences){

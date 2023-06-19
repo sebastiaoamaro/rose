@@ -28,7 +28,7 @@ const char DBBackupPath[] = "/tmp/rocksdb_c_simple_example_backup";
 int main(int argc, char **argv) {
 
   int workload_size = strtol(argv[1],NULL,10);
-  printf("Workloda size is %d\n",workload_size);
+  printf("Workload size is %d\n",workload_size);
   rocksdb_t *db;
   rocksdb_backup_engine_t *be;
   rocksdb_options_t *options = rocksdb_options_create();

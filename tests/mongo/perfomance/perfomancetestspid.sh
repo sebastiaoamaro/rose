@@ -1,5 +1,5 @@
 #!/bin/bash
-workload_size=5_000
+workload_size=25_000
 #maindirectory=/home/sebasamaro/phd/torefidevel/examples/c/main
 maindirectory=/vagrant/examples/c/main
 date=$(date +"%H:%M")
@@ -44,10 +44,10 @@ do
     faultsfile=$maindirectory/"faults.txt"
     echo $faultsfile
 
-    for run in 2 4 8 16
+    for run in 1 2 3 4 5
     do
     docker compose -f configs/docker-compose$topology.yaml up -d
-    sleep 15
+    sleep 30
 
     ./populatefaults.sh $faultsfile
 

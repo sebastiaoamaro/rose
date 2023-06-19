@@ -1,20 +1,20 @@
 #!/bin/bash
-workload_size=1000000
-maindirectory=/home/sebasamaro/phd/torefidevel/examples/c/main
+workload_size=100000000
+#workload_size=100000
+#maindirectory=/home/sebasamaro/phd/torefidevel/examples/c/main
 faultsfile=$maindirectory/"faults.txt"
-#maindirectory=/vagrant/examples/c/main/main
+maindirectory=/vagrant/examples/c/main/
 date=$(date +"%H:%M")
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-cd /home/sebasamaro/phd/torefidevel/examples/c
+#cd /home/sebasamaro/phd/torefidevel/examples/c
 cd /vagrant/examples/c/
-rocksdir=/home/sebasamaro/phd/rocksdb/examples/c_simple_example
-#rocksdir=/vagrant/rocksdb/examples/c_simple_example
+#rocksdir=/home/sebasamaro/phd/rocksdb/examples/c_simple_example
+rocksdir=/vagrant/rocksdb/examples/c_simple_example
 make
 cd $SCRIPT_DIR
 
-for run in 
+for run in 1 2 3 4 5
 do  
-    rm -r /tmp/*
     echo Starting Workload
     /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:v:%e" $rocksdir $workload_size
 done
@@ -25,11 +25,12 @@ done
 
 for run in 1 2 3 4 5
 do
-    rm -r /tmp/*
     rm $faultsfile
     echo Starting Workload
     /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:e:%e" $rocksdir $workload_size &
-    rockspid=$!
+
+    rockspid=$(pgrep -f $rocksdir | awk 'NR==2{print $1}')
+    echo "PID IN BASH IS " $pid
 
     echo $rockspid";" >> $faultsfile
     $maindirectory/main -f 1 -d 0 -i $faultsfile &
@@ -39,7 +40,6 @@ do
 
     echo $ebpf_PID
     kill $ebpf_PID
-    
     sleep 5
 done
 

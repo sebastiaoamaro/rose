@@ -39,47 +39,47 @@ __u32 hist[MAX_SLOTS] = {};
 
 static void entry(struct pt_regs *ctx)
 {
-	u64 id = bpf_get_current_pid_tgid();
-	u32 tgid = id >> 32;
-	u32 pid = id;
-	u64 nsec;
+	// u64 id = bpf_get_current_pid_tgid();
+	// u32 tgid = id >> 32;
+	// u32 pid = id;
+	// u64 nsec;
 
-	char* argument,argument2;
+	// char* argument,argument2;
 
-	argument = PT_REGS_PARM1(ctx);
+	// argument = PT_REGS_PARM1(ctx);
 
-	if(argument)
-		bpf_printk("Argument is %s \n",argument);
+	// if(argument)
+	// 	//bpf_printk("Argument is %s \n",argument);
 
-	argument2 = PT_REGS_PARM2(ctx);
+	// argument2 = PT_REGS_PARM2(ctx);
 
-	if(argument)
-		bpf_printk("Argument2 is %s \n",argument2);
+	// if(argument)
+	// 	//bpf_printk("Argument2 is %s \n",argument2);
 
-	if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
-		return;
+	// if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
+	// 	return;
 
-	if (targ_tgid && targ_tgid != tgid)
-		return;
-	nsec = bpf_ktime_get_ns();
+	// if (targ_tgid && targ_tgid != tgid)
+	// 	return;
+	// nsec = bpf_ktime_get_ns();
 
-	int one = 1;
+	// int one = 1;
 
-	int *count = bpf_map_lookup_or_try_init(&funcnames,&funcname,&one);
+	// int *count = bpf_map_lookup_or_try_init(&funcnames,&funcname,&one);
 
-	int new_value = 0;
-	if (!count)
-		return;
-	if (*count == 0){
-		bpf_map_update_elem(&funcnames,&funcname,&one,BPF_ANY);
+	// int new_value = 0;
+	// if (!count)
+	// 	return;
+	// if (*count == 0){
+	// 	bpf_map_update_elem(&funcnames,&funcname,&one,BPF_ANY);
 		
-	}else{
-		new_value = *count + 1;
-		bpf_map_update_elem(&funcnames,&funcname,&new_value,BPF_ANY);
-	}
-	bpf_printk("Count is %d \n",new_value);
+	// }else{
+	// 	new_value = *count + 1;
+	// 	bpf_map_update_elem(&funcnames,&funcname,&new_value,BPF_ANY);
+	// }
+	// //bpf_printk("Count is %d \n",new_value);
 
-	bpf_map_update_elem(&starts, &pid, &nsec, BPF_ANY);
+	// bpf_map_update_elem(&starts, &pid, &nsec, BPF_ANY);
 }
 
 SEC("fentry/dummy_fentry")

@@ -3,7 +3,7 @@
 
 #define MAX_ENTRIES 10240
 #define PATH_MAX	4096
-#define STATE_PROPERTIES_COUNT 11
+#define STATE_PROPERTIES_COUNT 12
 #define MAX_IPS_BLOCKED 16
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
@@ -62,6 +62,7 @@ enum faulttype{
     NETWORK_ISOLATION = 4,
     BLOCK_IPS = 5,
     DROP_PACKETS = 6,
+    CLONE = 7,
     TEMP_EMPTY = 999,
 };
 
@@ -77,7 +78,8 @@ enum stateinfo{
     READS = 7,
     IPS_BLOCKED = 8,
     FUNCNAMES = 9,
-    CALLCOUNT = 10    
+    CALLCOUNT = 10,
+    THREADS_CREATED = 11 
 };
 
 //To process different types of events in userspace
@@ -86,7 +88,8 @@ enum eventype{
     WRITE_HOOK = 1,
     READ_HOOK = 4,
     TC = 2,
-    FSYS = 3
+    FSYS = 3,
+    THREAD = 5,
 };
 
 enum generic{
@@ -123,4 +126,5 @@ void add_ip_to_block(struct fault*,char *,int);
 void set_if_name(struct fault*,char *);
 void add_function_to_monitor(struct fault*,char*,int);
 int bpf_map_lookup_or_try_init_user(int, const void *, void *,void *);
+int get_interface_names(char **,int);
 #endif /* __AUX_H */

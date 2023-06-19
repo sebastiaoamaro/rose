@@ -13,7 +13,6 @@
 #include <linux/if_ether.h>
 #include <linux/in.h>
 #include <net/if.h>
-#include <ifaddrs.h>
 
 //Modules
 #include <aux.h>
@@ -97,6 +96,42 @@ static void sig_handler(int sig)
 	printf("Main Finished \n");
 } 
 
+static error_t parse_arg(int key, char *arg, struct argp_state *state)
+{
+	switch (key) {
+		case 'f':
+			FAULT_COUNT = strtol(arg,NULL,10);
+			faults = (struct fault*)malloc(FAULT_COUNT*sizeof(struct fault));
+			break;
+		case 'd':
+			DEVICE_COUNT = strtol(arg,NULL,10);
+			break;
+		case 'p':
+			constants.pid = strtol(arg,NULL,10);
+			break;
+		case 'i':
+			constants.inputfilename = (char *)malloc(sizeof(char)*strlen(arg));
+			strcpy(constants.inputfilename,arg);
+			break;
+		case 'h':
+			argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
+		case ARGP_KEY_END:
+			if (state->argc < 2)
+				/* Not enough arguments. */
+				argp_usage (state);
+			break;
+		default:
+			return ARGP_ERR_UNKNOWN;
+	}
+	return 0;
+}
+
+static const struct argp argp = {
+	.options = opts,
+	.parser = parse_arg,	
+	.doc = argp_program_doc,
+};
+
 
 //Handles events received from ringbuf (eBPF)
 static int handle_event(void *ctx, void *data, size_t data_sz)
@@ -120,6 +155,10 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 		case FSYS:
 			process_fs(e);
 		break;
+		case THREAD:
+			printf("Received from clone sys call \n");
+		break;
+
 	}
 
 	int i,j = 0;
@@ -270,8 +309,9 @@ void build_faults(){
 
 		// faults[i].initial->fault_type_conditions[PROCESSES_OPENED] = 1;
 		// faults[i].initial->fault_type_conditions[PROCESSES_CLOSED] = 1;
-		faults[i].initial->fault_type_conditions[WRITES] = 50;
-		faults[i].initial->fault_type_conditions[READS] = 50;
+		// faults[i].initial->fault_type_conditions[WRITES] = 50;
+		// faults[i].initial->fault_type_conditions[READS] = 5;
+		//faults[i].initial->fault_type_conditions[THREADS_CREATED] = 1;
 		//faults[0].initial->fault_type_conditions[FILES_OPENED_ANY] = ANY_PID;
 	
 		// char string_ips[32] = "172.19.0.2";
@@ -284,15 +324,17 @@ void build_faults(){
 
 		char func_names[8][FUNCNAME_MAX] = {":rocksdb_put",":rocksdb_get"};
 
-		add_function_to_monitor(&faults[i],&func_names[0],i);
-		add_function_to_monitor(&faults[i],&func_names[1],i);
+		add_function_to_monitor(&faults[i],&func_names[0],0);
+		add_function_to_monitor(&faults[i],&func_names[1],1);
 
 	}
 
 	int fault_count = 0;
 	fp = fopen(constants.inputfilename, "r");
-    if (fp == NULL)
+    if (fp == NULL){
+		printf("Input file not found \n");
         exit(EXIT_FAILURE);
+	}
 		
 	while ((read = getline(&line, &len, fp)) != -1) {
         printf("Line is %s \n", line);
@@ -309,15 +351,19 @@ void build_faults(){
 
 		token = strtok(NULL,"");
 
-		char* ptr = strchr(token, '\n');
-        if (ptr) {
-            // if new line found replace with null character
-            *ptr = '\0';
-        }
-		printf("Token is %s and len is %d \n",ptr,strlen(ptr));
-
-		if(ptr)
-			set_if_name(&faults[fault_count],ptr);
+		char* newline = strchr(token, '\n');
+		if (newline != NULL) {
+			*newline = '\0';
+		}
+		else{
+			newline = token;
+		}
+		if(newline!='\0'){
+			printf("newline is %s and len is %d \n",newline,strlen(newline));
+			set_if_name(&faults[fault_count],newline);
+		}else{
+			set_if_name(&faults[fault_count],"\0");
+		}
 
 		fault_count++;
 
@@ -326,41 +372,78 @@ void build_faults(){
 }
 
 
-static error_t parse_arg(int key, char *arg, struct argp_state *state)
-{
-	switch (key) {
-		case 'f':
-			FAULT_COUNT = strtol(arg,NULL,10);
-			faults = (struct fault*)malloc(FAULT_COUNT*sizeof(struct fault));
-			break;
-		case 'd':
-			DEVICE_COUNT = strtol(arg,NULL,10);
-			break;
-		case 'p':
-			constants.pid = strtol(arg,NULL,10);
-			break;
-		case 'i':
-			constants.inputfilename = (char *)malloc(sizeof(char)*strlen(arg));
-			strcpy(constants.inputfilename,arg);
-			break;
-		case 'h':
-			argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
-		case ARGP_KEY_END:
-			if (state->argc < 2)
-				/* Not enough arguments. */
-				argp_usage (state);
-			break;
-		default:
-			return ARGP_ERR_UNKNOWN;
-	}
-	return 0;
+void get_fd_of_maps (struct aux_bpf *bpf){
+	constants.relevant_state_info_fd = bpf_map__fd(bpf->maps.relevant_state_info);
+	constants.faulttype_fd = bpf_map__fd(bpf->maps.faulttype);
+	constants.blocked_ips = bpf_map__fd(bpf->maps.blocked_ips);
+	constants.files = bpf_map__fd(bpf->maps.files);
+};
+
+void populate_stateinfo_map(){
+	for(int i = 0; i < FAULT_COUNT; i++){
+			for(int j = 0; j <STATE_PROPERTIES_COUNT;j++){
+				if(faults[i].initial->fault_type_conditions[j] != 0){
+					int error;
+					struct info_key information = {
+						faults[i].pid,
+						j
+					};
+
+					struct info_state *new_information_state = (struct info_state*)malloc(sizeof(struct info_state));
+
+					new_information_state->current_value = 0;
+
+					new_information_state->relevant_states[i] = faults[i].initial->fault_type_conditions[j];
+
+					new_information_state->repeat = faults[i].repeat;
+					
+					printf("FAULT %d state info pos[%d] is %llu with pid %d \n",i,j,new_information_state->relevant_states[i],faults[i].pid);
+
+					struct info_state *old_information_state = (struct info_state*)malloc(sizeof(struct info_state));
+
+					old_information_state->current_value = 0;
+
+					int exists = 0;
+					exists = bpf_map_lookup_or_try_init_user(constants.relevant_state_info_fd,&information,new_information_state,old_information_state);
+
+					//if already exists add
+					if(exists){
+						printf("It already exists \n");
+						old_information_state->relevant_states[i] = faults[i].initial->fault_type_conditions[j];
+						printf("State info is %llu \n",old_information_state->relevant_states[i]);
+						error = bpf_map_update_elem(constants.relevant_state_info_fd,&information,old_information_state,BPF_ANY);
+						if (error){
+							printf("Error of update is %d, key->%llu \n",error,j);	
+						}
+						free(new_information_state->relevant_states);
+					}else{
+						free(old_information_state->relevant_states);
+					}
+
+				}
+			}
+		}
 }
 
-static const struct argp argp = {
-	.options = opts,
-	.parser = parse_arg,
-	.doc = argp_program_doc,
-};
+void populate_files_map(){
+		//Insert info about files_open
+	for(int i=0;i<FAULT_COUNT;i++){
+		if (strlen(faults[i].file_open)!=0){
+			int error;
+			int value = ANY_PID;
+			printf("Fault %i has file open %s \n",i,faults[i].file_open);
+
+			struct file_info_simple file_info = {};
+			strcpy(file_info.filename,faults[i].file_open);
+			file_info.size = strlen(file_info.filename);
+
+			error = bpf_map_update_elem(constants.files,&value,&file_info,BPF_ANY);
+			if (error){
+				printf("Error of update in files_opened is %d, key->%s \n",error,faults[i].file_open);	
+			}	
+		}
+	}
+}
 
 int main(int argc, char **argv)
 {
@@ -389,101 +472,23 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	constants.relevant_state_info_fd = bpf_map__fd(aux_bpf->maps.relevant_state_info);
-	constants.faulttype_fd = bpf_map__fd(aux_bpf->maps.faulttype);
-	constants.blocked_ips = bpf_map__fd(aux_bpf->maps.blocked_ips);
-	constants.files = bpf_map__fd(aux_bpf->maps.files);
+	get_fd_of_maps(aux_bpf);
 
+	populate_stateinfo_map();
 
-	for(int i = 0; i < FAULT_COUNT; i++){
-		for(int j = 0; j <STATE_PROPERTIES_COUNT;j++){
-			if(faults[i].initial->fault_type_conditions[j] != 0){
-				int error;
-				struct info_key information = {
-					faults[i].pid,
-					j
-				};
+	populate_files_map();
 
-				struct info_state *new_information_state = (struct info_state*)malloc(sizeof(struct info_state));
-
-				new_information_state->current_value = 0;
-
-				new_information_state->relevant_states[i] = faults[i].initial->fault_type_conditions[j];
-
-				new_information_state->repeat = faults[i].repeat;
-				
-				printf("FAULT %d state info pos[%d] is %llu with pid %d \n",i,j,new_information_state->relevant_states[i],faults[i].pid);
-
-				struct info_state *old_information_state = (struct info_state*)malloc(sizeof(struct info_state));
-
-				old_information_state->current_value = 0;
-
-				int exists = 0;
-				exists = bpf_map_lookup_or_try_init_user(constants.relevant_state_info_fd,&information,new_information_state,old_information_state);
-
-				//if already exists add
-				if(exists){
-					printf("It already exists \n");
-					old_information_state->relevant_states[i] = faults[i].initial->fault_type_conditions[j];
-					printf("State info is %llu \n",old_information_state->relevant_states[i]);
-					error = bpf_map_update_elem(constants.relevant_state_info_fd,&information,old_information_state,BPF_ANY);
-					if (error){
-						printf("Error of update is %d, key->%llu \n",error,j);	
-					}
-					free(new_information_state->relevant_states);
-				}else{
-					free(old_information_state->relevant_states);
-				}
-
-			}
-		}
-	}
-
-
-	//Insert info about files_open
-	for(int i=0;i<FAULT_COUNT;i++){
-		if (strlen(faults[i].file_open)!=0){
-			int error;
-			int value = ANY_PID;
-			printf("Fault %i has file open %s \n",i,faults[i].file_open);
-
-			struct file_info_simple file_info = {};
-			strcpy(file_info.filename,faults[i].file_open);
-			file_info.size = strlen(file_info.filename);
-
-			error = bpf_map_update_elem(constants.files,&value,&file_info,BPF_ANY);
-			if (error){
-				printf("Error of update in files_opened is %d, key->%s \n",error,faults[i].file_open);	
-			}	
-		}
-	}
 
 	//Add to all networkdevices
-	struct ifaddrs *ifaddr;
-
-	int count_devices = 0;
 
 	char **device_names;
 
-	device_names = malloc(32*sizeof(char*));
+	device_names = malloc(32*sizeof(char));
+	int count_devices;
 
-	if (getifaddrs(&ifaddr) == -1) {
-		perror("getifaddrs \n");
-		exit(EXIT_FAILURE);
-	}
+	count_devices = get_interface_names(device_names,DEVICE_COUNT);
 
-	/* Walk through linked list, maintaining head pointer so we can free list later. */
-	//printf("Getting if names \n");
-
-    for (struct ifaddrs *ifa = ifaddr; ifa != NULL && count_devices < DEVICE_COUNT; ifa = ifa->ifa_next) {
-		
-		device_names[count_devices] = malloc(32*sizeof(char));
-        sprintf(device_names[count_devices++], "%s", ifa->ifa_name);
-    }
-
-    freeifaddrs(ifaddr);
-
-	printf("Printing names \n");
+	printf("Printing names %d\n",count_devices);
 
 	for (int i=0;i<count_devices;i++){
 		printf("Device name is %s \n",device_names[i]);
@@ -510,8 +515,7 @@ int main(int argc, char **argv)
 	for (int i = 0;i<DEVICE_COUNT;i++)
 		tc_ebpf_progs_tracking[i] = NULL;
 		
-
-
+	
 	int handle = 1;
 	//Insert IPS to block in a network device, key->if_index value->list of ips
 	for (int i =0; i<FAULT_COUNT;i++){
@@ -553,7 +557,7 @@ int main(int argc, char **argv)
 		tc_prog = traffic_control(index_in_unsigned,i,i+handle,FAULT_COUNT);
 
 		if (!tc_prog){
-			printf("Error in creating tc_prog with interface %s \n",faults[i].veth);
+			printf("Error in creating tc_prog with interface %s with index %lu \n",faults[i].veth,index_in_unsigned);
 			goto cleanup;		
 		}
 		tc_ebpf_progs[i] = tc_prog;
@@ -565,7 +569,7 @@ int main(int argc, char **argv)
 		bool already_exists = false;
 
 		for (int j=0;j<FAULT_COUNT;j++){
-			if (faults[j].veth){
+			if (strlen(faults[j].veth)){
 				if (strcmp(device_names[i],faults[j].veth) == 0){
 					already_exists = true;
 				}

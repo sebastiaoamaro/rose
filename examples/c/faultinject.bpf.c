@@ -185,6 +185,53 @@ static inline int process_current_state(int state_key, int type, int pid){
 	}
 }
 
+
+SEC("kprobe/__x64_sys_clone")
+int BPF_KPROBE(clone)
+{
+
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+	bpf_printk("IN CLONE \n");
+
+	// if (pid == 74705)
+	//bpf_printk("Tid is %u and pid is %u \n",tid,pid);
+
+	struct fault_key fault_to_inject = {
+		pid,
+		CLONE,
+	};
+
+	struct fault_description *description_of_fault;
+
+	description_of_fault = bpf_map_lookup_elem(&faulttype,&fault_to_inject);
+
+
+	if (description_of_fault){
+		if (description_of_fault->on){
+			if (writes_blocked < description_of_fault->occurences){
+				writes_blocked+=1;
+				bpf_override_return((struct pt_regs *) ctx, -1);
+			}
+			else if(description_of_fault->occurences == 0){
+				bpf_override_return((struct pt_regs *) ctx, -1);
+
+			}
+			else{
+				writes_blocked = 0;
+				description_of_fault->on = 0;
+			}
+		}
+	}
+
+	int result = process_current_state(THREADS_CREATED,THREAD,pid);
+	
+
+	return 0;
+
+	return 0;
+}
 SEC("kprobe/__x64_sys_write")
 int BPF_KPROBE(__x64_sys_write)
 {

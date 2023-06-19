@@ -131,6 +131,25 @@ services:
       TERM: xterm
     volumes:
       - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data6:/data/db
+
+  mongo7:
+    hostname: mongo7
+    container_name: mongo7
+    image: mongo:4.4
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --oplogSize 128 --bind_ip 0.0.0.0
+    ports:
+      - 27032:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.32
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
       - /mongo/16/data7:/data/db
 
   mongo8:
