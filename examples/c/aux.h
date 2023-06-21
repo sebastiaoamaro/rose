@@ -84,7 +84,8 @@ enum stateinfo{
 
 //To process different types of events in userspace
 enum eventype{
-    EXEC_EXIT = 0,
+    EXEC = 0,
+    EXIT = 7,
     WRITE_HOOK = 1,
     READ_HOOK = 4,
     TC = 2,

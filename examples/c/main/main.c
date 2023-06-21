@@ -140,14 +140,17 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 	//printf("Arrived here TYPE is %d \n",e->type);
 
 	switch(e->type){
-		case EXEC_EXIT:
-			process_exec_exit(e);
+		case EXEC:
+			process_counter(e,PROCESSES_OPENED);
+		break;
+		case EXIT:
+			process_counter(e,PROCESSES_CLOSED);
 		break;
 		case WRITE_HOOK:
-			process_write(e);
+			process_counter(e,WRITES);
 		break;
 		case READ_HOOK:
-			process_read(e);
+			process_counter(e,READS);
 		break;
 		case TC:
 			process_tc(e);
@@ -156,7 +159,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 			process_fs(e);
 		break;
 		case THREAD:
-			printf("Received from clone sys call \n");
+			process_counter(e,THREADS_CREATED);
 		break;
 
 	}
@@ -176,7 +179,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 				}
 			}
 		}
-		//printf("run is %d, relevant_conditions is %d \n",run,relevant_conditions);
+		printf("run is %d, relevant_conditions is %d \n",run,relevant_conditions);
 		if (run == relevant_conditions)
 			if (!faults[i].done){
 				if (faults[i].faulttype == (NETWORK_ISOLATION || DROP_PACKETS || BLOCK_IPS))
@@ -190,53 +193,17 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 	return 0;
 }
 
-//Handles start and stop of processes
-void process_exec_exit(const struct event *event){
-	int i = 0;
 
-	for (i=0; i<FAULT_COUNT;i++){
-		if (faults[i].initial->fault_type_conditions[PROCESSES_OPENED]){
-			if (event->state_condition == faults[i].initial->fault_type_conditions[PROCESSES_OPENED] && event->pid == faults[i].pid){
-				faults[i].initial->conditions_match[PROCESSES_OPENED] = 1;
-			}
-		}
-		if (faults[i].initial->fault_type_conditions[PROCESSES_CLOSED]){
-			if (event->state_condition == faults[i].initial->fault_type_conditions[PROCESSES_CLOSED] && event->pid == faults[i].pid){
-				faults[i].initial->conditions_match[PROCESSES_CLOSED] = 1;
-			}
-		}
-	}
-}
-
-
-//Handles the writes_syscall
-void process_write(const struct event *event){
+void process_counter(const struct event *event,int stateinfo){
 	for (int i=0; i<FAULT_COUNT;i++){
-		if (faults[i].initial->fault_type_conditions[WRITES]){
-			if (event->state_condition == faults[i].initial->fault_type_conditions[WRITES]&& event->pid == faults[i].pid){
-				faults[i].initial->conditions_match[WRITES] = 1;
+		if (faults[i].initial->fault_type_conditions[stateinfo]){
+			if (event->state_condition == faults[i].initial->fault_type_conditions[stateinfo] && event->pid == faults[i].pid){
+				faults[i].initial->conditions_match[stateinfo] = 1;
 			}
 
 			if (faults[i].repeat){
-				if (event->state_condition == faults[i].initial->fault_type_conditions[WRITES]&& event->pid == faults[i].pid){
-					faults[i].initial->conditions_match[WRITES] = 1;
-				}
-			}
-		}
-	}
-}
-
-//Handles the read syscall
-void process_read(const struct event *event){
-	for (int i=0; i<FAULT_COUNT;i++){
-		if (faults[i].initial->fault_type_conditions[READS]){
-			if (event->state_condition == faults[i].initial->fault_type_conditions[READS] && event->pid == faults[i].pid){
-				faults[i].initial->conditions_match[READS] = 1;
-			}
-
-			if (faults[i].repeat){
-				if (event->state_condition == faults[i].initial->fault_type_conditions[READS]&& event->pid == faults[i].pid){
-					faults[i].initial->conditions_match[READS] = 1;
+				if (event->state_condition == faults[i].initial->fault_type_conditions[stateinfo]&& event->pid == faults[i].pid){
+					faults[i].initial->conditions_match[stateinfo] = 1;
 				}
 			}
 		}
@@ -305,13 +272,13 @@ void build_faults(){
     ssize_t read;
 
 	for(int i = 0; i< FAULT_COUNT;i++){
-		build_fault(&faults[i],1,TEMP_EMPTY,5);
+		build_fault(&faults[i],0,CLONE,5);
 
 		// faults[i].initial->fault_type_conditions[PROCESSES_OPENED] = 1;
 		// faults[i].initial->fault_type_conditions[PROCESSES_CLOSED] = 1;
 		// faults[i].initial->fault_type_conditions[WRITES] = 50;
 		// faults[i].initial->fault_type_conditions[READS] = 5;
-		//faults[i].initial->fault_type_conditions[THREADS_CREATED] = 1;
+		faults[i].initial->fault_type_conditions[THREADS_CREATED] = 1;
 		//faults[0].initial->fault_type_conditions[FILES_OPENED_ANY] = ANY_PID;
 	
 		// char string_ips[32] = "172.19.0.2";
@@ -324,8 +291,8 @@ void build_faults(){
 
 		char func_names[8][FUNCNAME_MAX] = {":rocksdb_put",":rocksdb_get"};
 
-		add_function_to_monitor(&faults[i],&func_names[0],0);
-		add_function_to_monitor(&faults[i],&func_names[1],1);
+		// add_function_to_monitor(&faults[i],&func_names[0],0);
+		// add_function_to_monitor(&faults[i],&func_names[1],1);
 
 	}
 

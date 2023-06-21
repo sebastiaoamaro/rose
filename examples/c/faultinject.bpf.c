@@ -126,6 +126,7 @@ int fault_injection(struct pt_regs *ctx)
 
 static u64 writes_blocked = 0;
 static u64 reads_blocked = 0;
+static u64 threads_blocked = 0;
 
 static inline int process_current_state(int state_key, int type, int pid){
 
@@ -193,7 +194,6 @@ int BPF_KPROBE(clone)
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
-	bpf_printk("IN CLONE \n");
 
 	// if (pid == 74705)
 	//bpf_printk("Tid is %u and pid is %u \n",tid,pid);
@@ -210,8 +210,8 @@ int BPF_KPROBE(clone)
 
 	if (description_of_fault){
 		if (description_of_fault->on){
-			if (writes_blocked < description_of_fault->occurences){
-				writes_blocked+=1;
+			if (threads_blocked < description_of_fault->occurences){
+				threads_blocked+=1;
 				bpf_override_return((struct pt_regs *) ctx, -1);
 			}
 			else if(description_of_fault->occurences == 0){
@@ -219,16 +219,13 @@ int BPF_KPROBE(clone)
 
 			}
 			else{
-				writes_blocked = 0;
+				threads_blocked = 0;
 				description_of_fault->on = 0;
 			}
 		}
 	}
 
 	int result = process_current_state(THREADS_CREATED,THREAD,pid);
-	
-
-	return 0;
 
 	return 0;
 }
