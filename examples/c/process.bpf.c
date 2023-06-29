@@ -117,7 +117,7 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int result = process_current_state(PROCESSES_OPENED,EXEC_EXIT,pid);
+	int result = process_current_state(PROCESSES_OPENED,EXEC,pid);
 	
 	return 0;
 }
@@ -133,7 +133,7 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int result = process_current_state(PROCESSES_CLOSED,EXEC_EXIT,pid);
+	int result = process_current_state(PROCESSES_CLOSED,EXIT,pid);
 
 
 	return 0;

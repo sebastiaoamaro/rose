@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/libbpf"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/libbpf.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/libbpf-complete.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/libbpf/src/libbpf-stamp/libbpf-build.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/libbpf/src/libbpf-stamp/libbpf-configure.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/libbpf/src/libbpf-stamp/libbpf-download.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/libbpf/src/libbpf-stamp/libbpf-install.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/libbpf/src/libbpf-stamp/libbpf-mkdir.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/libbpf/src/libbpf-stamp/libbpf-patch.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/libbpf/src/libbpf-stamp/libbpf-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"libbpf"
+		],
+		"name" : "libbpf"
+	}
+}

@@ -1,0 +1,1 @@
+/usr/bin/gcc -O3 -DNDEBUG CMakeFiles/tc.dir/tc.c.o -o tc  libbpf/libbpf.a -lelf -lz 

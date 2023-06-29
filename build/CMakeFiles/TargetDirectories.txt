@@ -1,0 +1,13 @@
+/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/libbpf.dir
+/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/libbpf-build.dir
+/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/bpftool.dir
+/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/bpftool-build.dir
+/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/aux.dir
+/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/block.dir
+/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/faultinject.dir
+/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/fs.dir
+/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/process.dir
+/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/tc.dir
+/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/uprobes.dir
+/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/edit_cache.dir
+/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/rebuild_cache.dir

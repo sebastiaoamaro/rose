@@ -7,7 +7,7 @@
 #define MAX_IPS_BLOCKED 16
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
-#define FUNCNAME_MAX 16
+#define FUNCNAME_MAX 32
 #define MAX_FUNCTIONS 8
 #define FILENAME_MAX 64
 #define FAULTSSUPPORTED 7
@@ -19,7 +19,7 @@ struct fault {
     __be32 ips_blocked[MAX_IPS_BLOCKED];
     char *veth;
     char file_open[FILENAME_MAX];
-    char func_names[8][FUNCNAME_MAX];
+    char func_names[MAX_FUNCTIONS][FUNCNAME_MAX];
     int done;
     struct faultstate *initial;
     struct faultstate *end;
@@ -63,6 +63,8 @@ enum faulttype{
     BLOCK_IPS = 5,
     DROP_PACKETS = 6,
     CLONE = 7,
+    WRITE_FILE = 8,
+    READ_FILE = 9,
     TEMP_EMPTY = 999,
 };
 

@@ -313,7 +313,7 @@ out_binary:
 	return ret;
 }
 
-struct uprobe_bpf* uprobe(int pid,char* funcname)
+struct uprobes_bpf* uprobe(int pid,char* funcname)
 {
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
 	// static const struct argp argp = {

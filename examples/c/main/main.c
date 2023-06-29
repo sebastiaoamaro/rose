@@ -30,11 +30,9 @@
 #include <uprobes.h>
 #include <uprobes.skel.h>
 
-void process_exec_exit(const struct event*);
-void process_write(const struct event*);
+void process_counter(const struct event *event,int stateinfo);
 int process_tc(const struct event*);
 void process_fs(const struct event*);
-
 void inject_fault(int faulttype,int pid,int fault_id);
 
 const char *argp_program_version = "Tool for FI 0.01";
@@ -66,7 +64,6 @@ static struct constants {
 static struct fault *faults;
 static int FAULT_COUNT = 0;
 static int DEVICE_COUNT = 0;
-static int FAULTS_INJECTED = 0;
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
@@ -137,7 +134,7 @@ static const struct argp argp = {
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
 	const struct event *e = data;
-	//printf("Arrived here TYPE is %d \n",e->type);
+	printf("Arrived here TYPE is %d \n",e->type);
 
 	switch(e->type){
 		case EXEC:
@@ -179,7 +176,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 				}
 			}
 		}
-		printf("run is %d, relevant_conditions is %d \n",run,relevant_conditions);
+		//printf("run is %d, relevant_conditions is %d \n",run,relevant_conditions);
 		if (run == relevant_conditions)
 			if (!faults[i].done){
 				if (faults[i].faulttype == (NETWORK_ISOLATION || DROP_PACKETS || BLOCK_IPS))
@@ -272,13 +269,13 @@ void build_faults(){
     ssize_t read;
 
 	for(int i = 0; i< FAULT_COUNT;i++){
-		build_fault(&faults[i],0,CLONE,5);
+		build_fault(&faults[i],0,WRITE_FILE,5);
 
 		// faults[i].initial->fault_type_conditions[PROCESSES_OPENED] = 1;
 		// faults[i].initial->fault_type_conditions[PROCESSES_CLOSED] = 1;
-		// faults[i].initial->fault_type_conditions[WRITES] = 50;
+		faults[i].initial->fault_type_conditions[WRITES] = 5;
 		// faults[i].initial->fault_type_conditions[READS] = 5;
-		faults[i].initial->fault_type_conditions[THREADS_CREATED] = 1;
+		//faults[i].initial->fault_type_conditions[THREADS_CREATED] = 1;
 		//faults[0].initial->fault_type_conditions[FILES_OPENED_ANY] = ANY_PID;
 	
 		// char string_ips[32] = "172.19.0.2";
@@ -289,9 +286,9 @@ void build_faults(){
 
 		strcpy(faults[i].file_open,file_name);
 
-		char func_names[8][FUNCNAME_MAX] = {":rocksdb_put",":rocksdb_get"};
+		char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":Put"};
 
-		// add_function_to_monitor(&faults[i],&func_names[0],0);
+		//add_function_to_monitor(&faults[i],&func_names[0],0);
 		// add_function_to_monitor(&faults[i],&func_names[1],1);
 
 	}
@@ -304,11 +301,9 @@ void build_faults(){
 	}
 		
 	while ((read = getline(&line, &len, fp)) != -1) {
-        printf("Line is %s \n", line);
+        //printf("Line is %s \n", line);
 
 		int pid;
-
-		char *if_name;
 
 		char* token = strtok(line,";");
 
@@ -325,8 +320,8 @@ void build_faults(){
 		else{
 			newline = token;
 		}
-		if(newline!='\0'){
-			printf("newline is %s and len is %d \n",newline,strlen(newline));
+		if(*newline!='\0'){
+			printf("newline is %s and len is %ld \n",newline,strlen(newline));
 			set_if_name(&faults[fault_count],newline);
 		}else{
 			set_if_name(&faults[fault_count],"\0");
@@ -380,7 +375,7 @@ void populate_stateinfo_map(){
 						printf("State info is %llu \n",old_information_state->relevant_states[i]);
 						error = bpf_map_update_elem(constants.relevant_state_info_fd,&information,old_information_state,BPF_ANY);
 						if (error){
-							printf("Error of update is %d, key->%llu \n",error,j);	
+							printf("Error of update is %d, key->%d \n",error,j);	
 						}
 						free(new_information_state->relevant_states);
 					}else{
@@ -397,7 +392,8 @@ void populate_files_map(){
 	for(int i=0;i<FAULT_COUNT;i++){
 		if (strlen(faults[i].file_open)!=0){
 			int error;
-			int value = ANY_PID;
+			//We pass the pid to filter out irrelevant pids opening
+			int value = faults[i].pid;
 			printf("Fault %i has file open %s \n",i,faults[i].file_open);
 
 			struct file_info_simple file_info = {};
@@ -467,7 +463,7 @@ int main(int argc, char **argv)
 	struct tc_bpf *tc_ebpf_progs_tracking[DEVICE_COUNT];
 
 	//Create uprobes
-	struct uprobe_bpf *uprobes[FAULT_COUNT][MAX_FUNCTIONS];
+	struct uprobes_bpf *uprobes[FAULT_COUNT][MAX_FUNCTIONS];
 
 	for (int i = 0;i<FAULT_COUNT;i++)
 		for (int j = 0;j<MAX_FUNCTIONS;j++)
@@ -524,7 +520,7 @@ int main(int argc, char **argv)
 		tc_prog = traffic_control(index_in_unsigned,i,i+handle,FAULT_COUNT);
 
 		if (!tc_prog){
-			printf("Error in creating tc_prog with interface %s with index %lu \n",faults[i].veth,index_in_unsigned);
+			printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
 			goto cleanup;		
 		}
 		tc_ebpf_progs[i] = tc_prog;
@@ -607,10 +603,6 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 	
-	// if (!uprobe_bpf){
-	// 	printf("Error in creating uprobe \n");
-	// 	goto cleanup;
-	// }
 	
 	int err;
 	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
@@ -642,8 +634,6 @@ int main(int argc, char **argv)
 		aux_bpf__destroy(aux_bpf);
 	if(!fs_bpf)
 		fs_bpf__destroy(fs_bpf);
-	// if(!uprobe_bpf)
-	// 	uprobes_bpf__destroy(uprobe_bpf);
 	if(!rb)
 		ring_buffer__free(rb);
 

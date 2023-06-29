@@ -258,11 +258,12 @@ off_t get_elf_func_offset(const char *path, const char *func)
 		while ((data = elf_getdata(scn, data))) {
 			for (i = 0; gelf_getsym(data, i, sym); i++) {
 				n = elf_strptr(e, shdr->sh_link, sym->st_name);
+				printf("Elf name is %s \n ",n);
 				if (!n)
 					continue;
 				if (GELF_ST_TYPE(sym->st_info) != STT_FUNC)
 					continue;
-				if (!strcmp(n, func)) {
+				if (strstr(n, func)) {
 					ret = sym->st_value;
 					goto check;
 				}

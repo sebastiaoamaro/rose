@@ -1,0 +1,37 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/bpftool-build"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/CMakeFiles/bpftool-build.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/bpftool/src/bpftool-stamp/bpftool-build.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/bpftool/src/bpftool-stamp/bpftool-configure.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/bpftool/src/bpftool-stamp/bpftool-patch.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/bpftool/src/bpftool-stamp/bpftool-update.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/bpftool/src/bpftool-stamp/bpftool-download.rule"
+		},
+		{
+			"file" : "/home/sebastiaoamaro/phd/torefidevel/build/bpftool/src/bpftool-stamp/bpftool-mkdir.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"bpftool"
+		],
+		"name" : "bpftool-build"
+	}
+}

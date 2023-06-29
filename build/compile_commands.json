@@ -1,0 +1,37 @@
+[
+{
+  "directory": "/home/sebastiaoamaro/phd/torefidevel/build",
+  "command": "/usr/bin/gcc  -I/home/sebastiaoamaro/phd/torefidevel/build -isystem /home/sebastiaoamaro/phd/torefidevel/build/libbpf -O3 -DNDEBUG -o CMakeFiles/aux.dir/aux.c.o -c /home/sebastiaoamaro/phd/torefidevel/examples/c/aux.c",
+  "file": "/home/sebastiaoamaro/phd/torefidevel/examples/c/aux.c"
+},
+{
+  "directory": "/home/sebastiaoamaro/phd/torefidevel/build",
+  "command": "/usr/bin/gcc  -I/home/sebastiaoamaro/phd/torefidevel/build -isystem /home/sebastiaoamaro/phd/torefidevel/build/libbpf -O3 -DNDEBUG -o CMakeFiles/block.dir/block.c.o -c /home/sebastiaoamaro/phd/torefidevel/examples/c/block.c",
+  "file": "/home/sebastiaoamaro/phd/torefidevel/examples/c/block.c"
+},
+{
+  "directory": "/home/sebastiaoamaro/phd/torefidevel/build",
+  "command": "/usr/bin/gcc  -I/home/sebastiaoamaro/phd/torefidevel/build -isystem /home/sebastiaoamaro/phd/torefidevel/build/libbpf -O3 -DNDEBUG -o CMakeFiles/faultinject.dir/faultinject.c.o -c /home/sebastiaoamaro/phd/torefidevel/examples/c/faultinject.c",
+  "file": "/home/sebastiaoamaro/phd/torefidevel/examples/c/faultinject.c"
+},
+{
+  "directory": "/home/sebastiaoamaro/phd/torefidevel/build",
+  "command": "/usr/bin/gcc  -I/home/sebastiaoamaro/phd/torefidevel/build -isystem /home/sebastiaoamaro/phd/torefidevel/build/libbpf -O3 -DNDEBUG -o CMakeFiles/fs.dir/fs.c.o -c /home/sebastiaoamaro/phd/torefidevel/examples/c/fs.c",
+  "file": "/home/sebastiaoamaro/phd/torefidevel/examples/c/fs.c"
+},
+{
+  "directory": "/home/sebastiaoamaro/phd/torefidevel/build",
+  "command": "/usr/bin/gcc  -I/home/sebastiaoamaro/phd/torefidevel/build -isystem /home/sebastiaoamaro/phd/torefidevel/build/libbpf -O3 -DNDEBUG -o CMakeFiles/process.dir/process.c.o -c /home/sebastiaoamaro/phd/torefidevel/examples/c/process.c",
+  "file": "/home/sebastiaoamaro/phd/torefidevel/examples/c/process.c"
+},
+{
+  "directory": "/home/sebastiaoamaro/phd/torefidevel/build",
+  "command": "/usr/bin/gcc  -I/home/sebastiaoamaro/phd/torefidevel/build -isystem /home/sebastiaoamaro/phd/torefidevel/build/libbpf -O3 -DNDEBUG -o CMakeFiles/tc.dir/tc.c.o -c /home/sebastiaoamaro/phd/torefidevel/examples/c/tc.c",
+  "file": "/home/sebastiaoamaro/phd/torefidevel/examples/c/tc.c"
+},
+{
+  "directory": "/home/sebastiaoamaro/phd/torefidevel/build",
+  "command": "/usr/bin/gcc  -I/home/sebastiaoamaro/phd/torefidevel/build -isystem /home/sebastiaoamaro/phd/torefidevel/build/libbpf -O3 -DNDEBUG -o CMakeFiles/uprobes.dir/uprobes.c.o -c /home/sebastiaoamaro/phd/torefidevel/examples/c/uprobes.c",
+  "file": "/home/sebastiaoamaro/phd/torefidevel/examples/c/uprobes.c"
+}
+]
