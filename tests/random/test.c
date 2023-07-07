@@ -15,7 +15,7 @@ int main() {
     char string[32] = "String";
     FILE *fptr;
     fptr = fopen("test.txt","a");
-    fprintf(fptr,"%s",string);
+    fprintf(fptr,"%s\n",string);
     fclose(fptr);
     sleep(5);
     // pthread_t thread_id;

@@ -25,6 +25,9 @@ const char DBPath[] = "/tmp/rocksdb_c_simple_example";
 const char DBBackupPath[] = "/tmp/rocksdb_c_simple_example_backup";
 #endif
 
+int temporary_auxiliary_function(){
+  return 0;
+}
 int main(int argc, char **argv) {
 
   int workload_size = strtol(argv[1],NULL,10);
@@ -77,6 +80,10 @@ int main(int argc, char **argv) {
       assert(!err);
       assert(strcmp(returned_value, "value") == 0);
       free(returned_value);
+      
+      if (i%100000 == 0){
+        temporary_auxiliary_function();
+      }
   }
 
   // create new backup in a directory specified by DBBackupPath

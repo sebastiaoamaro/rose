@@ -51,7 +51,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
 	__type(key, char[FUNCNAME_MAX]);
-	__type(value,U64);
+	__type(value, u64);
 } funcnames SEC(".maps");
 
 struct {

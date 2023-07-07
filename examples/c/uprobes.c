@@ -313,7 +313,7 @@ out_binary:
 	return ret;
 }
 
-struct uprobes_bpf* uprobe(int pid,char* funcname)
+struct uprobes_bpf* uprobe(int pid,char* funcname,int faultcount)
 {
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
 	// static const struct argp argp = {
@@ -352,7 +352,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname)
 		warn("failed to open BPF object\n");
 		return NULL;
 	}
-
+	obj->rodata->fault_count = faultcount;
 	obj->rodata->units = MSEC;
 	obj->rodata->targ_tgid = pid;
 	obj->rodata->filter_cg = 0;

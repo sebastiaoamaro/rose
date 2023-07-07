@@ -117,13 +117,13 @@ class FullCompactor : public Compactor {
   }
 
   static void CompactFiles(void* arg) {
+    printf("Doing Compaction \n");
     std::unique_ptr<CompactionTask> task(
         reinterpret_cast<CompactionTask*>(arg));
     assert(task);
     assert(task->db);
     Status s = task->db->CompactFiles(
         task->compact_options, task->input_file_names, task->output_level);
-    printf("CompactFiles() finished with status %s\n", s.ToString().c_str());
     if (!s.ok() && !s.IsIOError() && task->retry_on_fail) {
       // If a compaction task with its retry_on_fail=true failed,
       // try to schedule another compaction in case the reason
@@ -139,7 +139,7 @@ class FullCompactor : public Compactor {
   CompactionOptions compact_options_;
 };
 
-int main() {
+int main(int argc, char*argv[]) {
   Options options;
   options.create_if_missing = true;
   // Disable RocksDB background compaction.
@@ -156,16 +156,21 @@ int main() {
   assert(s.ok());
   assert(db);
 
+  int workload_size = strtol(argv[1], NULL, 0);
   // if background compaction is not working, write will stall
   // because of options.level0_stop_writes_trigger
-  for (int i = 0; i < 1000000; ++i) {
+  for (int i = 0; i < workload_size; ++i) {
     db->Put(WriteOptions(), std::to_string(i),
             std::string(500, 'a' + (i % 26)));
+
+    // if((i%10000) == 0){
+    //   printf("I is %d \n",i);
+    // }
   }
 
   // verify the values are still there
   std::string value;
-  for (int i = 0; i < 1000000; ++i) {
+  for (int i = 0; i < workload_size; ++i) {
     db->Get(ReadOptions(), std::to_string(i), &value);
     assert(value == std::string(500, 'a' + (i % 26)));
   }

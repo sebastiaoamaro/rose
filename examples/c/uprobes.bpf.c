@@ -12,6 +12,22 @@ const volatile pid_t targ_tgid = 0;
 const volatile int units = 0;
 const volatile bool filter_cg = false;
 const volatile char funcname[FUNCNAME_MAX];
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 8192);
+	__type(key, struct info_key);
+	__type(value, struct info_state);
+	 __uint(pinning, LIBBPF_PIN_BY_NAME);
+} relevant_state_info SEC(".maps");
+
+
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 256 * 1024);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} rb SEC(".maps");
+
 struct {
 	__uint(type, BPF_MAP_TYPE_CGROUP_ARRAY);
 	__type(key, u32);
@@ -23,7 +39,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
 	__type(key, char[FUNCNAME_MAX]);
-	__type(value,U64);
+	__type(value,u64);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } funcnames SEC(".maps");
 
@@ -36,52 +52,106 @@ struct {
 } starts SEC(".maps");
 
 __u32 hist[MAX_SLOTS] = {};
+const volatile int fault_count = 0;
+
+static inline int process_current_state(int state_key, int type, int pid){
+
+	struct info_key information = {
+		pid,
+		state_key
+	};
+
+	struct info_state *current_state;
+
+	current_state = bpf_map_lookup_elem(&relevant_state_info,&information);
+	
+	if (current_state){
+		//bpf_printk("Found write in pid %d \n",pid);
+
+		current_state->current_value++;
+		u64 value = current_state->current_value;
+		if(current_state->relevant_states){
+			for (int i=0;i<fault_count;i++){
+				if (current_state->relevant_states[i]){
+					u64 relevant_value = current_state->relevant_states[i];
+					if (relevant_value == value && relevant_value != 0){
+
+						struct event *e;
+
+						/* reserve sample from BPF ringbuf */
+						e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+						if (!e)
+							return 0;
+
+						e->type = type;
+						e->pid = pid;
+						e->state_condition = value;
+						bpf_ringbuf_submit(e, 0);
+						return 0;
+					}
+					if(current_state->repeat && (value % relevant_value == 0)){
+						struct event *e;
+
+						/* reserve sample from BPF ringbuf */
+						e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+						if (!e)
+							return 0;
+
+						e->type = type;
+						e->pid = pid;
+						e->state_condition = relevant_value;
+						bpf_ringbuf_submit(e, 0);
+						return 0;
+					}
+					//bpf_printk("Skipped \n");
+					}
+					return 0;
+				}
+				
+		}
+	}
+}
 
 static void entry(struct pt_regs *ctx)
 {
 
-	bpf_printk("Found function \n ");
+	//bpf_printk("Found function \n ");
 
 	u64 id = bpf_get_current_pid_tgid();
 	u32 tgid = id >> 32;
 	u32 pid = id;
 	u64 nsec;
 
-	char* argument,argument2;
+	// char* argument,argument2;
 
-	argument = PT_REGS_PARM1(ctx);
+	// argument = PT_REGS_PARM1(ctx);
 
-	if(argument)
-		//bpf_printk("Argument is %s \n",argument);
+	// if(argument)
+	// 	bpf_printk("Argument is %s \n",argument);
 
-	argument2 = PT_REGS_PARM2(ctx);
+	// argument2 = PT_REGS_PARM2(ctx);
 
-	if(argument)
-		//bpf_printk("Argument2 is %s \n",argument2);
+	// if(argument)
+	// 	bpf_printk("Argument2 is %s \n",argument2);
 
-	if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
-		return;
 
-	if (targ_tgid && targ_tgid != tgid)
-		return;
-	nsec = bpf_ktime_get_ns();
+	// int one = 1;
 
-	int one = 1;
+	// int *count = bpf_map_lookup_or_try_init(&funcnames,&funcname,&one);
 
-	int *count = bpf_map_lookup_or_try_init(&funcnames,&funcname,&one);
-
-	int new_value = 0;
-	if (!count)
-		return;
-	if (*count == 0){
-		bpf_map_update_elem(&funcnames,&funcname,&one,BPF_ANY);
+	// int new_value = 0;
+	// if (!count)
+	// 	return;
+	// if (*count == 0){
+	// 	bpf_map_update_elem(&funcnames,&funcname,&one,BPF_ANY);
 		
-	}else{
-		new_value = *count + 1;
-		bpf_map_update_elem(&funcnames,&funcname,&new_value,BPF_ANY);
-	}
+	// }else{
+	// 	new_value = *count + 1;
+	// 	bpf_map_update_elem(&funcnames,&funcname,&new_value,BPF_ANY);
+	// }
 
-	bpf_map_update_elem(&starts, &pid, &nsec, BPF_ANY);
+	int result = process_current_state(FUNCTIONS,CALLCOUNT,pid);
+
 }
 
 SEC("fentry/dummy_fentry")

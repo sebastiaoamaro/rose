@@ -7,7 +7,7 @@
 #define MAX_IPS_BLOCKED 16
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
-#define FUNCNAME_MAX 32
+#define FUNCNAME_MAX 64
 #define MAX_FUNCTIONS 8
 #define FILENAME_MAX 64
 #define FAULTSSUPPORTED 7
@@ -65,6 +65,7 @@ enum faulttype{
     CLONE = 7,
     WRITE_FILE = 8,
     READ_FILE = 9,
+    FUNCTIONS = 10,
     TEMP_EMPTY = 999,
 };
 

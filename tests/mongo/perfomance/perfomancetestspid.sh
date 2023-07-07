@@ -1,5 +1,5 @@
 #!/bin/bash
-workload_size=25_000
+workload_size=100_000
 #maindirectory=/home/sebasamaro/phd/torefidevel/examples/c/main
 maindirectory=/vagrant/examples/c/main
 date=$(date +"%H:%M")

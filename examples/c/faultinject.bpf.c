@@ -296,17 +296,20 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 					}
 			}
 		}
+		if(*fdrelevant == 0){
+			//bpf_printk("fdrelevant is 0 \n");
+			process_fd = 1;
+		}
 		else{
 			bpf_printk("Already saw the fd and this one is not important %d \n",fd);
 			//It means w already found the relevant fd thus this one is not relevant.
 		}
 	}else{
-		// We have to check if the fd is relevant or not, thus it is relevant.
-		process_fd = 1;
+		//process_fd = 1;
 	}
 
 	if (fd > 0 && process_fd){
-        //bpf_printk("%d \n",fd);
+        //bpf_printk("%d and pid is %d \n",fd,pid);
 
         struct file *file = get_file_from_fd(fd);
 
@@ -466,8 +469,9 @@ int BPF_KPROBE(__x64_sys_close,struct pt_regs *regs)
 
 	if(fdrelevant){
 		if(*fdrelevant == fd){
+			int zero = 0;
 			bpf_printk("Removed fd %d \n",fd);
-			bpf_map_delete_elem(&relevant_fd,&pid);
+			bpf_map_update_elem(&relevant_fd,&pid,&zero,BPF_ANY);
 		}
 	}
 

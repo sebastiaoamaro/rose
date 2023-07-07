@@ -39,7 +39,7 @@ struct tc_bpf* traffic_control(__u32 index,int pos,int handle,int faults)
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, tc_hook,
 		.ifindex = index, .attach_point = BPF_TC_INGRESS);
 	DECLARE_LIBBPF_OPTS(bpf_tc_opts, tc_opts,
-		.handle = handle, .priority = 25);
+		.handle = handle, .priority = 1);
 	bool hook_created = false;
 	struct tc_bpf *skel;
 	int err;

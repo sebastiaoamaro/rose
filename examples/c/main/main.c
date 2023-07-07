@@ -45,7 +45,9 @@ static const struct argp_option opts[] = {
 	{ "faultcount", 'f', "FAULTCOUNT", 0, "Number of faults" },
 	{ "devicecount", 'd', "DEVICECOUNT", 0, "Number of network devices" },
 	{ "processid", 'p', "PID", 0, "Process ID" },
-	{ "inputfile", 'i', "inputfilename",0,"File with auxiliary fault information "},
+	{ "inputfile", 'i', "inputfilename",0,"File with auxiliary fault information. "},
+	{ "uprobes only",'u',0,0,"With this flag only uprobes will run"},
+	{ "tracing only",'t',0,0,"With this flag no fault will be processed"},
 	{ NULL, 'h', NULL, OPTION_HIDDEN, "Show the full help" },
 	{},
 };
@@ -56,9 +58,12 @@ static struct constants {
 	int faulttype_fd;
 	int relevant_state_info_fd;
 	int blocked_ips;
+	int relevant_fd;
 	int files;
 	int pid;
 	char *inputfilename;
+	int uprobemode;
+	int tracingmode;
 } constants;
 
 static struct fault *faults;
@@ -110,8 +115,15 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 			constants.inputfilename = (char *)malloc(sizeof(char)*strlen(arg));
 			strcpy(constants.inputfilename,arg);
 			break;
+		case 'u':
+			constants.uprobemode = 1;
+			break;
+		case 't':
+			constants.tracingmode = 1;
+			break;
 		case 'h':
 			argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
+			break;
 		case ARGP_KEY_END:
 			if (state->argc < 2)
 				/* Not enough arguments. */
@@ -134,7 +146,7 @@ static const struct argp argp = {
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
 	const struct event *e = data;
-	printf("Arrived here TYPE is %d \n",e->type);
+	//printf("Arrived here TYPE is %d \n",e->type);
 
 	switch(e->type){
 		case EXEC:
@@ -149,6 +161,8 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 		case READ_HOOK:
 			process_counter(e,READS);
 		break;
+		case FUNCTIONS:
+			process_counter(e,CALLCOUNT);
 		case TC:
 			process_tc(e);
 		break;
@@ -177,9 +191,10 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 			}
 		}
 		//printf("run is %d, relevant_conditions is %d \n",run,relevant_conditions);
-		if (run == relevant_conditions)
+		//temporary for testing
+		if (run > 0)
 			if (!faults[i].done){
-				if (faults[i].faulttype == (NETWORK_ISOLATION || DROP_PACKETS || BLOCK_IPS))
+				if (faults[i].faulttype == NETWORK_ISOLATION ||faults[i].faulttype == DROP_PACKETS ||faults[i].faulttype == BLOCK_IPS)
 					inject_fault(faults[i].faulttype,0,i);
 				else
 					inject_fault(faults[i].faulttype,faults[i].pid,i);
@@ -229,7 +244,7 @@ void process_fs(const struct event *event){
 //Tells eBPF via Maps to start a fault
 void inject_fault(int faulttype,int pid,int fault_id){
 
-	//printf("Injecting fault in %d for pid %d \n",faulttype,pid);
+	//	printf("Injecting fault in %d for pid %d \n",faulttype,pid);
 
 	int error;
 
@@ -269,14 +284,15 @@ void build_faults(){
     ssize_t read;
 
 	for(int i = 0; i< FAULT_COUNT;i++){
-		build_fault(&faults[i],0,WRITE_FILE,5);
+		build_fault(&faults[i],1,TEMP_EMPTY,5);
 
-		// faults[i].initial->fault_type_conditions[PROCESSES_OPENED] = 1;
-		// faults[i].initial->fault_type_conditions[PROCESSES_CLOSED] = 1;
-		faults[i].initial->fault_type_conditions[WRITES] = 5;
-		// faults[i].initial->fault_type_conditions[READS] = 5;
-		//faults[i].initial->fault_type_conditions[THREADS_CREATED] = 1;
-		//faults[0].initial->fault_type_conditions[FILES_OPENED_ANY] = ANY_PID;
+		faults[i].initial->fault_type_conditions[PROCESSES_OPENED] = 1;
+		faults[i].initial->fault_type_conditions[PROCESSES_CLOSED] = 1;
+		faults[i].initial->fault_type_conditions[WRITES] = 100;
+		faults[i].initial->fault_type_conditions[READS] = 100;
+		faults[i].initial->fault_type_conditions[THREADS_CREATED] = 1;
+		faults[0].initial->fault_type_conditions[FILES_OPENED_ANY] = ANY_PID;
+		faults[i].initial->fault_type_conditions[CALLCOUNT] = 1;
 	
 		// char string_ips[32] = "172.19.0.2";
 
@@ -286,10 +302,10 @@ void build_faults(){
 
 		strcpy(faults[i].file_open,file_name);
 
-		char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":Put"};
-
-		//add_function_to_monitor(&faults[i],&func_names[0],0);
-		// add_function_to_monitor(&faults[i],&func_names[1],1);
+		//char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":_ZN13FullCompactor12CompactFilesEPv"};
+		char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":temporary_auxiliary_function"};
+		add_function_to_monitor(&faults[i],&func_names[0],0);
+		//add_function_to_monitor(&faults[i],&func_names[1],1);
 
 	}
 
@@ -300,7 +316,9 @@ void build_faults(){
         exit(EXIT_FAILURE);
 	}
 		
-	while ((read = getline(&line, &len, fp)) != -1) {
+	for(int i =0; i<FAULT_COUNT;i++){
+
+		getline(&line, &len, fp);
         //printf("Line is %s \n", line);
 
 		int pid;
@@ -339,6 +357,7 @@ void get_fd_of_maps (struct aux_bpf *bpf){
 	constants.faulttype_fd = bpf_map__fd(bpf->maps.faulttype);
 	constants.blocked_ips = bpf_map__fd(bpf->maps.blocked_ips);
 	constants.files = bpf_map__fd(bpf->maps.files);
+	constants.relevant_fd = bpf_map__fd(bpf->maps.relevant_fd);
 };
 
 void populate_stateinfo_map(){
@@ -393,17 +412,25 @@ void populate_files_map(){
 		if (strlen(faults[i].file_open)!=0){
 			int error;
 			//We pass the pid to filter out irrelevant pids opening
-			int value = faults[i].pid;
+			int pid = faults[i].pid;
 			printf("Fault %i has file open %s \n",i,faults[i].file_open);
 
 			struct file_info_simple file_info = {};
 			strcpy(file_info.filename,faults[i].file_open);
 			file_info.size = strlen(file_info.filename);
 
-			error = bpf_map_update_elem(constants.files,&value,&file_info,BPF_ANY);
+			error = bpf_map_update_elem(constants.files,&pid,&file_info,BPF_ANY);
 			if (error){
-				printf("Error of update in files_opened is %d, key->%s \n",error,faults[i].file_open);	
-			}	
+				printf("Error of update in files_opened is %d, value->%s \n",error,faults[i].file_open);	
+			}
+
+			int zero = 0;
+
+			error = bpf_map_update_elem(constants.relevant_fd,&pid,&zero,BPF_ANY);
+			if (error){
+				printf("Error of update in files_opened is %d, value->%d \n",error,pid);	
+			}
+
 		}
 	}
 }
@@ -436,10 +463,13 @@ int main(int argc, char **argv)
 	}
 
 	get_fd_of_maps(aux_bpf);
+	if(!constants.tracingmode){
 
-	populate_stateinfo_map();
+		populate_stateinfo_map();
 
-	populate_files_map();
+		populate_files_map();
+	}
+
 
 
 	//Add to all networkdevices
@@ -568,39 +598,44 @@ int main(int argc, char **argv)
 				continue;
 			printf("Fault is %d funcame is %s, pid is %d \n",i,faults[i].func_names[j],faults[i].pid);
 
-			uprobes[i][j] = uprobe(faults[i].pid,faults[i].func_names[j]);
+			uprobes[i][j] = uprobe(faults[i].pid,faults[i].func_names[j],FAULT_COUNT);
 		}
 
 
 	}
 
-	struct fs_bpf* fs_bpf = monitor_fs();
-	struct process_bpf* process_bpf = exec_and_exit(FAULT_COUNT);
-	struct faultinject_bpf* faultinject_bpf = fault_inject(FAULT_COUNT);
-	struct block_bpf* block_bpf = monitor_disk();
-	//struct uprobe_bpf* uprobe_bpf = uprobe(0,funcname);
+	struct fs_bpf* fs_bpf;
+	struct process_bpf* process_bpf;
+	struct faultinject_bpf* faultinject_bpf;
+	struct block_bpf* block_bpf;
 	struct ring_buffer *rb = NULL;
 
+	if(!constants.uprobemode){
+		fs_bpf = monitor_fs();
+		process_bpf = exec_and_exit(FAULT_COUNT);
+		faultinject_bpf = fault_inject(FAULT_COUNT);
+		block_bpf = monitor_disk();
 
-	printf("Created all structs \n");
-	
-	if (!fs_bpf){
-		printf("Error in creating fs tracing\n");
-		goto cleanup;			
-	}
+		printf("Created all structs \n");
+		
+		if (!fs_bpf){
+			printf("Error in creating fs tracing\n");
+			goto cleanup;			
+		}
 
-	if (!process_bpf){
-		printf("Error in creating process_tracing \n");
-		goto cleanup;		
-	}
-	if (!faultinject_bpf){
-		printf("Error in creating fault injection bpf\n");
-		goto cleanup;		
-	}
+		if (!process_bpf){
+			printf("Error in creating process_tracing \n");
+			goto cleanup;		
+		}
+		if (!faultinject_bpf){
+			printf("Error in creating fault injection bpf\n");
+			goto cleanup;		
+		}
 
-	if (!block_bpf){
-		printf("Error in creating disk monitor \n");
-		goto cleanup;
+		if (!block_bpf){
+			printf("Error in creating disk monitor \n");
+			goto cleanup;
+		}
 	}
 	
 	

@@ -78,7 +78,7 @@ def workload2(id):
 def workload3(num):
     for i in range(num):
         id = workload1()
-        read(id)
+        #read(id)
 
 def workload4(num):
     global global_i
@@ -169,6 +169,7 @@ import os
 import sys
 
 def main():
+
     workload3(int(sys.argv[1]))
     
 if __name__ == "__main__":

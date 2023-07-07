@@ -11,5 +11,7 @@ set style data histogram
 set style fill solid 0.5 border
 set style histogram clustered errorbars
 plot "times.data" using 2:3:xtic(1) title "vanilla" ls 101, \
-    "times.data" using  4:5:xtic(1) title "eBPF" ls 102, \
+    "times.data" using  4:5:xtic(1) title "uprobes" ls 102, \
+    "times.data" using  6:7:xtic(1) title "uprobes+faults" ls 103, \
+    "times.data" using  8:9:xtic(1) title "all" ls 104, \
     
