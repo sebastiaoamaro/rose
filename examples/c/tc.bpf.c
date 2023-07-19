@@ -65,6 +65,7 @@ struct {
 
 const volatile __u32 if_index = 0;
 const volatile int fault_count = 0;
+const volatile int network_direction = 0;
 static int packets_dropped = 0;
 
 static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff)
@@ -77,7 +78,7 @@ static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff)
 }
 
 SEC("tc")
-int tc_ingress(struct __sk_buff *ctx)
+int monitor(struct __sk_buff *ctx)
 {
 
 	struct fault_key fault_to_inject_networkiso = {
@@ -92,6 +93,7 @@ int tc_ingress(struct __sk_buff *ctx)
 
 	if (description_of_fault_netiso){
 		if (description_of_fault_netiso->on){
+			//bpf_printk("Blocking packet in %d \n ",network_direction);
 			return TC_ACT_SHOT;
 		}
 	}

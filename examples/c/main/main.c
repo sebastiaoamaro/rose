@@ -13,6 +13,7 @@
 #include <linux/if_ether.h>
 #include <linux/in.h>
 #include <net/if.h>
+ #include <signal.h>
 
 //Modules
 #include <aux.h>
@@ -48,12 +49,13 @@ static const struct argp_option opts[] = {
 	{ "inputfile", 'i', "inputfilename",0,"File with auxiliary fault information. "},
 	{ "uprobes only",'u',0,0,"With this flag only uprobes will run"},
 	{ "tracing only",'t',0,0,"With this flag no fault will be processed"},
+	{ "verbose",'v',0,0,"With this flag extra information is shown in stdout"},
 	{ NULL, 'h', NULL, OPTION_HIDDEN, "Show the full help" },
 	{},
 };
 
 static struct constants {
-	bool verbose;
+	int verbose;
 	long min_duration_ms;
 	int faulttype_fd;
 	int relevant_state_info_fd;
@@ -64,6 +66,9 @@ static struct constants {
 	char *inputfilename;
 	int uprobemode;
 	int tracingmode;
+	int faultsverbose;
+	char *command;
+
 } constants;
 
 static struct fault *faults;
@@ -121,6 +126,9 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 		case 't':
 			constants.tracingmode = 1;
 			break;
+		case 'v':
+			constants.faultsverbose = 1;
+			break;
 		case 'h':
 			argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
 			break;
@@ -146,7 +154,8 @@ static const struct argp argp = {
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
 	const struct event *e = data;
-	//printf("Arrived here TYPE is %d \n",e->type);
+	if(constants.faultsverbose)
+		printf("Arrived here TYPE is %d \n",e->type);
 
 	switch(e->type){
 		case EXEC:
@@ -244,7 +253,12 @@ void process_fs(const struct event *event){
 //Tells eBPF via Maps to start a fault
 void inject_fault(int faulttype,int pid,int fault_id){
 
-	//	printf("Injecting fault in %d for pid %d \n",faulttype,pid);
+	if (constants.faultsverbose)
+		printf("Injecting fault in %d for pid %d \n",faulttype,pid);
+	
+	if(faulttype == PROCESS_KILL){
+		kill(faults[fault_id].initial->fault_type_conditions[PROCESS_TO_KILL],9);
+	}
 
 	int error;
 
@@ -284,15 +298,15 @@ void build_faults(){
     ssize_t read;
 
 	for(int i = 0; i< FAULT_COUNT;i++){
-		build_fault(&faults[i],1,TEMP_EMPTY,5);
+		build_fault(&faults[i],1,TEMP_EMPTY,5,2);
 
 		faults[i].initial->fault_type_conditions[PROCESSES_OPENED] = 1;
 		faults[i].initial->fault_type_conditions[PROCESSES_CLOSED] = 1;
 		faults[i].initial->fault_type_conditions[WRITES] = 100;
 		faults[i].initial->fault_type_conditions[READS] = 100;
 		faults[i].initial->fault_type_conditions[THREADS_CREATED] = 1;
-		faults[0].initial->fault_type_conditions[FILES_OPENED_ANY] = ANY_PID;
 		faults[i].initial->fault_type_conditions[CALLCOUNT] = 1;
+		//faults[i].initial->fault_type_conditions[PROCESS_TO_KILL] = 105534;
 	
 		// char string_ips[32] = "172.19.0.2";
 
@@ -303,6 +317,7 @@ void build_faults(){
 		strcpy(faults[i].file_open,file_name);
 
 		//char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":_ZN13FullCompactor12CompactFilesEPv"};
+		//char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":github.com/cometbft/cometbft/statesync.(*syncer).Sync"};
 		char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":temporary_auxiliary_function"};
 		add_function_to_monitor(&faults[i],&func_names[0],0);
 		//add_function_to_monitor(&faults[i],&func_names[1],1);
@@ -331,16 +346,11 @@ void build_faults(){
 
 		token = strtok(NULL,"");
 
-		char* newline = strchr(token, '\n');
-		if (newline != NULL) {
-			*newline = '\0';
-		}
-		else{
-			newline = token;
-		}
-		if(*newline!='\0'){
-			printf("newline is %s and len is %ld \n",newline,strlen(newline));
-			set_if_name(&faults[fault_count],newline);
+		strtok(token,"\n");
+
+		if(*token!='\0'){
+			printf("newline is %s and len is %ld \n",token,strlen(token));
+			set_if_name(&faults[fault_count],token);
 		}else{
 			set_if_name(&faults[fault_count],"\0");
 		}
@@ -362,48 +372,48 @@ void get_fd_of_maps (struct aux_bpf *bpf){
 
 void populate_stateinfo_map(){
 	for(int i = 0; i < FAULT_COUNT; i++){
-			for(int j = 0; j <STATE_PROPERTIES_COUNT;j++){
-				if(faults[i].initial->fault_type_conditions[j] != 0){
-					int error;
-					struct info_key information = {
-						faults[i].pid,
-						j
-					};
+		for(int j = 0; j <STATE_PROPERTIES_COUNT;j++){
+			if(faults[i].initial->fault_type_conditions[j] != 0){
+				int error;
+				struct info_key information = {
+					faults[i].pid,
+					j
+				};
 
-					struct info_state *new_information_state = (struct info_state*)malloc(sizeof(struct info_state));
+				struct info_state *new_information_state = (struct info_state*)malloc(sizeof(struct info_state));
 
-					new_information_state->current_value = 0;
+				new_information_state->current_value = 0;
 
-					new_information_state->relevant_states[i] = faults[i].initial->fault_type_conditions[j];
+				new_information_state->relevant_states[i] = faults[i].initial->fault_type_conditions[j];
 
-					new_information_state->repeat = faults[i].repeat;
-					
-					printf("FAULT %d state info pos[%d] is %llu with pid %d \n",i,j,new_information_state->relevant_states[i],faults[i].pid);
+				new_information_state->repeat = faults[i].repeat;
+				
+				printf("FAULT %d state info pos[%d] is %llu with pid %d \n",i,j,new_information_state->relevant_states[i],faults[i].pid);
 
-					struct info_state *old_information_state = (struct info_state*)malloc(sizeof(struct info_state));
+				struct info_state *old_information_state = (struct info_state*)malloc(sizeof(struct info_state));
 
-					old_information_state->current_value = 0;
+				old_information_state->current_value = 0;
 
-					int exists = 0;
-					exists = bpf_map_lookup_or_try_init_user(constants.relevant_state_info_fd,&information,new_information_state,old_information_state);
+				int exists = 0;
+				exists = bpf_map_lookup_or_try_init_user(constants.relevant_state_info_fd,&information,new_information_state,old_information_state);
 
-					//if already exists add
-					if(exists){
-						printf("It already exists \n");
-						old_information_state->relevant_states[i] = faults[i].initial->fault_type_conditions[j];
-						printf("State info is %llu \n",old_information_state->relevant_states[i]);
-						error = bpf_map_update_elem(constants.relevant_state_info_fd,&information,old_information_state,BPF_ANY);
-						if (error){
-							printf("Error of update is %d, key->%d \n",error,j);	
-						}
-						free(new_information_state->relevant_states);
-					}else{
-						free(old_information_state->relevant_states);
+				//if already exists add
+				if(exists){
+					printf("It already exists \n");
+					old_information_state->relevant_states[i] = faults[i].initial->fault_type_conditions[j];
+					printf("State info is %llu \n",old_information_state->relevant_states[i]);
+					error = bpf_map_update_elem(constants.relevant_state_info_fd,&information,old_information_state,BPF_ANY);
+					if (error){
+						printf("Error of update is %d, key->%d \n",error,j);	
 					}
-
+					free(new_information_state->relevant_states);
+				}else{
+					free(old_information_state->relevant_states);
 				}
+
 			}
 		}
+	}
 }
 
 void populate_files_map(){
@@ -413,7 +423,6 @@ void populate_files_map(){
 			int error;
 			//We pass the pid to filter out irrelevant pids opening
 			int pid = faults[i].pid;
-			printf("Fault %i has file open %s \n",i,faults[i].file_open);
 
 			struct file_info_simple file_info = {};
 			strcpy(file_info.filename,faults[i].file_open);
@@ -454,6 +463,18 @@ int main(int argc, char **argv)
 	/* Cleaner handling of Ctrl-C */
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
+
+
+	// int entry = 1;
+	// char line[200];
+
+	// pid_t pid = popen_aux("main/script.sh","r");
+
+	// while ( fgets(line, 199, output) )
+  	// {
+    // 	printf("%5d: %s", entry++, line);
+  	// }
+
 	build_faults();
 	struct aux_bpf *aux_bpf = start_aux_maps();
 
@@ -481,13 +502,11 @@ int main(int argc, char **argv)
 
 	count_devices = get_interface_names(device_names,DEVICE_COUNT);
 
-	printf("Printing names %d\n",count_devices);
-
 	for (int i=0;i<count_devices;i++){
 		printf("Device name is %s \n",device_names[i]);
 	}
 
-	init_tc(FAULT_COUNT+DEVICE_COUNT);
+	init_tc((FAULT_COUNT+DEVICE_COUNT)*2);
 
 	struct tc_bpf *tc_ebpf_progs[FAULT_COUNT];
 	struct tc_bpf *tc_ebpf_progs_tracking[DEVICE_COUNT];
@@ -544,16 +563,60 @@ int main(int argc, char **argv)
 		}
 
 		struct tc_bpf* tc_prog;
-		//printf("Inserted in %s for faults \n",faults[i].veth);
+		if (constants.verbose)
+			printf("Inserted in %s for faults \n",faults[i].veth);
 
 		//handle must be different than 0 so add 1
-		tc_prog = traffic_control(index_in_unsigned,i,i+handle,FAULT_COUNT);
 
-		if (!tc_prog){
-			printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
-			goto cleanup;		
+		printf("Network directions is %d \n",faults[i].network_directions);
+
+		if (faults[i].network_directions == 0){
+
+			printf("Blocking ingress \n ");
+
+			tc_prog = traffic_control(index_in_unsigned,i,i+handle,FAULT_COUNT,BPF_TC_INGRESS);
+
+			if (!tc_prog){
+				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
+				goto cleanup;		
+			}
+			tc_ebpf_progs[i] = tc_prog;
 		}
-		tc_ebpf_progs[i] = tc_prog;
+		if(faults[i].network_directions == 1){
+			
+			printf("Blocking egress \n ");
+
+			tc_prog = traffic_control(index_in_unsigned,i,i+handle,FAULT_COUNT,BPF_TC_EGRESS);
+
+			if (!tc_prog){
+				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
+				goto cleanup;		
+			}
+			tc_ebpf_progs[i] = tc_prog;
+		}
+		if(faults[i].network_directions == 2){
+
+			printf("Blocking ingress and egress \n ");
+
+			tc_prog = traffic_control(index_in_unsigned,i,i+handle,FAULT_COUNT,BPF_TC_INGRESS);
+
+			if (!tc_prog){
+				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
+				goto cleanup;		
+			}
+			tc_ebpf_progs[i] = tc_prog;
+
+			i++;
+
+			tc_prog = traffic_control(index_in_unsigned,i,i+handle,FAULT_COUNT,BPF_TC_EGRESS);
+
+			if (!tc_prog){
+				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
+				goto cleanup;		
+			}
+			tc_ebpf_progs[i] = tc_prog;
+		}
+
 
 	}
 
@@ -579,7 +642,7 @@ int main(int argc, char **argv)
 
 		//printf("Inserted in %s for tracking \n",device_names[i]);
 		//handle must be different than 0 so add 1
-		tc_prog = traffic_control(index_in_unsigned,i+FAULT_COUNT,i+FAULT_COUNT+handle,FAULT_COUNT);
+		tc_prog = traffic_control(index_in_unsigned,i+FAULT_COUNT,i+FAULT_COUNT+handle,FAULT_COUNT,BPF_TC_INGRESS);
 
 		if (!tc_prog){
 			printf("Error in creating tc_prog_tracking with interface %s \n",device_names[i]);

@@ -1,5 +1,6 @@
 #!/bin/bash
 workload_size=20000000
+call_interval=100000
 runs=10
 #maindirectory=/home/sebastiaoamaro/phd/torefidevel/examples/c/main
 faultsfile=$maindirectory/"faults.txt"
@@ -26,25 +27,23 @@ make
 
 cd $SCRIPT_DIR
 
-rm -r /tmp/*
 for (( run=1; run<=$runs; run++ ))
 do  
     #rm -r /tmp/*
     echo Starting Workload
-    /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:v:%e" $rocksexecutable $workload_size
+    /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:v:%e" $rocksexecutable $workload_size $call_interval
 done
 
 ############################################################################################################
 ############################################################################################################
 ############################################################################################################
 
-rm -r /tmp/*
 for (( run=1; run<=$runs; run++ ))
 do
     #rm -r /tmp/*
     rm $faultsfile
     echo Starting Workload
-    /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:u:%e" $rocksexecutable $workload_size &
+    /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:u:%e" $rocksexecutable $workload_size $call_interval &
 
     rockspid=$(pgrep -f $rocksdir | awk 'NR==2{print $1}')
     echo "PID IN BASH IS " $pid
@@ -64,13 +63,12 @@ done
 ############################################################################################################
 ############################################################################################################
 
-rm -r /tmp/*
 for (( run=1; run<=$runs; run++ ))
 do
     #rm -r /tmp/*
     rm $faultsfile
     echo Starting Workload
-    /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:uf:%e" $rocksexecutable $workload_size &
+    /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:uf:%e" $rocksexecutable $workload_size $call_interval &
 
     rockspid=$(pgrep -f $rocksdir | awk 'NR==2{print $1}')
     echo "PID IN BASH IS " $pid
@@ -90,13 +88,12 @@ done
 ############################################################################################################
 ############################################################################################################
 
-rm -r /tmp/*
 for (( run=1; run<=$runs; run++ ))
 do
     #rm -r /tmp/*
     rm $faultsfile
     echo Starting Workload
-    /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:a:%e" $rocksexecutable $workload_size &
+    /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:a:%e" $rocksexecutable $workload_size $call_interval &
 
     rockspid=$(pgrep -f $rocksdir | awk 'NR==2{print $1}')
     echo "PID IN BASH IS " $pid

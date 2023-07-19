@@ -276,11 +276,10 @@ static int attach_uprobes(struct uprobes_bpf *obj)
 	*function = '\0';
 	function++;
 
-	printf("Binary is %s \n",binary);
-
 	if (resolve_binary_path(binary, env.pid, bin_path, sizeof(bin_path)))
 		goto out_binary;
 
+	printf("Binary is %s \n",binary);
 	func_off = get_elf_func_offset(bin_path, function);
 	if (func_off < 0) {
 		warn("Could not find %s in %s\n", function, bin_path);

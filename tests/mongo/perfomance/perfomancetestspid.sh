@@ -1,5 +1,6 @@
 #!/bin/bash
-workload_size=100_000
+workload_size=1000000
+runs=5
 #maindirectory=/home/sebasamaro/phd/torefidevel/examples/c/main
 maindirectory=/vagrant/examples/c/main
 date=$(date +"%H:%M")
@@ -11,7 +12,7 @@ cd $SCRIPT_DIR
 
 for topology in 2 4 8 16
 do
-    for run in 1 2 3 4 5
+    for (( run=1; run<=$runs; run++ ))
         do
         #Normal run
         docker compose -f configs/docker-compose$topology.yaml up -d
@@ -30,7 +31,7 @@ do
         done
 
         echo Starting Workload
-                /usr/bin/time -ao stats/times$date.txt -f "$run:v:$topology:%e" python3 workload.py $workload_size
+        /usr/bin/time -ao stats/times$date.txt -f "$run:v:$topology:%e" python3 workload.py $workload_size
         docker compose -f configs/docker-compose$topology.yaml down
         rm -r /mongo/*
     done
@@ -44,7 +45,7 @@ do
     faultsfile=$maindirectory/"faults.txt"
     echo $faultsfile
 
-    for run in 1 2 3 4 5
+    for (( run=1; run<=$runs; run++ ))
     do
     docker compose -f configs/docker-compose$topology.yaml up -d
     sleep 30

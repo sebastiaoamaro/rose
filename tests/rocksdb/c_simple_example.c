@@ -25,13 +25,16 @@ const char DBPath[] = "/tmp/rocksdb_c_simple_example";
 const char DBBackupPath[] = "/tmp/rocksdb_c_simple_example_backup";
 #endif
 
-int temporary_auxiliary_function(){
-  return 0;
+int temporary_auxiliary_function(int iteration){
+  int calculation = iteration*10 +5;
+
+  return calculation;
 }
 int main(int argc, char **argv) {
 
   int workload_size = strtol(argv[1],NULL,10);
-  printf("Workload size is %d\n",workload_size);
+  int call_interval = strtol(argv[2],NULL,10);
+  printf("Workload size is %d and call interval is %d\n",workload_size,call_interval);
   rocksdb_t *db;
   rocksdb_backup_engine_t *be;
   rocksdb_options_t *options = rocksdb_options_create();
@@ -65,7 +68,6 @@ int main(int argc, char **argv) {
   rocksdb_readoptions_t *readoptions = rocksdb_readoptions_create();
 
   printf("PID is %d \n",getpid());
-
   for(int i = 0; i< workload_size;i++){
         // Put key-value
       const char key[] = "key";
@@ -81,8 +83,8 @@ int main(int argc, char **argv) {
       assert(strcmp(returned_value, "value") == 0);
       free(returned_value);
       
-      if (i%100000 == 0){
-        temporary_auxiliary_function();
+      if (i%call_interval == 0){
+        int storing = temporary_auxiliary_function(i);
       }
   }
 

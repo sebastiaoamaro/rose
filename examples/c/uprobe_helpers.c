@@ -241,23 +241,25 @@ off_t get_elf_func_offset(const char *path, const char *func)
 	char *n;
 
 	e = open_elf(path, &fd);
-
 	if (!gelf_getehdr(e, &ehdr))
 		goto out;
 
 	if (elf_getshdrstrndx(e, &shstrndx) != 0)
 		goto out;
-
 	scn = NULL;
 	while ((scn = elf_nextscn(e, scn))) {
 		if (!gelf_getshdr(scn, shdr))
 			continue;
-		if (!(shdr->sh_type == SHT_SYMTAB || shdr->sh_type == SHT_DYNSYM))
+		if (!(shdr->sh_type == SHT_SYMTAB || shdr->sh_type == SHT_DYNSYM)){
+			//printf("Not a relevant symbol \n");
 			continue;
+		}
+			
 		data = NULL;
 		while ((data = elf_getdata(scn, data))) {
 			for (i = 0; gelf_getsym(data, i, sym); i++) {
 				n = elf_strptr(e, shdr->sh_link, sym->st_name);
+				//printf("Func in pid is %s \n",n);
 				if (!n)
 					continue;
 				if (GELF_ST_TYPE(sym->st_info) != STT_FUNC)

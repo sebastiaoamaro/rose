@@ -35,6 +35,10 @@ int handle_exit_open(struct trace_event_raw_sys_exit *ctx){
 
     long fd = ctx->ret;
 
+    __u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
     //bpf_printk("%ld \n",fd);
 
     FileFDKey fdkey = {};
@@ -69,9 +73,7 @@ int handle_exit_open(struct trace_event_raw_sys_exit *ctx){
         if (get_file_path(&path, &event_path, &fi) != 0) return 2;
 
 
-        int files_open = ANY_PID;
-
-        struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&files_open);
+        struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&pid);
 
         if(file_open){
             //bpf_printk("%s and %s and str_len is %d \n",&file_open->filename,&(fi.filename[fi.offset]),file_open->size);

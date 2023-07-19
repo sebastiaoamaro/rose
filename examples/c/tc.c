@@ -34,10 +34,12 @@ void init_tc(int devicecount){
 	tc_opts_handle = (struct bpf_tc_opts*)malloc(devicecount*sizeof(struct bpf_tc_opts));
 	
 }
-struct tc_bpf* traffic_control(__u32 index,int pos,int handle,int faults)
+struct tc_bpf* traffic_control(__u32 index,int pos,int handle,int faults,int direction)
 {	
+	printf("Direction is %d \n",direction);
+	
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, tc_hook,
-		.ifindex = index, .attach_point = BPF_TC_INGRESS);
+		.ifindex = index, .attach_point = direction);
 	DECLARE_LIBBPF_OPTS(bpf_tc_opts, tc_opts,
 		.handle = handle, .priority = 1);
 	bool hook_created = false;
@@ -65,6 +67,8 @@ struct tc_bpf* traffic_control(__u32 index,int pos,int handle,int faults)
 
 	skel->rodata->fault_count = faults;
 
+	skel->rodata->network_direction = direction;
+
 	err = tc_bpf__load(skel);
 	if (err) {
 		fprintf(stderr, "Failed to load BPF skeleton\n");
@@ -79,7 +83,7 @@ struct tc_bpf* traffic_control(__u32 index,int pos,int handle,int faults)
 		return NULL;
 	}
 
-	tc_opts.prog_fd = bpf_program__fd(skel->progs.tc_ingress);
+	tc_opts.prog_fd = bpf_program__fd(skel->progs.monitor);
 	err = bpf_tc_attach(&tc_hook, &tc_opts);
 	if (err) {
 		fprintf(stderr, "Failed to attach TC: %d\n", err);

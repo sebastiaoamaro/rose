@@ -188,13 +188,14 @@ int get_interface_names(char** device_names,int device_count){
 	return count_devices;
 }
 
-void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences){
+void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,int network_directions){
 	fault->done = 0;
 	fault->repeat = repeat;
 	fault->pid = 0;
 	fault->faulttype = faulttype;
 	fault->initial = (struct faultstate*)malloc(sizeof(struct faultstate));
 	fault->end = (struct faultstate*)malloc(sizeof(struct faultstate));
+	fault->network_directions = network_directions;
 
 	fault->initial->fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
 	fault->initial->conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
@@ -233,9 +234,10 @@ void add_ip_to_block(struct fault* fault,char *string_ip,int pos){
 }
 
 void set_if_name(struct fault* fault, char*if_name){
-		fault->veth = (char*)malloc(sizeof(char)*32);
+		fault->veth = (char*)malloc(sizeof(char)*sizeof(if_name));
 		strcpy(fault->veth,if_name);	
 }
+
 
 void add_function_to_monitor(struct fault* fault, char *funcname,int pos){
 	printf("Funcname in aux.c is %s \n",funcname);

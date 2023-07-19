@@ -3,7 +3,7 @@
 
 #define MAX_ENTRIES 10240
 #define PATH_MAX	4096
-#define STATE_PROPERTIES_COUNT 12
+#define STATE_PROPERTIES_COUNT 13
 #define MAX_IPS_BLOCKED 16
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
@@ -26,6 +26,7 @@ struct fault {
     int pid;
     int repeat;
     int occurrences;
+    int network_directions;
 };
 
 struct fault_key{
@@ -66,6 +67,7 @@ enum faulttype{
     WRITE_FILE = 8,
     READ_FILE = 9,
     FUNCTIONS = 10,
+    PROCESS_KILL = 11,
     TEMP_EMPTY = 999,
 };
 
@@ -82,7 +84,8 @@ enum stateinfo{
     IPS_BLOCKED = 8,
     FUNCNAMES = 9,
     CALLCOUNT = 10,
-    THREADS_CREATED = 11 
+    THREADS_CREATED = 11,
+    PROCESS_TO_KILL = 12
 };
 
 //To process different types of events in userspace
@@ -125,7 +128,7 @@ struct event {
 
 struct aux_bpf* start_aux_maps();
 int get_interface_index(char*);
-void build_fault(struct fault* ,int,int,int);
+void build_fault(struct fault* ,int,int,int,int);
 void add_ip_to_block(struct fault*,char *,int);
 void set_if_name(struct fault*,char *);
 void add_function_to_monitor(struct fault*,char*,int);

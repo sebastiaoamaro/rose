@@ -66,7 +66,7 @@ static inline int process_current_state(int state_key, int type, int pid){
 	current_state = bpf_map_lookup_elem(&relevant_state_info,&information);
 	
 	if (current_state){
-		//bpf_printk("Found write in pid %d \n",pid);
+		//bpf_printk("Found func in pid %d \n",pid);
 
 		current_state->current_value++;
 		u64 value = current_state->current_value;

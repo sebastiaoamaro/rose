@@ -116,21 +116,19 @@ static inline int process_current_state(int state_key, int type, int pid){
 }
 
 
-SEC("kprobe/__x64_sys_clone")
-int sys_clone(struct pt_regs *ctx)
+SEC("ksyscall/clone")
+int BPF_KSYSCALL(clone,int flags)
 {
 
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-    int THREAD_FLAG = 0x00010000;
+    int THREAD_FLAG = 0x10000;
 
 
-	unsigned long clone_flags = PT_REGS_PARM1_SYSCALL(ctx);
-
-	if ((clone_flags & THREAD_FLAG) != 0){
-		//bpf_printk("A thread was created using clone2 \n");
+	if (!(flags & THREAD_FLAG)){
+		return 0;
 	}
 
 	// bpf_probe_read_kernel(&clone_flags,sizeof(clone_flags),clone_flags_ptr);
@@ -170,43 +168,25 @@ int sys_clone(struct pt_regs *ctx)
 	return 0;
 }
 
-struct clone_args_help {
-	__u64 flags;
-	__u64 pidfd;
-	__u64 child_tid;
-	__u64 parent_tid;
-	__u64 exit_signal;
-	__u64 stack;
-	__u64 stack_size;
-	__u64 tls;
-	__u64 set_tid;
-	__u64 set_tid_size;
-	__u64 cgroup;
-};
-
-SEC("kprobe/__x64_sys_clone3")
-int BPF_KPROBE(__x64_sys_clone3,struct pt_regs *regs)
+SEC("ksyscall/clone3")
+int BPF_KSYSCALL(clone3,struct clone_args *cl_args)
 {
 
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-    int THREAD_FLAG = 0x0010000;
+    int THREAD_FLAG = 0x00010000;
 
-	struct clone_args_help args = {};
-	bpf_probe_read_user(&args, sizeof(args), (void *)PT_REGS_PARM1_CORE(regs));
+	__u64 clone_flags;
 
-	__u64 clone_flags = args.flags;
-	__u64 parent_tid = args.parent_tid;
-	__u64 pidfd = args.pidfd;
+	struct clone_args clone_args_new;
 
+	bpf_probe_read_user(&clone_args_new, sizeof(clone_args_new), cl_args);
 
-	//bpf_printk("In clone3 with pid %d \n",pidfd);
-
-
-	if ((clone_flags & THREAD_FLAG) != 0){
-		//bpf_printk("A thread was created using clone3\n");
+	//bpf_printk("A thread was created using clone3 and flags are is %u and result of & is %x \n",clone_args_new.flags,(clone_args_new.flags & THREAD_FLAG));
+	if (!(clone_args_new.flags & THREAD_FLAG)){
+		return 0;
 	}
 
 	// bpf_probe_read_kernel(&clone_flags,sizeof(clone_flags),clone_flags_ptr);
@@ -231,7 +211,7 @@ int BPF_KPROBE(__x64_sys_clone3,struct pt_regs *regs)
 				bpf_override_return((struct pt_regs *) ctx, -1);
 			}
 			else if(description_of_fault->occurences == 0){
-				bpf_override_return((struct pt_regs *) ctx, -1);
+				bpf_override_return((struct pt_regs *) ctx, 0);
 
 			}
 			else{
@@ -268,7 +248,7 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 	if(fdrelevant){
 		if(*fdrelevant == fd){
 			
-			bpf_printk("This fd is important but we already processed it \n");
+			//bpf_printk("This fd is important but we already processed it \n");
 
 			struct fault_key fault_to_inject = {
 				pid,
@@ -301,7 +281,7 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 			process_fd = 1;
 		}
 		else{
-			bpf_printk("Already saw the fd and this one is not important %d \n",fd);
+			//bpf_printk("Already saw the fd and this one is not important %d \n",fd);
 			//It means w already found the relevant fd thus this one is not relevant.
 		}
 	}else{
