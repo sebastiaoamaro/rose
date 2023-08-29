@@ -136,6 +136,18 @@ struct aux_bpf* start_aux_maps(){
 		return NULL;
 	}
 
+	err = bpf_map__unpin(skel->maps.active_write_fd, "/sys/fs/bpf/active_write_fd");
+	if(err) {
+		printf("[ERROR] libbpf unpin API: %d\n", err);
+		//return NULL;
+	}
+
+	err = bpf_map__pin(skel->maps.active_write_fd, "/sys/fs/bpf/active_write_fd");
+	if(err) {
+		printf("[ERROR] libbpf pin API: %d\n", err);
+		return NULL;
+	}
+
 
     return skel;
 
@@ -188,7 +200,7 @@ int get_interface_names(char** device_names,int device_count){
 	return count_devices;
 }
 
-void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,int network_directions){
+void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,int network_directions,int return_value,char **command,int container_pid){
 	fault->done = 0;
 	fault->repeat = repeat;
 	fault->pid = 0;
@@ -196,6 +208,8 @@ void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,i
 	fault->initial = (struct faultstate*)malloc(sizeof(struct faultstate));
 	fault->end = (struct faultstate*)malloc(sizeof(struct faultstate));
 	fault->network_directions = network_directions;
+	fault->return_value = return_value;
+	fault->container_pid = container_pid;
 
 	fault->initial->fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
 	fault->initial->conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
@@ -222,6 +236,9 @@ void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,i
 		char string[FUNCNAME_MAX] = "empty";
 		strcpy(fault->func_names[i],string);
 	}
+
+	fault->command = command;
+
 }
 
 void add_ip_to_block(struct fault* fault,char *string_ip,int pos){
@@ -256,9 +273,112 @@ int bpf_map_lookup_or_try_init_user(int map, const void *key, void *init,void *v
 	}
 	else{
 		err = bpf_map_update_elem(map, key, init,BPF_ANY);
-		printf("Created and err is %d \n",err);
+		//printf("Created and err is %d \n",err);
 		if (err && err != -EEXIST)
 			printf("Error in init \n");
 		return 0;
 	}
+}
+
+FILE * custom_popen(char* command, char** args, char type, pid_t* pid)
+{
+    pid_t child_pid;
+    int fd[2];
+    pipe(fd);
+
+	printf("Command is %s \n",command);
+
+    if((child_pid = fork()) == -1)
+    {
+        perror("fork");
+        exit(1);
+    }
+
+    /* child process */
+    if (child_pid == 0)
+    {
+        if (type == 'r')
+        {
+            close(fd[0]);    //Close the READ end of the pipe since the child's fd is write-only
+            dup2(fd[1], 1); //Redirect stdout to pipe
+        }
+        else
+        {
+            close(fd[1]);    //Close the WRITE end of the pipe since the child's fd is read-only
+            dup2(fd[0], 0);   //Redirect stdin to pipe
+        }
+
+        setpgid(child_pid, child_pid); //Needed so negative PIDs can kill children of /bin/sh
+        int err = execv(command,args,NULL);
+        exit(0);
+    }
+    else
+    {
+        if (type == 'r')
+        {
+            close(fd[1]); //Close the WRITE end of the pipe since parent's fd is read-only
+        }
+        else
+        {
+            close(fd[0]); //Close the READ end of the pipe since parent's fd is write-only
+        }
+    }
+
+    *pid = child_pid;
+
+    if (type == 'r')
+    {
+        return fdopen(fd[0], "r");
+    }
+
+    return fdopen(fd[1], "w");
+}
+
+int custom_pclose(FILE * fp, pid_t pid)
+{
+    int stat;
+
+    fclose(fp);
+    while (waitpid(pid, &stat, 0) == -1)
+    {
+        if (errno != EINTR)
+        {
+            stat = -1;
+            break;
+        }
+    }
+
+    return stat;
+}
+
+int translate_pid(int pid){
+
+	char result[100];
+
+	char chr_pid[10];
+
+	sprintf(chr_pid,"%d",pid);
+
+	strcpy(result,"/proc/");
+
+	strcat(result,chr_pid);
+
+	strcat(result,"/status");
+
+	printf("result is %s \n ",result);
+
+	FILE *fptr;
+
+	fptr = fopen(result, "r");
+
+
+	char inLine[1024];
+    while (fgets(inLine, sizeof(inLine), fptr) != NULL)
+    {
+		if(strstr(inLine,"NSpid"))
+       		printf("%s\n", inLine);
+    }
+
+
+	return pid;
 }

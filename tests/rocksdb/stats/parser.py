@@ -8,9 +8,9 @@ from statistics import mean,stdev
 from datetime import datetime
     
 
-def parse_perfomance(filename):
+def parse_perfomance(filename,call_interval):
     times = open(filename)
-    times_data = open("times.data","w")
+    times_data = open("times" + call_interval + ".data","w")
 
     times_lines = times.readlines()
 
@@ -58,8 +58,8 @@ def parse_perfomance(filename):
 
 import sys
 def main():
-    if sys.argv[1] == "perfomance":
-        parse_perfomance(sys.argv[2])
+    print(sys.argv[1] + " " + sys.argv[2])
+    parse_perfomance(sys.argv[1],sys.argv[2])
     
 if __name__ == "__main__":
     main()

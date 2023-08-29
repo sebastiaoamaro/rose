@@ -27,6 +27,10 @@ struct fault {
     int repeat;
     int occurrences;
     int network_directions;
+    int return_value;
+    //Might not be relevant
+    int container_pid;
+    char **command;
 };
 
 struct fault_key{
@@ -37,6 +41,7 @@ struct fault_key{
 struct fault_description{
     int on;
     int occurences;
+    int return_value;
 };
 
 struct info_key{
@@ -68,6 +73,8 @@ enum faulttype{
     READ_FILE = 9,
     FUNCTIONS = 10,
     PROCESS_KILL = 11,
+    WRITE_RET = 12,
+    READ_RET = 13,
     TEMP_EMPTY = 999,
 };
 
@@ -128,10 +135,14 @@ struct event {
 
 struct aux_bpf* start_aux_maps();
 int get_interface_index(char*);
-void build_fault(struct fault* ,int,int,int,int);
+void build_fault(struct fault* ,int,int,int,int,int,char**,int);
 void add_ip_to_block(struct fault*,char *,int);
 void set_if_name(struct fault*,char *);
 void add_function_to_monitor(struct fault*,char*,int);
 int bpf_map_lookup_or_try_init_user(int, const void *, void *,void *);
 int get_interface_names(char **,int);
+FILE * custom_popen(char* command,char** args, char type, pid_t* pid);
+void start_target_process();
+int custom_pclose(FILE*,int);
+int translate_pid(int);
 #endif /* __AUX_H */

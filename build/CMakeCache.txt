@@ -18,7 +18,7 @@
 BPFOBJECT_CLANG_EXE:FILEPATH=/usr/bin/clang
 
 //Path to a program.
-CARGO_EXISTS:FILEPATH=CARGO_EXISTS-NOTFOUND
+CARGO_EXISTS:FILEPATH=/home/sebastiaoamaro/.cargo/bin/cargo
 
 //Path to a program.
 CMAKE_ADDR2LINE:FILEPATH=/usr/bin/addr2line

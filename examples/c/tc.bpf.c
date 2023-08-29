@@ -182,17 +182,23 @@ int monitor(struct __sk_buff *ctx)
 				//bpf_printk("Have list of ips \n");
 				for(int i=0;i<MAX_IPS_BLOCKED;i++){
 					if (ips[i]){
-						if(ips[i] == pair.src_addr || ips[i] == pair.dst_addr){
-							//bpf_printk("Blocked packet \n");
-							//bpf_ringbuf_discard(e, 0);
-							return TC_ACT_SHOT;
+						if (network_direction == 1){
+							if(ips[i] == pair.src_addr){
+								//bpf_printk("Blocked packet \n");
+								return TC_ACT_SHOT;
+							}
+						}
+						if (network_direction == 2){
+							if(ips[i] == pair.dst_addr){
+								//bpf_printk("Blocked packet \n");
+								return TC_ACT_SHOT;
+							}
 						}
 					}
 				}
 
 		}else{
 			//bpf_printk("Ips is NULL and if_index is %d \n",if_index);
-			//bpf_ringbuf_discard(e, 0);
 			return 0;
 			}
 		}
@@ -210,12 +216,6 @@ int monitor(struct __sk_buff *ctx)
 		bpf_map_update_elem(&network,&pair,&new_bytes,BPF_ANY);
 	}
 
-
-	// e->type = TC;
-	// e->ifindex = if_index;
-
-	//TRACING CHANGE LATER
-	//bpf_ringbuf_discard(e, 0);
 
 	return TC_ACT_OK;
 }

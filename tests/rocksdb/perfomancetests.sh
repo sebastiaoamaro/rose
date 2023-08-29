@@ -1,11 +1,9 @@
 #!/bin/bash
-workload_size=20000000
-call_interval=100000
+workload_size=50000000
 runs=10
 #maindirectory=/home/sebastiaoamaro/phd/torefidevel/examples/c/main
 faultsfile=$maindirectory/"faults.txt"
 maindirectory=/vagrant/examples/c/main/
-date=$(date +"%H:%M")
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 #cd /home/sebastiaoamaro/phd/torefidevel/examples/c/
 cd /vagrant/examples/c/
@@ -26,90 +24,93 @@ cd $rocksdir
 make
 
 cd $SCRIPT_DIR
-
-for (( run=1; run<=$runs; run++ ))
-do  
-    #rm -r /tmp/*
-    echo Starting Workload
-    /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:v:%e" $rocksexecutable $workload_size $call_interval
-done
-
-############################################################################################################
-############################################################################################################
-############################################################################################################
-
-for (( run=1; run<=$runs; run++ ))
+for call_interval in 1 10 100 1000 10000 100000
 do
-    #rm -r /tmp/*
-    rm $faultsfile
-    echo Starting Workload
-    /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:u:%e" $rocksexecutable $workload_size $call_interval &
+    date=$(date +"%H:%M")
+    for (( run=1; run<=$runs; run++ ))
+    do  
+        #rm -r /tmp/*
+        echo Starting Workload
+        /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:v:%e" $rocksexecutable $workload_size $call_interval
+    done
 
-    rockspid=$(pgrep -f $rocksdir | awk 'NR==2{print $1}')
-    echo "PID IN BASH IS " $pid
+    ############################################################################################################
+    ############################################################################################################
+    ############################################################################################################
 
-    echo $rockspid";" >> $faultsfile
-    $maindirectory/main -f 1 -d 0 -u -t -i $faultsfile &
-    ebpf_PID=$!
+    for (( run=1; run<=$runs; run++ ))
+    do
+        #rm -r /tmp/*
+        rm $faultsfile
+        echo Starting Workload
+        /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:u:%e" $rocksexecutable $workload_size $call_interval &
 
-    while kill -0 $rockspid 2> /dev/null; do sleep 1; done;
+        rockspid=$(pgrep -f $rocksdir | awk 'NR==2{print $1}')
+        echo "PID IN BASH IS " $pid
 
-    echo $ebpf_PID
-    kill $ebpf_PID
-    sleep 5
+        echo $rockspid";" >> $faultsfile
+        $maindirectory/main -f 1 -d 0 -u -t -i $faultsfile &
+        ebpf_PID=$!
+
+        while kill -0 $rockspid 2> /dev/null; do sleep 1; done;
+
+        echo $ebpf_PID
+        kill $ebpf_PID
+        sleep 5
+    done
+
+    ############################################################################################################
+    ############################################################################################################
+    ############################################################################################################
+
+    for (( run=1; run<=$runs; run++ ))
+    do
+        #rm -r /tmp/*
+        rm $faultsfile
+        echo Starting Workload
+        /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:uf:%e" $rocksexecutable $workload_size $call_interval &
+
+        rockspid=$(pgrep -f $rocksdir | awk 'NR==2{print $1}')
+        echo "PID IN BASH IS " $pid
+
+        echo $rockspid";" >> $faultsfile
+        $maindirectory/main -f 1 -d 0 -u -i $faultsfile &
+        ebpf_PID=$!
+
+        while kill -0 $rockspid 2> /dev/null; do sleep 1; done;
+
+        echo $ebpf_PID
+        kill $ebpf_PID
+        sleep 5
+    done
+
+    ############################################################################################################
+    ############################################################################################################
+    ############################################################################################################
+
+    for (( run=1; run<=$runs; run++ ))
+    do
+        #rm -r /tmp/*
+        rm $faultsfile
+        echo Starting Workload
+        /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:a:%e" $rocksexecutable $workload_size $call_interval &
+
+        rockspid=$(pgrep -f $rocksdir | awk 'NR==2{print $1}')
+        echo "PID IN BASH IS " $pid
+
+        echo $rockspid";" >> $faultsfile
+        $maindirectory/main -f 1 -d 0 -i $faultsfile &
+        ebpf_PID=$!
+
+        while kill -0 $rockspid 2> /dev/null; do sleep 1; done;
+
+        echo $ebpf_PID
+        kill $ebpf_PID
+        sleep 5
+    done
+
+
+    cd stats
+    ./generate_graphs.sh timesrocks$date.txt $call_interval
+    cd $SCRIPT_DIR
 done
-
-############################################################################################################
-############################################################################################################
-############################################################################################################
-
-for (( run=1; run<=$runs; run++ ))
-do
-    #rm -r /tmp/*
-    rm $faultsfile
-    echo Starting Workload
-    /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:uf:%e" $rocksexecutable $workload_size $call_interval &
-
-    rockspid=$(pgrep -f $rocksdir | awk 'NR==2{print $1}')
-    echo "PID IN BASH IS " $pid
-
-    echo $rockspid";" >> $faultsfile
-    $maindirectory/main -f 1 -d 0 -u -i $faultsfile &
-    ebpf_PID=$!
-
-    while kill -0 $rockspid 2> /dev/null; do sleep 1; done;
-
-    echo $ebpf_PID
-    kill $ebpf_PID
-    sleep 5
-done
-
-############################################################################################################
-############################################################################################################
-############################################################################################################
-
-for (( run=1; run<=$runs; run++ ))
-do
-    #rm -r /tmp/*
-    rm $faultsfile
-    echo Starting Workload
-    /usr/bin/time -ao stats/timesrocks$date.txt -f "$run:a:%e" $rocksexecutable $workload_size $call_interval &
-
-    rockspid=$(pgrep -f $rocksdir | awk 'NR==2{print $1}')
-    echo "PID IN BASH IS " $pid
-
-    echo $rockspid";" >> $faultsfile
-    $maindirectory/main -f 1 -d 0 -i $faultsfile &
-    ebpf_PID=$!
-
-    while kill -0 $rockspid 2> /dev/null; do sleep 1; done;
-
-    echo $ebpf_PID
-    kill $ebpf_PID
-    sleep 5
-done
-
-
-cd stats
-./generate_graphs.sh perfomance timesrocks$date.txt
-

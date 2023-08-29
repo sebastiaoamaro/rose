@@ -68,6 +68,7 @@ static struct constants {
 	int tracingmode;
 	int faultsverbose;
 	char *command;
+	int target_pid;
 
 } constants;
 
@@ -172,6 +173,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 		break;
 		case FUNCTIONS:
 			process_counter(e,CALLCOUNT);
+		break;
 		case TC:
 			process_tc(e);
 		break;
@@ -199,8 +201,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 				}
 			}
 		}
-		//printf("run is %d, relevant_conditions is %d \n",run,relevant_conditions);
-		//temporary for testing
+		//temporary for testing, basically OR
 		if (run > 0)
 			if (!faults[i].done){
 				if (faults[i].faulttype == NETWORK_ISOLATION ||faults[i].faulttype == DROP_PACKETS ||faults[i].faulttype == BLOCK_IPS)
@@ -247,6 +248,8 @@ int process_tc(const struct event *event){
 
 void process_fs(const struct event *event){
 	//printf("Got event filename is %s\n",event->filename);
+
+	//Iterate over faults and check files, then set file opened to true, can add map counters to fsys
 }
 
 
@@ -270,6 +273,7 @@ void inject_fault(int faulttype,int pid,int fault_id){
 	struct fault_description description_of_fault = {
 		1,
 		faults[fault_id].occurrences,
+		faults[fault_id].return_value,
 	};
 
 	error = bpf_map_update_elem(constants.faulttype_fd,&fault_to_inject,&description_of_fault,BPF_ANY);
@@ -298,7 +302,13 @@ void build_faults(){
     ssize_t read;
 
 	for(int i = 0; i< FAULT_COUNT;i++){
-		build_fault(&faults[i],1,TEMP_EMPTY,5,2);
+		int repeat = 1;
+		int occurrences = 0;
+		int network_directions = 2;
+		int return_value = -1;
+
+		char *args[] = {"/bin/ping","-c","5","google.pt",NULL};
+		build_fault(&faults[i],repeat,TEMP_EMPTY,occurrences,network_directions,return_value,args,0);
 
 		faults[i].initial->fault_type_conditions[PROCESSES_OPENED] = 1;
 		faults[i].initial->fault_type_conditions[PROCESSES_CLOSED] = 1;
@@ -346,11 +356,14 @@ void build_faults(){
 
 		token = strtok(NULL,"");
 
-		strtok(token,"\n");
-
-		if(*token!='\0'){
-			printf("newline is %s and len is %ld \n",token,strlen(token));
-			set_if_name(&faults[fault_count],token);
+		if (token){
+			strtok(token,"\n");
+			if(strlen(token) !=1 ){
+				printf("newline is %s and len is %ld \n",token,strlen(token));
+				set_if_name(&faults[fault_count],token);
+			}else{
+				set_if_name(&faults[fault_count],"\0");
+			}
 		}else{
 			set_if_name(&faults[fault_count],"\0");
 		}
@@ -387,8 +400,9 @@ void populate_stateinfo_map(){
 				new_information_state->relevant_states[i] = faults[i].initial->fault_type_conditions[j];
 
 				new_information_state->repeat = faults[i].repeat;
-				
-				printf("FAULT %d state info pos[%d] is %llu with pid %d \n",i,j,new_information_state->relevant_states[i],faults[i].pid);
+
+				if (constants.faultsverbose)
+					printf("FAULT %d state info pos[%d] is %llu with pid %d \n",i,j,new_information_state->relevant_states[i],faults[i].pid);
 
 				struct info_state *old_information_state = (struct info_state*)malloc(sizeof(struct info_state));
 
@@ -444,92 +458,10 @@ void populate_files_map(){
 	}
 }
 
-int main(int argc, char **argv)
-{
-
-	/* Set up libbpf errors and debug info callback */
-	libbpf_set_print(libbpf_print_fn);
-
-	int err_args;
-	/* Parse command line arguments */
-	err_args = argp_parse(&argp, argc, argv, 0, NULL, NULL);
-	if (err_args)
-		return err_args;
-	/* Bump RLIMIT_MEMLOCK to create BPF maps */
-	//bump_memlock_rlimit();
-
-	//constants.verbose = true;
-	
-	/* Cleaner handling of Ctrl-C */
-	signal(SIGINT, sig_handler);
-	signal(SIGTERM, sig_handler);
-
-
-	// int entry = 1;
-	// char line[200];
-
-	// pid_t pid = popen_aux("main/script.sh","r");
-
-	// while ( fgets(line, 199, output) )
-  	// {
-    // 	printf("%5d: %s", entry++, line);
-  	// }
-
-	build_faults();
-	struct aux_bpf *aux_bpf = start_aux_maps();
-
-	if(!aux_bpf){
-		printf("Error in creating aux_bpf_maps \n");
-		return 0;
-	}
-
-	get_fd_of_maps(aux_bpf);
-	if(!constants.tracingmode){
-
-		populate_stateinfo_map();
-
-		populate_files_map();
-	}
-
-
-
-	//Add to all networkdevices
-
-	char **device_names;
-
-	device_names = malloc(32*sizeof(char));
-	int count_devices;
-
-	count_devices = get_interface_names(device_names,DEVICE_COUNT);
-
-	for (int i=0;i<count_devices;i++){
-		printf("Device name is %s \n",device_names[i]);
-	}
-
-	init_tc((FAULT_COUNT+DEVICE_COUNT)*2);
-
-	struct tc_bpf *tc_ebpf_progs[FAULT_COUNT];
-	struct tc_bpf *tc_ebpf_progs_tracking[DEVICE_COUNT];
-
-	//Create uprobes
-	struct uprobes_bpf *uprobes[FAULT_COUNT][MAX_FUNCTIONS];
-
-	for (int i = 0;i<FAULT_COUNT;i++)
-		for (int j = 0;j<MAX_FUNCTIONS;j++)
-			uprobes[i][j] = NULL;
-
-
-	//We have different progs for different network devices
-
-	for (int i = 0;i<FAULT_COUNT;i++)
-		tc_ebpf_progs[i] = NULL;
-	
-	for (int i = 0;i<DEVICE_COUNT;i++)
-		tc_ebpf_progs_tracking[i] = NULL;
-		
-	
+int setup_tc_progs(struct tc_bpf **tc_ebpf_progs,struct tc_bpf **tc_ebpf_progs_tracking){
 	int handle = 1;
 	//Insert IPS to block in a network device, key->if_index value->list of ips
+	int tc_ebpf_progs_counter = 0;
 	for (int i =0; i<FAULT_COUNT;i++){
 
 		if(strlen(faults[i].veth) == 0){
@@ -566,59 +498,153 @@ int main(int argc, char **argv)
 		if (constants.verbose)
 			printf("Inserted in %s for faults \n",faults[i].veth);
 
-		//handle must be different than 0 so add 1
-
-		printf("Network directions is %d \n",faults[i].network_directions);
 
 		if (faults[i].network_directions == 0){
 
-			printf("Blocking ingress \n ");
-
-			tc_prog = traffic_control(index_in_unsigned,i,i+handle,FAULT_COUNT,BPF_TC_INGRESS);
+			tc_prog = traffic_control(index_in_unsigned,tc_ebpf_progs_counter,tc_ebpf_progs_counter+handle,FAULT_COUNT,BPF_TC_INGRESS);
 
 			if (!tc_prog){
 				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
-				goto cleanup;		
+				return -1;		
 			}
-			tc_ebpf_progs[i] = tc_prog;
+			tc_ebpf_progs[tc_ebpf_progs_counter] = tc_prog;
+			tc_ebpf_progs_counter++;
+			
 		}
 		if(faults[i].network_directions == 1){
-			
-			printf("Blocking egress \n ");
 
-			tc_prog = traffic_control(index_in_unsigned,i,i+handle,FAULT_COUNT,BPF_TC_EGRESS);
+			tc_prog = traffic_control(index_in_unsigned,tc_ebpf_progs_counter,tc_ebpf_progs_counter+handle,FAULT_COUNT,BPF_TC_EGRESS);
 
 			if (!tc_prog){
 				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
-				goto cleanup;		
+				return -1;		
 			}
-			tc_ebpf_progs[i] = tc_prog;
+			tc_ebpf_progs[tc_ebpf_progs_counter] = tc_prog;
+			tc_ebpf_progs_counter++;
 		}
 		if(faults[i].network_directions == 2){
 
-			printf("Blocking ingress and egress \n ");
 
-			tc_prog = traffic_control(index_in_unsigned,i,i+handle,FAULT_COUNT,BPF_TC_INGRESS);
-
-			if (!tc_prog){
-				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
-				goto cleanup;		
-			}
-			tc_ebpf_progs[i] = tc_prog;
-
-			i++;
-
-			tc_prog = traffic_control(index_in_unsigned,i,i+handle,FAULT_COUNT,BPF_TC_EGRESS);
+			tc_prog = traffic_control(index_in_unsigned,tc_ebpf_progs_counter,tc_ebpf_progs_counter+handle,FAULT_COUNT,BPF_TC_INGRESS);
 
 			if (!tc_prog){
 				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
-				goto cleanup;		
+				return -1;		
 			}
-			tc_ebpf_progs[i] = tc_prog;
+			tc_ebpf_progs[tc_ebpf_progs_counter] = tc_prog;
+			tc_ebpf_progs_counter++;
+
+			tc_prog = traffic_control(index_in_unsigned,tc_ebpf_progs_counter,tc_ebpf_progs_counter+handle,FAULT_COUNT,BPF_TC_EGRESS);
+
+			if (!tc_prog){
+				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
+				return -1;		
+			}
+			tc_ebpf_progs[tc_ebpf_progs_counter] = tc_prog;
+			tc_ebpf_progs_counter++;
 		}
 
 
 	}
+	return 0;
+}
+
+void start_target_process(const char **args){
+
+
+	FILE *fp = custom_popen(args[0],args,'r',&constants.target_pid);
+
+	if (!fp)
+    {
+        perror("popen failed:");
+        exit(1);
+    }
+
+	char inLine[1024];
+    while (fgets(inLine, sizeof(inLine), fp) != NULL)
+    {
+        printf("%s\n", inLine);
+    }
+
+}
+int main(int argc, char **argv)
+{
+
+	//translate_pid(5);
+	//pthread_t thread_id;
+
+	//pthread_create(&thread_id, NULL, start_target_process, args);
+
+
+	// while(constants.target_pid == 0){
+	// 	sleep(1);
+	// }
+	// printf("Target process pid is %d \n",constants.target_pid);
+	
+	/* Set up libbpf errors and debug info callback */
+	libbpf_set_print(libbpf_print_fn);
+
+	int err_args;
+	/* Parse command line arguments */
+	err_args = argp_parse(&argp, argc, argv, 0, NULL, NULL);
+	if (err_args)
+		return err_args;
+
+	
+	/* Cleaner handling of Ctrl-C */
+	signal(SIGINT, sig_handler);
+	signal(SIGTERM, sig_handler);
+
+	build_faults();
+	if (constants.faultsverbose)
+		printf("Built %d faults \n",FAULT_COUNT);
+
+	struct aux_bpf *aux_bpf = start_aux_maps();
+
+	if(!aux_bpf){
+		printf("Error in creating aux_bpf_maps \n");
+		return 0;
+	}
+
+	get_fd_of_maps(aux_bpf);
+	if(!constants.tracingmode){
+
+		populate_stateinfo_map();
+
+		populate_files_map();
+	}
+
+	//Add to all networkdevices
+
+	char **device_names = get_device_names(DEVICE_COUNT);
+
+	init_tc((FAULT_COUNT+DEVICE_COUNT)*2);
+
+	struct tc_bpf *tc_ebpf_progs[FAULT_COUNT];
+	struct tc_bpf *tc_ebpf_progs_tracking[DEVICE_COUNT];
+
+	//Create uprobes
+	struct uprobes_bpf *uprobes[FAULT_COUNT][MAX_FUNCTIONS];
+
+	for (int i = 0;i<FAULT_COUNT;i++)
+		for (int j = 0;j<MAX_FUNCTIONS;j++)
+			uprobes[i][j] = NULL;
+
+
+	//We have different lists for devices from faults or generic insertion
+
+	for (int i = 0;i<FAULT_COUNT;i++)
+		tc_ebpf_progs[i] = NULL;
+	
+	for (int i = 0;i<DEVICE_COUNT;i++)
+		tc_ebpf_progs_tracking[i] = NULL;
+		
+		
+	if(setup_tc_progs(tc_ebpf_progs,tc_ebpf_progs_tracking))
+		goto cleanup;
+
+	int handle = 1;
+	int tc_ebpf_progs_counter = 0;
 
 	for (int i =0; i<DEVICE_COUNT;i++){
 
@@ -659,7 +685,8 @@ int main(int argc, char **argv)
 		for (int j = 0; j<MAX_FUNCTIONS;j++){
 			if (!strcmp(faults[i].func_names[j],"empty"))
 				continue;
-			printf("Fault is %d funcame is %s, pid is %d \n",i,faults[i].func_names[j],faults[i].pid);
+			if (constants.faultsverbose)
+				printf("Fault is %d funcame is %s, pid is %d \n",i,faults[i].func_names[j],faults[i].pid);
 
 			uprobes[i][j] = uprobe(faults[i].pid,faults[i].func_names[j],FAULT_COUNT);
 		}
@@ -720,6 +747,10 @@ int main(int argc, char **argv)
 
 
 	cleanup:
+
+	//Kill process we started
+	//kill(constants.target_pid,9);
+
 	//Destroy eBPF stuff
     printf("Running cleanup \n"); 
 	if(!block_bpf)
@@ -736,23 +767,13 @@ int main(int argc, char **argv)
 		ring_buffer__free(rb);
 
 	printf("Deleting tc_hooks \n");
-	for(int i=0; i<FAULT_COUNT;i++){
 
-		if(strlen(faults[i].veth) == 0)
-			continue;
-		//printf("Deleting prog %d with pointer %u \n",i,tc_ebpf_progs[i]);
-		err = bpf_tc_detach(get_tc_hook(i), get_tc_opts(i));
-		if (err) {
-			fprintf(stderr, "Failed to detach TC faults %d: %d\n", i,err);
+	tc_ebpf_progs_counter = 0;
+	for(int i = 0; i <FAULT_COUNT;i++){
+		if(strlen(faults[i].veth) != 0){
+			tc_ebpf_progs_counter = delete_tc_hook(tc_ebpf_progs,faults[i].network_directions,tc_ebpf_progs_counter);
 		}
-
-		//printf("Deleting hook %d \n",i);
-		bpf_tc_hook_destroy(get_tc_hook(i));
-
-		//printf("Destroying prog %d \n",i);
-		tc_bpf__destroy(tc_ebpf_progs[i]);
 	}
-
 	printf("Deleting tc_hooks_tracking \n");
 	for(int i=0; i<DEVICE_COUNT;i++){
 

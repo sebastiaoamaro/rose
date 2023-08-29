@@ -36,7 +36,6 @@ void init_tc(int devicecount){
 }
 struct tc_bpf* traffic_control(__u32 index,int pos,int handle,int faults,int direction)
 {	
-	printf("Direction is %d \n",direction);
 	
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, tc_hook,
 		.ifindex = index, .attach_point = direction);
@@ -110,4 +109,68 @@ struct tc_bpf* traffic_control(__u32 index,int pos,int handle,int faults,int dir
 // 		bpf_tc_hook_destroy(&tc_hook);
 // 	tc_bpf__destroy(skel);
 	return skel;
+}
+
+char** get_device_names(int device_count){
+	char **device_names = malloc(32*sizeof(char));
+	int count_devices;
+
+	count_devices = get_interface_names(device_names,device_count);
+
+	for (int i=0;i<count_devices;i++){
+		printf("Device name is %s \n",device_names[i]);
+	}
+
+	return device_names;
+}
+
+int delete_tc_hook(struct tc_bpf **tc_ebpf_progs,int network_directions,int tc_ebpf_progs_counter){
+	int err;
+
+	if (network_directions == 2){
+		//printf("Deleting prog %d with pointer %u \n",tc_ebpf_progs_counter,tc_ebpf_progs[tc_ebpf_progs_counter]);
+		err = bpf_tc_detach(get_tc_hook(tc_ebpf_progs_counter), get_tc_opts(tc_ebpf_progs_counter));
+		if (err) {
+			fprintf(stderr, "Failed to detach TC 0 faults %d: %d\n", tc_ebpf_progs_counter,err);
+		}
+
+		//printf("Deleting hook %d \n",i);
+		bpf_tc_hook_destroy(get_tc_hook(tc_ebpf_progs_counter));
+
+		//printf("Destroying prog %d \n",i);
+		tc_bpf__destroy(tc_ebpf_progs[tc_ebpf_progs_counter]);
+
+		tc_ebpf_progs_counter++;
+
+		//printf("Deleting prog %d with pointer %u \n",tc_ebpf_progs_counter,tc_ebpf_progs[tc_ebpf_progs_counter]);
+		err = bpf_tc_detach(get_tc_hook(tc_ebpf_progs_counter), get_tc_opts(tc_ebpf_progs_counter));
+		if (err) {
+			fprintf(stderr, "Failed to detach TC 1 faults %d: %d\n", tc_ebpf_progs_counter,err);
+		}
+
+		//printf("Deleting hook %d \n",i);
+		bpf_tc_hook_destroy(get_tc_hook(tc_ebpf_progs_counter));
+
+		//printf("Destroying prog %d \n",i);
+		tc_bpf__destroy(tc_ebpf_progs[tc_ebpf_progs_counter]);
+
+		tc_ebpf_progs_counter++;
+
+	}else{
+		//printf("Deleting prog %d with pointer %u \n",i,tc_ebpf_progs[i]);
+		err = bpf_tc_detach(get_tc_hook(tc_ebpf_progs_counter), get_tc_opts(tc_ebpf_progs_counter));
+		if (err) {
+			fprintf(stderr, "Failed to detach TC faults %d: %d\n", tc_ebpf_progs_counter,err);
+		}
+
+		//printf("Deleting hook %d \n",i);
+		bpf_tc_hook_destroy(get_tc_hook(tc_ebpf_progs_counter));
+
+		//printf("Destroying prog %d \n",i);
+		tc_bpf__destroy(tc_ebpf_progs[tc_ebpf_progs_counter]);
+
+		tc_ebpf_progs_counter++;
+	}
+
+	return tc_ebpf_progs_counter;
 }

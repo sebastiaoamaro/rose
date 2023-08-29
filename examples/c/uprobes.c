@@ -315,12 +315,7 @@ out_binary:
 struct uprobes_bpf* uprobe(int pid,char* funcname,int faultcount)
 {
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
-	// static const struct argp argp = {
-	// 	.options = opts,
-	// 	.parser = parse_arg,
-	// 	.args_doc = args_doc,
-	// 	.doc = program_doc,
-	// };
+
 	printf("In uprobe for function %s \n",funcname);
 	
 	struct uprobes_bpf *obj;
@@ -331,14 +326,10 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,int faultcount)
 	int idx, cg_map_fd;
 	int cgfd = -1;
 	bool used_fentry = false;
-	// err = argp_parse(&argp, argc, argv, 0, NULL, &env);
-	// if (err)
-	// 	return err;
+
 	printf("%s \n",funcname);
 	env.is_kernel_func = !strchr(funcname, ':');
 	printf("env kernel func %d \n",env.is_kernel_func);
-
-	//libbpf_set_print(libbpf_print_fn);
 
 	err = ensure_core_btf(&open_opts);
 	if (err) {
@@ -399,8 +390,6 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,int faultcount)
 
 	}
 
-	printf("!Used fentry \n");
-
 	err = uprobes_bpf__attach(obj);
 	if (err) {
 		fprintf(stderr, "failed to attach BPF programs: %s\n",
@@ -409,11 +398,6 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,int faultcount)
 	}
 	printf("Attached \n");
 
-// cleanup:
-// 	uprobes_bpf__destroy(obj);
-// 	cleanup_core_btf(&open_opts);
-// 	if (cgfd > 0)
-// 		close(cgfd);
 
 	return obj;
 }
