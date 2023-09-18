@@ -24,7 +24,7 @@ INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
 CFLAGS := -g -Wall
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
-APPS = process tc aux faultinject fs block uprobes
+APPS = process tc aux faultinject fs block uprobes popen
 MAIN = main
 
 CARGO ?= $(shell which cargo)

@@ -66,6 +66,9 @@ static u64 reads_blocked = 0;
 static u64 threads_blocked = 0;
 static u64 writes_file_blocked = 0;
 static u64 writes_ret_overrun = 0;
+static u64 opens_blocked = 0;
+static u64 mkdir_blocked = 0;
+static u64 newfstatat_blocked = 0;
 
 static inline int process_current_state(int state_key, int type, int pid){
 
@@ -502,71 +505,126 @@ int BPF_KPROBE(__x64_sys_close,struct pt_regs *regs)
 	return 0;
 }
 
-SEC("kprobe/__x64_sys_sendmsg")
-int BPF_KPROBE(__x64_sys_sendmsg, int sockfd, const struct msghdr *msg, int flags)
+SEC("kprobe/__x64_sys_open")
+int BPF_KPROBE(__x64_sys_open,struct pt_regs *regs)
 {
-	// tentativa 1
-	// u32 pid = bpf_get_current_pid_tgid() >> 32;
-	// if (filter_pid && pid != filter_pid) {
-	// 	return 0;
-	// }
-	// /*u32 src_addr_ipv4;
-	// u32 ipv4_convert;
-	// u32 dest_addr_ipv4;
-	// int family;
 
-	// struct sock *sk;
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
 
 
-    // BPF_CORE_READ_INTO(&sk, socket, sk); // sk = sock->sk
+	struct fault_key fault_to_inject = {
+		pid,
+		OPEN,
+	};
 
-    // BPF_CORE_READ_INTO(&family,  sk, __sk_common.skc_family);
-    // BPF_CORE_READ_INTO(&src_addr_ipv4,  sk, __sk_common.skc_rcv_saddr);
-    // BPF_CORE_READ_INTO(&dest_addr_ipv4, sk, __sk_common.skc_daddr);
-	// //ipv4_convert = bpf_ntohl(src_addr_ipv4);
+	struct fault_description *description_of_fault;
 
-	// //int len2 = msg->msg_namelen;*/
+	description_of_fault = bpf_map_lookup_elem(&faulttype,&fault_to_inject);
 
-    // struct sockaddr_in addr;
-    // socklen_t addr_size = sizeof(struct sockaddr_in);
-    // int res = getpeername(sockfd, (struct sockaddr *)&addr, &addr_size);
-    // //char *clientip = char[20];
-    // //strcpy(clientip, inet_ntoa(addr.sin_addr));
+	if (description_of_fault){
+		if (description_of_fault->on){
+			if (opens_blocked < description_of_fault->occurences){
+				opens_blocked+=1;
+				bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
+			}
+			else if(description_of_fault->occurences == 0){
+				bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
 
-	// //int srcaddr = addr.sin_addr.s_addr;
-    
+			}
+			else{
+				opens_blocked = 0;
+				description_of_fault->on = 0;
+			}
+		}
+	}
 
-
-	// //BPF_CORE_READ_INTO(&x, msg, msg_namelen); // sk = sock->sk
-
-	/* tentativa 2
-	struct socket *sock;
-	int err2, fput_needed;
-	sock = sockfd_lookup_light(sockfd, &err2, &fput_needed);
-
-	int src_addr = socket_getpeername(sock);*/
-
-	// if(syscall_idx != 2) {
-	// 	return 0;
-	// }
-	// int err = fault_injection(ctx);
-	// if(err) {
-	// 	return -1;
-	// }
+	int result = process_current_state(OPENS,OPEN_HOOK,pid);
 
 	return 0;
 }
 
-SEC("kprobe/__x64_sys_recvmsg")
-int BPF_KPROBE(__x64_sys_recvmsg)
+SEC("kprobe/__x64_sys_mkdir")
+int BPF_KPROBE(__x64_sys_mkdir)
 {
-	// if(syscall_idx != 2) {
-	// 	return 0;
-	// }
-	// int err = fault_injection(ctx);
-	// if(err) {
-	// 	return -1;
-	// }
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+
+	struct fault_key fault_to_inject = {
+		pid,
+		MKDIR,
+	};
+
+	struct fault_description *description_of_fault;
+
+	description_of_fault = bpf_map_lookup_elem(&faulttype,&fault_to_inject);
+
+	if (description_of_fault){
+		if (description_of_fault->on){
+			if (mkdir_blocked < description_of_fault->occurences){
+				mkdir_blocked+=1;
+				bpf_printk("Blocked MKDIR \n");
+				bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
+			}
+			else if(description_of_fault->occurences == 0){
+				bpf_printk("Blocked MKDIR \n");
+				bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
+
+			}
+			else{
+				mkdir_blocked = 0;
+				description_of_fault->on = 0;
+			}
+		}
+	}
+
+	int result = process_current_state(DIRCREATED,MKDIR_HOOK,pid);
+
+	return 0;
+}
+
+SEC("ksyscall/newfstatat")
+//SEC("kprobe/__x64_sys_newfstatat")
+int BPF_KPROBE(__x64_sys_newfstatat)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	
+	struct fault_key fault_to_inject = {
+		pid,
+		NEWFSTATAT,
+	};
+
+	struct fault_description *description_of_fault;
+
+	description_of_fault = bpf_map_lookup_elem(&faulttype,&fault_to_inject);
+
+	if (description_of_fault){
+		if (description_of_fault->on){
+			if (newfstatat_blocked < description_of_fault->occurences){
+				bpf_printk("Blocked STAT with return value %d and tid %d \n",description_of_fault->return_value,tid);
+				newfstatat_blocked+=1;
+				bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
+			}
+			else if(description_of_fault->occurences == 0){
+				bpf_printk("Blocked STAT with return value %d and tid %d \n",description_of_fault->return_value,tid);
+				bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
+				
+
+			}
+			else{
+				newfstatat_blocked = 0;
+				description_of_fault->on = 0;
+			}
+		}
+	}
+
+	int result = process_current_state(NEWFSTATAT_COUNT,NEWFSTATAT_HOOK,pid);
 
 	return 0;
 }

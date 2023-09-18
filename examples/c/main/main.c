@@ -13,7 +13,7 @@
 #include <linux/if_ether.h>
 #include <linux/in.h>
 #include <net/if.h>
- #include <signal.h>
+#include <signal.h>
 
 //Modules
 #include <aux.h>
@@ -30,6 +30,7 @@
 #include <block.skel.h>
 #include <uprobes.h>
 #include <uprobes.skel.h>
+#include <popen.h>
 
 void process_counter(const struct event *event,int stateinfo);
 int process_tc(const struct event*);
@@ -202,7 +203,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 			}
 		}
 		//temporary for testing, basically OR
-		if (run > 0)
+		if (run == relevant_conditions)
 			if (!faults[i].done){
 				if (faults[i].faulttype == NETWORK_ISOLATION ||faults[i].faulttype == DROP_PACKETS ||faults[i].faulttype == BLOCK_IPS)
 					inject_fault(faults[i].faulttype,0,i);
@@ -262,6 +263,9 @@ void inject_fault(int faulttype,int pid,int fault_id){
 	if(faulttype == PROCESS_KILL){
 		kill(faults[fault_id].initial->fault_type_conditions[PROCESS_TO_KILL],9);
 	}
+	if(faulttype == STOP){
+		kill(faults[fault_id].initial->fault_type_conditions[PROCESS_TO_KILL],SIGSTOP);
+	}
 
 	int error;
 
@@ -302,21 +306,23 @@ void build_faults(){
     ssize_t read;
 
 	for(int i = 0; i< FAULT_COUNT;i++){
-		int repeat = 1;
-		int occurrences = 0;
+		int repeat = 0;
+		int occurrences = 4;
 		int network_directions = 2;
-		int return_value = -1;
+		int return_value = 1;
 
-		char *args[] = {"/bin/ping","-c","5","google.pt",NULL};
-		build_fault(&faults[i],repeat,TEMP_EMPTY,occurrences,network_directions,return_value,args,0);
+		char *binary_location = "/home/sebastiaoamaro/phd/tendermint/build/tendermint";
+		//char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","init",NULL};
+		char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","node","--proxy_app=kvstore",NULL};
+		build_fault(&faults[i],repeat,NEWFSTATAT,occurrences,network_directions,return_value,args,0,binary_location);
 
-		faults[i].initial->fault_type_conditions[PROCESSES_OPENED] = 1;
-		faults[i].initial->fault_type_conditions[PROCESSES_CLOSED] = 1;
-		faults[i].initial->fault_type_conditions[WRITES] = 100;
-		faults[i].initial->fault_type_conditions[READS] = 100;
-		faults[i].initial->fault_type_conditions[THREADS_CREATED] = 1;
+		// faults[i].initial->fault_type_conditions[PROCESSES_OPENED] = 1;
+		// faults[i].initial->fault_type_conditions[PROCESSES_CLOSED] = 1;
+		// faults[i].initial->fault_type_conditions[WRITES] = 100;
+		// faults[i].initial->fault_type_conditions[READS] = 100;
+		// faults[i].initial->fault_type_conditions[THREADS_CREATED] = 1;
 		faults[i].initial->fault_type_conditions[CALLCOUNT] = 1;
-		//faults[i].initial->fault_type_conditions[PROCESS_TO_KILL] = 105534;
+		//faults[i].initial->fault_type_conditions[PROCESS_TO_KILL] = 225183;
 	
 		// char string_ips[32] = "172.19.0.2";
 
@@ -328,7 +334,7 @@ void build_faults(){
 
 		//char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":_ZN13FullCompactor12CompactFilesEPv"};
 		//char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":github.com/cometbft/cometbft/statesync.(*syncer).Sync"};
-		char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":temporary_auxiliary_function"};
+		char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":github.com/tendermint/tendermint/libs/os.EnsureDir"};
 		add_function_to_monitor(&faults[i],&func_names[0],0);
 		//add_function_to_monitor(&faults[i],&func_names[1],1);
 
@@ -549,7 +555,16 @@ int setup_tc_progs(struct tc_bpf **tc_ebpf_progs,struct tc_bpf **tc_ebpf_progs_t
 	return 0;
 }
 
-void start_target_process(const char **args){
+void print_output(FILE *fp){
+
+	char inLine[1024];
+    while (fgets(inLine, sizeof(inLine), fp) != NULL)
+    {
+        printf("%s\n", inLine);
+    }
+}
+
+void* start_target_process(const char **args){
 
 
 	FILE *fp = custom_popen(args[0],args,'r',&constants.target_pid);
@@ -560,26 +575,36 @@ void start_target_process(const char **args){
         exit(1);
     }
 
-	char inLine[1024];
-    while (fgets(inLine, sizeof(inLine), fp) != NULL)
-    {
-        printf("%s\n", inLine);
-    }
+	pthread_t thread_id;
+	pthread_create(&thread_id, NULL, print_output, (void *)fp);
 
 }
+
+void start_processes(){
+
+	for(int i=0;i<FAULT_COUNT;i++){
+		int size = strlen(faults[i].command[0]);
+		if(size!=0){
+			FILE *fp = start_target_process(faults[i].command);
+			faults[i].pid = constants.target_pid;
+			printf("Starting process with pid is %d \n",faults[i].pid);
+		}
+	}
+}
+
+void resume_processes(){
+	printf("Resuming Processes \n");
+	for(int i=0;i<FAULT_COUNT;i++){
+		if(faults[i].pid){
+			kill(faults[i].pid,SIGUSR1);
+		}
+	}
+}
+
 int main(int argc, char **argv)
 {
 
 	//translate_pid(5);
-	//pthread_t thread_id;
-
-	//pthread_create(&thread_id, NULL, start_target_process, args);
-
-
-	// while(constants.target_pid == 0){
-	// 	sleep(1);
-	// }
-	// printf("Target process pid is %d \n",constants.target_pid);
 	
 	/* Set up libbpf errors and debug info callback */
 	libbpf_set_print(libbpf_print_fn);
@@ -596,6 +621,12 @@ int main(int argc, char **argv)
 	signal(SIGTERM, sig_handler);
 
 	build_faults();
+
+	//start process where we will inject faults
+
+	start_processes();
+
+
 	if (constants.faultsverbose)
 		printf("Built %d faults \n",FAULT_COUNT);
 
@@ -688,7 +719,7 @@ int main(int argc, char **argv)
 			if (constants.faultsverbose)
 				printf("Fault is %d funcame is %s, pid is %d \n",i,faults[i].func_names[j],faults[i].pid);
 
-			uprobes[i][j] = uprobe(faults[i].pid,faults[i].func_names[j],FAULT_COUNT);
+			uprobes[i][j] = uprobe(faults[i].pid,faults[i].func_names[j],faults[i].binary_location,FAULT_COUNT);
 		}
 
 
@@ -731,7 +762,7 @@ int main(int argc, char **argv)
 	
 	int err;
 	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
-
+	resume_processes();
 	while (!exiting) {
 		err = ring_buffer__poll(rb, -1 /* timeout, ms */);
 		/* Ctrl-C will cause -EINTR */

@@ -3,14 +3,14 @@
 
 #define MAX_ENTRIES 10240
 #define PATH_MAX	4096
-#define STATE_PROPERTIES_COUNT 13
+#define STATE_PROPERTIES_COUNT 16
 #define MAX_IPS_BLOCKED 16
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
 #define FUNCNAME_MAX 64
 #define MAX_FUNCTIONS 8
 #define FILENAME_MAX 64
-#define FAULTSSUPPORTED 7
+#define FAULTSSUPPORTED 18
 
 struct fault {
     __u64 faulttype;
@@ -31,6 +31,7 @@ struct fault {
     //Might not be relevant
     int container_pid;
     char **command;
+    char *binary_location;
 };
 
 struct fault_key{
@@ -75,6 +76,10 @@ enum faulttype{
     PROCESS_KILL = 11,
     WRITE_RET = 12,
     READ_RET = 13,
+    STOP = 14,
+    OPEN = 15,
+    MKDIR = 16,
+    NEWFSTATAT = 17,
     TEMP_EMPTY = 999,
 };
 
@@ -92,7 +97,10 @@ enum stateinfo{
     FUNCNAMES = 9,
     CALLCOUNT = 10,
     THREADS_CREATED = 11,
-    PROCESS_TO_KILL = 12
+    PROCESS_TO_KILL = 12,
+    OPENS = 13,
+    DIRCREATED =14,
+    NEWFSTATAT_COUNT = 15
 };
 
 //To process different types of events in userspace
@@ -104,6 +112,9 @@ enum eventype{
     TC = 2,
     FSYS = 3,
     THREAD = 5,
+    NEWFSTATAT_HOOK = 6,
+    MKDIR_HOOK = 7,
+    OPEN_HOOK = 8,
 };
 
 enum generic{
@@ -135,14 +146,11 @@ struct event {
 
 struct aux_bpf* start_aux_maps();
 int get_interface_index(char*);
-void build_fault(struct fault* ,int,int,int,int,int,char**,int);
+void build_fault(struct fault* ,int,int,int,int,int,char**,int,char *);
 void add_ip_to_block(struct fault*,char *,int);
 void set_if_name(struct fault*,char *);
 void add_function_to_monitor(struct fault*,char*,int);
 int bpf_map_lookup_or_try_init_user(int, const void *, void *,void *);
 int get_interface_names(char **,int);
-FILE * custom_popen(char* command,char** args, char type, pid_t* pid);
-void start_target_process();
-int custom_pclose(FILE*,int);
 int translate_pid(int);
 #endif /* __AUX_H */

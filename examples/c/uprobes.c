@@ -253,7 +253,7 @@ static int attach_kprobes(struct uprobes_bpf *obj)
 	return 0;
 }
 
-static int attach_uprobes(struct uprobes_bpf *obj)
+static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location)
 {
 	char *binary, *function;
 	char bin_path[PATH_MAX];
@@ -276,10 +276,14 @@ static int attach_uprobes(struct uprobes_bpf *obj)
 	*function = '\0';
 	function++;
 
-	if (resolve_binary_path(binary, env.pid, bin_path, sizeof(bin_path)))
+	printf("Binary location in uprobe is %s \n",binary_location);
+
+	if (binary_location)
+		strcpy(bin_path,binary_location);
+	else if(resolve_binary_path(binary, env.pid, bin_path, sizeof(bin_path)))
 		goto out_binary;
 
-	printf("Binary is %s \n",binary);
+	printf("Binary is %s and bin_path is %s \n",binary,bin_path);
 	func_off = get_elf_func_offset(bin_path, function);
 	if (func_off < 0) {
 		warn("Could not find %s in %s\n", function, bin_path);
@@ -312,7 +316,7 @@ out_binary:
 	return ret;
 }
 
-struct uprobes_bpf* uprobe(int pid,char* funcname,int faultcount)
+struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faultcount)
 {
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
 
@@ -327,9 +331,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,int faultcount)
 	int cgfd = -1;
 	bool used_fentry = false;
 
-	printf("%s \n",funcname);
 	env.is_kernel_func = !strchr(funcname, ':');
-	printf("env kernel func %d \n",env.is_kernel_func);
 
 	err = ensure_core_btf(&open_opts);
 	if (err) {
@@ -384,7 +386,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,int faultcount)
 		if (env.is_kernel_func)
 			err = attach_kprobes(obj);
 		else
-			err = attach_uprobes(obj);
+			err = attach_uprobes(obj,binary_location);
 		if (err)
 			return NULL;
 

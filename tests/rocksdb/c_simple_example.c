@@ -25,6 +25,9 @@ const char DBPath[] = "/tmp/rocksdb_c_simple_example";
 const char DBBackupPath[] = "/tmp/rocksdb_c_simple_example_backup";
 #endif
 
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+
 int temporary_auxiliary_function(int iteration){
   int calculation = iteration*10 +5;
 
@@ -83,7 +86,9 @@ int main(int argc, char **argv) {
       assert(strcmp(returned_value, "value") == 0);
       free(returned_value);
       
-      if (i%call_interval == 0){
+      int result = ((i%call_interval)==0);
+
+      if (result){
         int storing = temporary_auxiliary_function(i);
       }
   }
