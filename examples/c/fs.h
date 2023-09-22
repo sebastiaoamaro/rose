@@ -3,7 +3,7 @@
 
 
 #define FILENAME_MAX		64
-#define MAX_JUMPS 			15
+#define MAX_JUMPS 			10
 #define MAX_FILE_OFFSET		(FILENAME_MAX>>1)
 #define SUB_STR_MAX			512
 #define PATH_MAX	4096

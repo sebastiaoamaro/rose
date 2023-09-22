@@ -77,9 +77,7 @@ int handle_exit_open(struct trace_event_raw_sys_exit *ctx){
 
         if(file_open){
             //bpf_printk("%s and %s and str_len is %d \n",&file_open->filename,&(fi.filename[fi.offset]),file_open->size);
-
             if(equal_to_true(file_open,&(fi.filename[fi.offset]),fi.offset)){
-                
                 struct event *e;
 
 				/* reserve sample from BPF ringbuf */

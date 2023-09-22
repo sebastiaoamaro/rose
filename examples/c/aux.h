@@ -3,14 +3,15 @@
 
 #define MAX_ENTRIES 10240
 #define PATH_MAX	4096
-#define STATE_PROPERTIES_COUNT 16
+#define STATE_PROPERTIES_COUNT 17
 #define MAX_IPS_BLOCKED 16
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
 #define FUNCNAME_MAX 64
 #define MAX_FUNCTIONS 8
 #define FILENAME_MAX 64
-#define FAULTSSUPPORTED 18
+#define FAULTSSUPPORTED 19
+#define MAX_RELEVANT_FILES 256
 
 struct fault {
     __u64 faulttype;
@@ -28,10 +29,10 @@ struct fault {
     int occurrences;
     int network_directions;
     int return_value;
-    //Might not be relevant
     int container_pid;
     char **command;
     char *binary_location;
+    int faults_injected_counter;
 };
 
 struct fault_key{
@@ -61,6 +62,11 @@ struct faultstate{
     int *conditions_match;
 };
 
+struct relevant_fds{
+    __u64 fds[MAX_RELEVANT_FILES];
+    int size;
+};
+
 //syscall to fail, rename to faulttype
 enum faulttype{
     FORK = 1,
@@ -72,7 +78,6 @@ enum faulttype{
     CLONE = 7,
     WRITE_FILE = 8,
     READ_FILE = 9,
-    FUNCTIONS = 10,
     PROCESS_KILL = 11,
     WRITE_RET = 12,
     READ_RET = 13,
@@ -80,6 +85,7 @@ enum faulttype{
     OPEN = 15,
     MKDIR = 16,
     NEWFSTATAT = 17,
+    OPENNAT = 19,
     TEMP_EMPTY = 999,
 };
 
@@ -100,7 +106,8 @@ enum stateinfo{
     PROCESS_TO_KILL = 12,
     OPENS = 13,
     DIRCREATED =14,
-    NEWFSTATAT_COUNT = 15
+    NEWFSTATAT_COUNT = 15,
+    OPENNAT_COUNT = 16
 };
 
 //To process different types of events in userspace
@@ -115,6 +122,8 @@ enum eventype{
     NEWFSTATAT_HOOK = 6,
     MKDIR_HOOK = 7,
     OPEN_HOOK = 8,
+    OPENNAT_HOOK = 9,
+    FUNCTIONS = 10,
 };
 
 enum generic{

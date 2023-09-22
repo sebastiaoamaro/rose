@@ -57,7 +57,7 @@ FILE * custom_popen(char* command, char** args, char type, pid_t* pid)
             if(ready){
                 break;
             }
-            //sleep();
+            sleep(0.000001);
 
         }
         //desligar signal

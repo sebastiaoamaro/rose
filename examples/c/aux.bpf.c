@@ -44,7 +44,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
 	__type(key, int);
-	__type(value,int);
+	__type(value,struct relevant_fds);
 } relevant_fd SEC(".maps");
 
 struct {
