@@ -3,14 +3,14 @@
 
 #define MAX_ENTRIES 10240
 #define PATH_MAX	4096
-#define STATE_PROPERTIES_COUNT 17
+#define STATE_PROPERTIES_COUNT 19
 #define MAX_IPS_BLOCKED 16
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
-#define FUNCNAME_MAX 64
+#define FUNCNAME_MAX 128
 #define MAX_FUNCTIONS 8
 #define FILENAME_MAX 64
-#define FAULTSSUPPORTED 19
+#define FAULTSSUPPORTED 22
 #define MAX_RELEVANT_FILES 256
 
 struct fault {
@@ -85,7 +85,10 @@ enum faulttype{
     OPEN = 15,
     MKDIR = 16,
     NEWFSTATAT = 17,
-    OPENNAT = 19,
+    OPENAT = 18,
+    NEWFSTATAT_RET = 19,
+    VFSTATAT_FILE = 20,
+    OPENAT_RET = 21,
     TEMP_EMPTY = 999,
 };
 
@@ -107,10 +110,12 @@ enum stateinfo{
     OPENS = 13,
     DIRCREATED =14,
     NEWFSTATAT_COUNT = 15,
-    OPENNAT_COUNT = 16
+    OPENNAT_COUNT = 16,
+    VFS_FSTATAT_COUNT = 17,
+    VFS_FSTATAT_SPECIFIC = 18
 };
 
-//To process different types of events in userspace
+//TODO:To process different types of events in userspace, THIS CAN BE REFACTORED TO JUST BE THE SAME AS STATE_INFO
 enum eventype{
     EXEC = 0,
     EXIT = 7,
@@ -124,6 +129,7 @@ enum eventype{
     OPEN_HOOK = 8,
     OPENNAT_HOOK = 9,
     FUNCTIONS = 10,
+    VFS_FSTATAT_HOOK = 11
 };
 
 enum generic{

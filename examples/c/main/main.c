@@ -70,7 +70,6 @@ static struct constants {
 	int uprobemode;
 	int tracingmode;
 	int faultsverbose;
-	char *command;
 	int target_pid;
 	int maintainpid;
 
@@ -196,6 +195,9 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 		case OPENNAT_HOOK:
 			process_counter(e,OPENNAT_COUNT);
 		break;
+		case VFS_FSTATAT_SPECIFIC:
+			process_on_or_off_cond(e,VFS_FSTATAT_SPECIFIC);
+		break;
 
 	}
 
@@ -228,6 +230,16 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 	return 0;
 }
 
+void process_on_or_off_cond(const struct event *event,int stateinfo){
+	for (int i=0; i<FAULT_COUNT;i++){
+		if (faults[i].initial->fault_type_conditions[stateinfo]){
+			if(strcmp(faults[i].file_open,event->filename)){
+				faults[i].initial->conditions_match[stateinfo] = 1;
+			}
+		}
+	}
+}
+
 
 void process_counter(const struct event *event,int stateinfo){
 	for (int i=0; i<FAULT_COUNT;i++){
@@ -235,7 +247,7 @@ void process_counter(const struct event *event,int stateinfo){
 			if (event->state_condition == faults[i].initial->fault_type_conditions[stateinfo] && event->pid == faults[i].pid){
 				faults[i].initial->conditions_match[stateinfo] = 1;
 			}
-
+			//What is this?
 			if (faults[i].repeat){
 				if (event->state_condition == faults[i].initial->fault_type_conditions[stateinfo]&& event->pid == faults[i].pid){
 					faults[i].initial->conditions_match[stateinfo] = 1;
@@ -300,7 +312,7 @@ void inject_fault(int faulttype,int pid,int fault_id){
 	faults[fault_id].faults_injected_counter++;
 
 	//If fault is to be injected again clear conditions match
-	if (faults[fault_id].repeat && faults[fault_id].faults_injected_counter == faults[fault_id].occurrences){
+	if (faults[fault_id].repeat && (faults[fault_id].faults_injected_counter == faults[fault_id].occurrences)){
 		faults[fault_id].done = 0;
 		for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
 			faults[fault_id].initial->conditions_match[i] = 0;
@@ -318,60 +330,66 @@ void build_faults(){
     size_t len = 0;
     ssize_t read;
 
-	for(int i = 0; i< 0;i++){
-		int repeat = 0;
-		int occurrences = 4;
+	for(int i = 0; i< FAULT_COUNT;i++){
+		int repeat = 1;
+		int occurrences = 0;
 		int network_directions = 2;
-		int return_value = 1;
+		int return_value = -2;
 
-		char *binary_location = "/home/sebastiaoamaro/phd/tendermint/build/tendermint";
-		//char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","init",NULL};
-		char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","node","--proxy_app=kvstore",NULL};
-		build_fault(&faults[i],repeat,TEMP_EMPTY,occurrences,network_directions,return_value,args,0,binary_location);
+		// char *binary_location = "/home/sebastiaoamaro/phd/tendermint/build/tendermint";
+		// char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","init",NULL};
+		char *binary_location = NULL;
+		char *args[] = {""};
+		// char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","node","--proxy_app=kvstore",NULL};
+		build_fault(&faults[i],repeat,OPENAT_RET,occurrences,network_directions,return_value,args,0,binary_location);
 
-		faults[i].initial->fault_type_conditions[CALLCOUNT] = 1;
-		//faults[i].initial->fault_type_conditions[PROCESS_TO_KILL] = 225183;
+		faults[i].initial->fault_type_conditions[WRITES] = 1;
+		// faults[i].initial->fault_type_conditions[PROCESS_TO_KILL] = 225183;
 	
 		// char string_ips[32] = "172.19.0.2";
 
 		// add_ip_to_block(&faults[0],string_ips,0);
 
-		char file_name[FILENAME_MAX] = ".tendermint/";
+		// char file_name[FILENAME_MAX] = ".tendermint/";
 
-		strcpy(faults[i].file_open,file_name);
+		// strcpy(faults[i].file_open,file_name);
 
 		//char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":_ZN13FullCompactor12CompactFilesEPv"};
 		//char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":github.com/cometbft/cometbft/statesync.(*syncer).Sync"};
-		char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":github.com/tendermint/tendermint/libs/os.EnsureDir"};
-		add_function_to_monitor(&faults[i],&func_names[0],0);
+		// char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":github.com/tendermint/tendermint/libs/os.EnsureDir"};
+		// add_function_to_monitor(&faults[i],&func_names[0],0);
 		//add_function_to_monitor(&faults[i],&func_names[1],1);
 
 	}
 	//FAULT 0
-	char *binary_location = "/home/sebastiaoamaro/phd/tendermint/build/tendermint";
-	char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","node","--proxy_app=kvstore",NULL};
-	build_fault(&faults[0],0,NEWFSTATAT,3,2,-2,args,0,binary_location);
+	// char *binary_location = "/home/sebastiaoamaro/phd/tendermint/build/tendermint";
+	// char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","node","--proxy_app=kvstore",NULL};
+	// int network_directions = 2;
+	// int occurrences = 0;
+	// int repeat = 1;
+	// int return_value = -20;
+	// build_fault(&faults[0],repeat,NEWFSTATAT_RET,occurrences,network_directions,return_value,args,0,binary_location);
 
-	faults[0].initial->fault_type_conditions[CALLCOUNT] = 1;
-	faults[0].initial->fault_type_conditions[NEWFSTATAT_COUNT] = 4;
+	// faults[0].initial->fault_type_conditions[CALLCOUNT] = 1;
+	// faults[0].initial->fault_type_conditions[VFS_FSTATAT_SPECIFIC] = 1;
 
+	// char file_name[FILENAME_MAX] = ".tendermint";
 
-	char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":github.com/tendermint/tendermint/libs/os.EnsureDir"};
-	add_function_to_monitor(&faults[0],&func_names[0],0);
+	// strcpy(faults[0].file_open,file_name);
 
-	//FAULT 1
+	// //TODO:This is causing overflows fix!!!
+	// char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":github.com/tendermint/tendermint/libs/os.EnsureDir"};
+	// add_function_to_monitor(&faults[0],&func_names[0],0);
 
-	char *binary_location2 = "";
-	char *args2[] = {""};
+	// //FAULT 1
 
-	build_fault(&faults[1],1,OPENNAT,1,2,-1,args2,0,binary_location2);
+	// char *binary_location2 = "";
+	// char *args2[] = {""};
 
-	faults[1].initial->fault_type_conditions[CALLCOUNT] = 1;
-	faults[1].initial->fault_type_conditions[NEWFSTATAT_COUNT] = 4;
+	// build_fault(&faults[1],1,OPENNAT,1,2,-1,args2,0,binary_location2);
 
-	char file_name[FILENAME_MAX] = ".tendermint/";
-
-	strcpy(faults[1].file_open,file_name);
+	// faults[1].initial->fault_type_conditions[CALLCOUNT] = 1;
+	// faults[1].initial->fault_type_conditions[NEWFSTATAT_COUNT] = 3;
 
 
 	//GET PIDS AND NETDEVICES
@@ -616,9 +634,9 @@ void print_output(FILE *fp){
     }
 }
 
-void* start_target_process(const char **args){
+FILE* start_target_process(const char **args){
 
-
+	printf("Args is %s \n",args[0]);
 	FILE *fp = custom_popen(args[0],args,'r',&constants.target_pid);
 
 	if (!fp)
@@ -630,24 +648,28 @@ void* start_target_process(const char **args){
 	pthread_t thread_id;
 	pthread_create(&thread_id, NULL, print_output, (void *)fp);
 
+	return fp;
+
 }
 
 void start_processes(){
-
-	for(int i=0;i<FAULT_COUNT;i++){
-		int size = strlen(faults[i].command);
-		if(size!=0){
-			FILE *fp = start_target_process(faults[i].command);
-			faults[i].pid = constants.target_pid;
-			printf("Starting process with pid is %d \n",faults[i].pid);
-		}
-	}
-	//Make pid of all faults same as the first one that started the command
-	for (int i=0;i<FAULT_COUNT;i++){
-		if(i==0)
-			continue;
-		faults[i].pid = faults[0].pid;
-	}
+	// if(constants.faultsverbose)
+	// 	printf("Starting processes \n");
+	// for(int i=0;i<FAULT_COUNT;i++){
+	// 	if (strlen(faults[i].command[0])) 
+	// 		continue;
+	// 	if(constants.faultsverbose)
+	// 		printf("Starting processes with command %s \n",faults[i].command[0]);
+	// 	FILE *fp = start_target_process(faults[i].command);
+	// 	faults[i].pid = constants.target_pid;
+	// 	printf("Starting process with pid is %d \n",faults[i].pid);
+	// }
+	// //Make pid of all faults same as the first one that started the command
+	// for (int i=0;i<FAULT_COUNT;i++){
+	// 	if(i==0)
+	// 		continue;
+	// 	faults[i].pid = faults[0].pid;
+	// }
 }
 
 void resume_processes(){
@@ -681,13 +703,14 @@ int main(int argc, char **argv)
 	if(constants.faultsverbose)
 		printf("Building faults \n");
 	build_faults();
-
+	if(constants.faultsverbose)
+		printf("Built faults \n");
 	//start process where we will inject faults
 
 	start_processes();
 
 	if (constants.faultsverbose)
-		printf("Started processes \n",FAULT_COUNT);
+		printf("Started %d processes \n",FAULT_COUNT);
 
 	struct aux_bpf *aux_bpf = start_aux_maps();
 
@@ -825,7 +848,9 @@ int main(int argc, char **argv)
 	
 	int err;
 	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
-	resume_processes();
+
+	if(constants.target_pid)
+		resume_processes();
 	while (!exiting) {
 		err = ring_buffer__poll(rb, -1 /* timeout, ms */);
 		/* Ctrl-C will cause -EINTR */
@@ -843,7 +868,8 @@ int main(int argc, char **argv)
 	cleanup:
 
 	//Kill process we started
-	//kill(constants.target_pid,9);
+	if(constants.target_pid)
+		kill(constants.target_pid,9);
 
 	//Destroy eBPF stuff
     printf("Running cleanup \n"); 
@@ -899,7 +925,7 @@ int main(int argc, char **argv)
 	for (int i=0;i<FAULT_COUNT;i++){
 		free(faults[i].initial->fault_type_conditions);
 		free(faults[i].initial->conditions_match);
-		free(faults[i].initial);
+		free(faults[i].initial); // double corrupt look later
 		free(faults[i].end->fault_type_conditions);
 		free(faults[i].end->conditions_match);
 		free(faults[i].end);

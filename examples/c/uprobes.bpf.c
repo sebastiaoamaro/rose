@@ -116,7 +116,6 @@ static void entry(struct pt_regs *ctx)
 	u64 id = bpf_get_current_pid_tgid();
 	u32 tgid = id >> 32;
 	u32 pid = id;
-	u64 nsec;
 
 	// char* argument,argument2;
 
@@ -166,34 +165,6 @@ int BPF_KPROBE(dummy_kprobe)
 
 static void exit(void)
 {
-	u64 *start;
-	u64 nsec = bpf_ktime_get_ns();
-	u64 id = bpf_get_current_pid_tgid();
-	u32 pid = id;
-	u64 slot, delta;
-
-	if (filter_cg && !bpf_current_task_under_cgroup(&cgroup_map, 0))
-		return;
-
-	start = bpf_map_lookup_elem(&starts, &pid);
-	if (!start)
-		return;
-
-	delta = nsec - *start;
-
-	switch (units) {
-	case USEC:
-		delta /= 1000;
-		break;
-	case MSEC:
-		delta /= 1000000;
-		break;
-	}
-
-	slot = log2l(delta);
-	if (slot >= MAX_SLOTS)
-		slot = MAX_SLOTS - 1;
-	__sync_fetch_and_add(&hist[slot], 1);
 }
 
 SEC("fexit/dummy_fexit")

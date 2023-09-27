@@ -9,7 +9,7 @@
 #include <pthread.h>
 #include "aux.h"
 
-struct fs_bpf* monitor_fs(){
+struct fs_bpf* monitor_fs(int fault_count){
     
     struct fs_bpf *skel;
 
@@ -22,6 +22,9 @@ struct fs_bpf* monitor_fs(){
         return NULL;
     }
 
+    //int err_flag = bpf_program__set_flags(skel->progs.vfs_fstatat,BPF_F_SLEEPABLE);
+	//printf("Err is %d \n",err_flag);
+    skel->rodata->fault_count = fault_count;
     /* Load & verify BPF programs */
 	err = fs_bpf__load(skel);
 	if (err) {

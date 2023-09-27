@@ -144,23 +144,21 @@ static inline int get_file_path(struct path *path, struct event_path_t *event_pa
     return 0;
 }
 
-static inline bool equal_to_true(struct file_info_simple *file_info,char *str2,uint32_t size) {
+static inline bool string_contains(struct file_info_simple *file_info,char *str2,uint32_t size) {
     const char comparand[FILENAME_MAX];
     const char comparand2[FILENAME_MAX];
     bpf_probe_read(&comparand, sizeof(comparand), file_info->filename);
     bpf_probe_read(&comparand2, sizeof(comparand2), str2);
 
     int str_len = file_info->size;
-    
-    // if(comparand!=NULL && comparand2!=NULL)
-    //     bpf_strncmp(comparand,FILENAME_MAX,comparand2);
-
-    //bpf_printk("Result of compare is %d \n",compare);
     int count = 0;
     #pragma unroll
     for (int i = 0; i < FILENAME_MAX; ++i){
         if (comparand[count] == comparand2[i] ){
             count++;
+            if(str_len == count){
+                return true; 
+            }
             continue;
         }
         if(str_len == count){
@@ -170,7 +168,6 @@ static inline bool equal_to_true(struct file_info_simple *file_info,char *str2,u
             count = 0;
         }
     }
-
     return false;
 }
 

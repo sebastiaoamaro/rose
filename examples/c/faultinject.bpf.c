@@ -69,7 +69,9 @@ static u64 writes_ret_overrun = 0;
 static u64 opens_blocked = 0;
 static u64 mkdir_blocked = 0;
 static u64 newfstatat_blocked = 0;
-static u64 opennat_ret_blocked = 0;
+static u64 newfstatat_ret_blocked = 0;
+static u64 openat_ret_blocked = 0;
+static u64 openat_blocked = 0;
 
 static inline int process_current_state(int state_key, int type, int pid){
 
@@ -133,7 +135,6 @@ static inline int inject_override(int pid,int fault,u64* counter, struct pt_regs
 		pid,
 		fault,
 	};
-
 	struct fault_description *description_of_fault;
 
 	description_of_fault = bpf_map_lookup_elem(&faulttype,&fault_to_inject);
@@ -142,11 +143,13 @@ static inline int inject_override(int pid,int fault,u64* counter, struct pt_regs
 			if (description_of_fault->on){
 				if (*counter < description_of_fault->occurences){
 					*counter+=1;
-					bpf_printk("Injected fault with return value %d\n",description_of_fault->return_value);
+					u64 ts = bpf_ktime_get_ns();
+					bpf_printk("Injected fault with return value %d at ts %u \n",description_of_fault->return_value,ts);
 					bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
 				}
 				else if(description_of_fault->occurences == 0){
-					bpf_printk("Injected fault with return value %d\n",description_of_fault->return_value);
+					u64 ts = bpf_ktime_get_ns();
+					bpf_printk("Injected fault with return value %d at ts %u \n",description_of_fault->return_value,ts);
 					bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
 
 				}
@@ -275,7 +278,7 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
         struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&pid);
 
         if(file_open){
-            if(equal_to_true(file_open,&(fi.filename[fi.offset]),fi.offset)){
+            if(string_contains(file_open,&(fi.filename[fi.offset]),fi.offset)){
 				struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);
 				if(fds){
 					u64 position = fds->size;
@@ -365,15 +368,29 @@ int BPF_KPROBE(__x64_sys_open)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
+	int result = process_current_state(OPENS,OPEN_HOOK,pid);
+
 	inject_override(pid,OPEN,&opens_blocked,(struct pt_regs *) ctx);
 
-	int result = process_current_state(OPENS,OPEN_HOOK,pid);
+	return 0;
+}
+
+SEC("ksyscall/openat")
+int BPF_KPROBE(__x64_sys_openat)
+{	
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int result = process_current_state(OPENS,OPENNAT_COUNT,pid);
+
+	inject_override(pid,OPENAT,&openat_blocked,(struct pt_regs *) ctx);
 
 	return 0;
 }
 
 SEC("kretsyscall/openat")
-int BPF_KRETPROBE(__x64_sys_openat)
+int BPF_KRETPROBE(__x64_sys_openat_ret)
 {	
 	long fd = PT_REGS_RC((struct pt_regs *) ctx);
 
@@ -395,7 +412,7 @@ int BPF_KRETPROBE(__x64_sys_openat)
 				u64 relevant_fd = fdrelevant->fds[i];
 				if (relevant_fd == fd){
 					//bpf_printk("This fd is important but we already processed it \n");
-					inject_override(pid,OPENNAT,&opennat_ret_blocked,(struct pt_regs *) ctx);
+					inject_override(pid,OPENAT_RET,&openat_ret_blocked,(struct pt_regs *) ctx);
 				}
 			}
 			process_fd = 1;
@@ -437,7 +454,7 @@ int BPF_KRETPROBE(__x64_sys_openat)
         struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&pid);
 
         if(file_open){
-            if(equal_to_true(file_open,&(fi.filename[fi.offset]),fi.offset)){
+            if(string_contains(file_open,&(fi.filename[fi.offset]),fi.offset)){
 				//bpf_printk("%s and %s and fd is %d \n",&file_open->filename,&(fi.filename[fi.offset]),fd);
 				struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);
 				if(fds){
@@ -450,15 +467,15 @@ int BPF_KRETPROBE(__x64_sys_openat)
 					bpf_printk("This should not happen, main should init the structures \n");
 				}
 				
-				inject_override(pid,OPENNAT,&opennat_ret_blocked,(struct pt_regs *) ctx);
+				inject_override(pid,OPENAT_RET,&openat_ret_blocked,(struct pt_regs *) ctx);
 
             }
         }
     }
 
-	inject_override(pid,OPENNAT,&opennat_ret_blocked,(struct pt_regs *) ctx);
+	//int result = process_current_state(OPENAT_COUNT,OPENNAT_HOOK,pid);
+	inject_override(pid,OPENAT_RET,&openat_ret_blocked,(struct pt_regs *) ctx);
 
-	int result = process_current_state(OPENNAT_COUNT,OPENNAT_HOOK,pid);
 	
 
 	return 0;
@@ -472,24 +489,40 @@ int BPF_KPROBE(__x64_sys_mkdir)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
+	int result = process_current_state(DIRCREATED,MKDIR_HOOK,pid);
 
 	inject_override(pid,MKDIR,&mkdir_blocked,(struct pt_regs *) ctx);
-
-	int result = process_current_state(DIRCREATED,MKDIR_HOOK,pid);
 
 	return 0;
 }
 
 SEC("ksyscall/newfstatat")
 int BPF_KPROBE(__x64_sys_newfstatat)
+
 {	
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
-	
-	//bpf_printk("Looking at a newfstatat by %d \n",pid);
-	int result = process_current_state(NEWFSTATAT_COUNT,NEWFSTATAT_HOOK,pid);
+
+
+	int result = process_current_state(NEWFSTATAT_COUNT,NEWFSTATAT_HOOK,tid);
 	inject_override(pid,NEWFSTATAT,&newfstatat_blocked,(struct pt_regs *) ctx);
+
+
+	return 0;
+}
+
+SEC("kretsyscall/newfstatat")
+int BPF_KRETPROBE(__x64_sys_newfstatat_ret)
+
+{	
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+
+	//int result = process_current_state(NEWFSTATAT_COUNT,NEWFSTATAT_HOOK,tid);
+	inject_override(pid,NEWFSTATAT_RET,&newfstatat_ret_blocked,(struct pt_regs *) ctx);
 
 
 	return 0;

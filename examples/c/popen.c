@@ -16,8 +16,6 @@
 
 static int ready = 0;
 void sig_handler(int signum){
-
-    printf("Inside handler function\n");
     ready = 1;
 }
 
@@ -27,11 +25,9 @@ FILE * custom_popen(char* command, char** args, char type, pid_t* pid)
     int fd[2];
     pipe(fd);
 
-	printf("Command is %s \n",command);
-
     if((child_pid = fork()) == -1)
     {
-        perror("fork");
+        perror("fork \n");
         exit(1);
     }
 
@@ -78,7 +74,7 @@ FILE * custom_popen(char* command, char** args, char type, pid_t* pid)
 
     }
     *pid = child_pid;
-
+    printf("PID IS %d \n",child_pid);
     if (type == 'r')
     {
         return fdopen(fd[0], "r");
