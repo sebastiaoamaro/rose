@@ -7,6 +7,13 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
+//Struct to hold faults
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(max_entries, 128);
+	__type(key, int);
+	__type(value, struct fault);
+} faults SEC(".maps");
 
 //ARRAYS ARE NECESSARY AS VALUES BECAUSE DIFFERENT FAULT MIGHT HAVE THE SAME STATE PROPERTY
 struct {

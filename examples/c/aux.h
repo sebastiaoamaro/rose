@@ -60,7 +60,7 @@ struct info_state{
 };
 
 struct faultstate{
-    __u64 *fault_type_conditions;
+    int fault_type_conditions[STATE_PROPERTIES_COUNT];
     int *conditions_match;
 };
 

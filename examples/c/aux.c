@@ -149,6 +149,18 @@ struct aux_bpf* start_aux_maps(){
 		return NULL;
 	}
 
+	err = bpf_map__unpin(skel->maps.faults, "/sys/fs/bpf/faults");
+	if(err) {
+		printf("[ERROR] libbpf unpin API: %d\n", err);
+		//return NULL;
+	}
+
+	err = bpf_map__pin(skel->maps.faults, "/sys/fs/bpf/faults");
+	if(err) {
+		printf("[ERROR] libbpf pin API: %d\n", err);
+		return NULL;
+	}
+
 
     return skel;
 
@@ -214,7 +226,7 @@ void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,i
 
 	fault->binary_location = binary_location;
 
-	fault->initial->fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
+	//fault->initial->fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
 	fault->initial->conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
 
 	fault->faulttype_count = (int*)malloc(FAULTSSUPPORTED*sizeof(int));

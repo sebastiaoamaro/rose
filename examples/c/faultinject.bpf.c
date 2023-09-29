@@ -8,6 +8,7 @@
 #include "aux.h"
 #include "fs.bpf.h"
 #include "fs.h"
+#include "faults.bpf.h"
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
@@ -104,7 +105,9 @@ static inline int process_current_state(int state_key, int type, int pid){
 						e->type = type;
 						e->pid = pid;
 						e->state_condition = value;
+						handle_event(e,fault_count);
 						bpf_ringbuf_submit(e, 0);
+
 						return value;
 					}
 					if(current_state->repeat && (value % relevant_value == 0)){

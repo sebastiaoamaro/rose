@@ -64,6 +64,7 @@ static struct constants {
 	int relevant_state_info_fd;
 	int blocked_ips;
 	int relevant_fd;
+	int bpf_map_fault_fd;
 	int files;
 	int pid;
 	char *inputfilename;
@@ -317,7 +318,6 @@ void inject_fault(int faulttype,int pid,int fault_id,int syscall_nr){
 		for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
 			faults[fault_id].initial->conditions_match[i] = 0;
 		}
-
 	}
 
 }
@@ -330,7 +330,7 @@ void build_faults(){
     size_t len = 0;
     ssize_t read;
 
-	for(int i = 0; i < 0;i++){
+	for(int i = 0; i < FAULT_COUNT;i++){
 		int repeat = 1;
 		int occurrences = 0;
 		int network_directions = 2;
@@ -338,13 +338,13 @@ void build_faults(){
 
 		// char *binary_location = "/home/sebastiaoamaro/phd/tendermint/build/tendermint";
 		// char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","init",NULL};
-		// char *binary_location;
-		// char *args[64];
+		char *binary_location;
+		char *args[64];
 		// char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","node","--proxy_app=kvstore",NULL};
-		// build_fault(&faults[i],repeat,OPENAT_RET,occurrences,network_directions,return_value,args,0,binary_location);
+		build_fault(&faults[i],repeat,OPENAT_RET,occurrences,network_directions,return_value,args,0,binary_location);
 
-		// faults[i].initial->fault_type_conditions[WRITES] = 1;
-		// faults[i].initial->fault_type_conditions[PROCESS_TO_KILL] = 225183;
+		faults[i].initial->fault_type_conditions[WRITES] = 1;
+		//faults[i].initial->fault_type_conditions[PROCESS_TO_KILL] = 225183;
 	
 		// char string_ips[32] = "172.19.0.2";
 
@@ -362,25 +362,25 @@ void build_faults(){
 
 	}
 	//FAULT 0
-	char *binary_location = "/home/sebastiaoamaro/phd/tendermint/build/tendermint";
-	char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","node","--proxy_app=kvstore",NULL};
-	int network_directions = 2;
-	int occurrences = 3;
-	int repeat = 0;
-	int return_value = -20;
-	build_fault(&faults[0],repeat,NEWFSTATAT,occurrences,network_directions,return_value,args,0,binary_location);
+	// char *binary_location = "/home/sebastiaoamaro/phd/tendermint/build/tendermint";
+	// char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","node","--proxy_app=kvstore",NULL};
+	// int network_directions = 2;
+	// int occurrences = 3;
+	// int repeat = 0;
+	// int return_value = -20;
+	// build_fault(&faults[0],repeat,NEWFSTATAT,occurrences,network_directions,return_value,args,0,binary_location);
 
-	faults[0].initial->fault_type_conditions[CALLCOUNT] = 1;
-	faults[0].initial->fault_type_conditions[NEW_FSTATAT_SPECIFIC] = 1;
-	faults[0].initial->fault_type_conditions[NEWFSTATAT_COUNT] = 1;
+	// faults[0].initial->fault_type_conditions[CALLCOUNT] = 1;
+	// faults[0].initial->fault_type_conditions[NEW_FSTATAT_SPECIFIC] = 1;
+	// faults[0].initial->fault_type_conditions[NEWFSTATAT_COUNT] = 1;
 
-	char file_name[FILENAME_MAX] = "/root/.tendermint/data";
+	// char file_name[FILENAME_MAX] = "/root/.tendermint/data";
 
-	strcpy(faults[0].file_open,file_name);
+	// strcpy(faults[0].file_open,file_name);
 
-	//TODO:This is causing overflows fix!!!
-	char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":github.com/tendermint/tendermint/libs/os.EnsureDir"};
-	add_function_to_monitor(&faults[0],&func_names[0],0);
+	// //TODO:This is causing overflows fix!!!
+	// char func_names[MAX_FUNCTIONS][FUNCNAME_MAX] = {":github.com/tendermint/tendermint/libs/os.EnsureDir"};
+	// add_function_to_monitor(&faults[0],&func_names[0],0);
 
 	// //FAULT 1
 
@@ -433,8 +433,17 @@ void build_faults(){
 			fault_count++;
 
 		}
+
 	}
 
+	add_faults_to_bpf();
+}
+
+void add_faults_to_bpf(){
+	printf("Adding faults to the map \n");
+	for (int i = 0; i < FAULT_COUNT; i++){
+		bpf_map_update_elem(constants.bpf_map_fault_fd,&i,faults[i],BPF_ANY);
+	}
 }
 
 
@@ -444,6 +453,7 @@ void get_fd_of_maps (struct aux_bpf *bpf){
 	constants.blocked_ips = bpf_map__fd(bpf->maps.blocked_ips);
 	constants.files = bpf_map__fd(bpf->maps.files);
 	constants.relevant_fd = bpf_map__fd(bpf->maps.relevant_fd);
+	constants.bpf_map_fault_fd = bpf_map__fd(bpf->maps.relevant_fd);
 };
 
 void populate_stateinfo_map(){
@@ -927,10 +937,8 @@ int main(int argc, char **argv)
 	printf("Freeing structures \n");
 
 	for (int i=0;i<FAULT_COUNT;i++){
-		free(faults[i].initial->fault_type_conditions);
 		free(faults[i].initial->conditions_match);
 		free(faults[i].initial); // double corrupt look later
-		free(faults[i].end->fault_type_conditions);
 		free(faults[i].end->conditions_match);
 		free(faults[i].end);
 		printf("Free fault number [%d] \n",i);
