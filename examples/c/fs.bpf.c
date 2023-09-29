@@ -91,42 +91,42 @@ static inline int process_current_state(int state_key, int type, int pid){
 SEC("fentry/vfs_fstatat")
 int BPF_PROG(vfs_fstatat, int dfd,char * filename)
 {
-	pid_t pid;
+	// pid_t pid;
 
-	pid = bpf_get_current_pid_tgid() >> 32;
+	// pid = bpf_get_current_pid_tgid() >> 32;
 
-	struct info_key information = {
-		pid,
-		VFS_FSTATAT_SPECIFIC
-	};
+	// struct info_key information = {
+	// 	pid,
+	// 	VFS_FSTATAT_SPECIFIC
+	// };
 
-	struct info_state *current_state;
+	// struct info_state *current_state;
 
-	current_state = bpf_map_lookup_elem(&relevant_state_info,&information);
+	// current_state = bpf_map_lookup_elem(&relevant_state_info,&information);
 
-	if (current_state){
-		struct file_info_simple *file_stat = bpf_map_lookup_elem(&files,&pid);
-		if(file_stat){
-			if(string_contains(file_stat,filename,sizeof(filename))){
-				//bpf_printk("%s %s\n",&file_stat->filename,filename);
+	// if (current_state){
+	// 	struct file_info_simple *file_stat = bpf_map_lookup_elem(&files,&pid);
+	// 	if(file_stat){
+	// 		if(string_contains(file_stat,filename,sizeof(filename))){
+	// 			//bpf_printk("%s %s\n",&file_stat->filename,filename);
 
-                struct event *e;
+    //             struct event *e;
 
-				/* reserve sample from BPF ringbuf */
-				e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-				if (!e)
-					return 0;
-                bpf_probe_read(e->filename, sizeof(&file_stat->filename), &file_stat->filename);
+	// 			/* reserve sample from BPF ringbuf */
+	// 			e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+	// 			if (!e)
+	// 				return 0;
+    //             bpf_probe_read(e->filename, sizeof(&file_stat->filename), &file_stat->filename);
 
-				e->type = VFS_FSTATAT_SPECIFIC;
-				bpf_ringbuf_submit(e, 0);
+	// 			e->type = VFS_FSTATAT_SPECIFIC;
+	// 			bpf_ringbuf_submit(e, 0);
 
-            }
-		}
-	}
+    //         }
+	// 	}
+	// }
 
 
-    int result = process_current_state(VFS_FSTATAT_COUNT,VFS_FSTATAT_HOOK,pid);
+    // int result = process_current_state(VFS_FSTATAT_COUNT,VFS_FSTATAT_HOOK,pid);
 
 	return 0;
 }

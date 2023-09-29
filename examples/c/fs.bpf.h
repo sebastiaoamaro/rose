@@ -165,7 +165,7 @@ static inline bool string_contains(struct file_info_simple *file_info,char *str2
             return true; 
         }
         else{
-            count = 0;
+            return false;
         }
     }
     return false;

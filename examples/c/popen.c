@@ -30,6 +30,7 @@ FILE * custom_popen(char* command, char** args, char type, pid_t* pid)
         perror("fork \n");
         exit(1);
     }
+    printf("Command is %s and args is %s \n",command,args[1]);
 
     /* child process */
     if (child_pid == 0)
@@ -58,7 +59,7 @@ FILE * custom_popen(char* command, char** args, char type, pid_t* pid)
         }
         //desligar signal
         int err = execv(command,args);
-        printf("Err is %d \n",err);
+        printf("Err is %d and errno is %d \n",err,errno);
         exit(0);
     }
     else

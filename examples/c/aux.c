@@ -235,7 +235,7 @@ void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,i
 		fault->occurrences = occurrences;
 	}
 	
-	char string[FUNCNAME_MAX] = "empty";
+	char string[64] = "empty";
 	//I do not remember what this was for
 	for(int i=0;i<MAX_FUNCTIONS;i++){
 		strcpy(fault->func_names[i],string);

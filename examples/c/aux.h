@@ -3,7 +3,7 @@
 
 #define MAX_ENTRIES 10240
 #define PATH_MAX	4096
-#define STATE_PROPERTIES_COUNT 19
+#define STATE_PROPERTIES_COUNT 20
 #define MAX_IPS_BLOCKED 16
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
@@ -44,10 +44,12 @@ struct fault_description{
     int on;
     int occurences;
     int return_value;
+    int syscall_nr;
 };
 
 struct info_key{
     int pid;
+    //type of state_condition
     int infotype;
 };
 
@@ -112,7 +114,8 @@ enum stateinfo{
     NEWFSTATAT_COUNT = 15,
     OPENNAT_COUNT = 16,
     VFS_FSTATAT_COUNT = 17,
-    VFS_FSTATAT_SPECIFIC = 18
+    VFS_FSTATAT_SPECIFIC = 18,
+    NEW_FSTATAT_SPECIFIC = 19
 };
 
 //TODO:To process different types of events in userspace, THIS CAN BE REFACTORED TO JUST BE THE SAME AS STATE_INFO
@@ -145,14 +148,7 @@ struct event {
 	char comm[TASK_COMM_LEN];
 	char filename[MAX_FILENAME_LEN];
     __u64 state_condition;
-	__u64 processes_created;
-    __u64 processes_created_repeat;
-	__u64 processes_closed;
-    __u64 processes_closed_repeat;
-    __u64 writes;
-    __u64 writes_repeat;
-    __u64 reads;
-    __u64 reads_repeat;
+    int syscall_nr;
     __u32 ip_proto;
     __u32 ifindex;
 	__be32 src_addr;

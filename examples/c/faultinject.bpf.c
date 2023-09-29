@@ -105,7 +105,7 @@ static inline int process_current_state(int state_key, int type, int pid){
 						e->pid = pid;
 						e->state_condition = value;
 						bpf_ringbuf_submit(e, 0);
-						return 0;
+						return value;
 					}
 					if(current_state->repeat && (value % relevant_value == 0)){
 						struct event *e;
@@ -113,24 +113,25 @@ static inline int process_current_state(int state_key, int type, int pid){
 						/* reserve sample from BPF ringbuf */
 						e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
 						if (!e)
-							return 0;
+							return value;
 
 						e->type = type;
 						e->pid = pid;
 						e->state_condition = relevant_value;
 						bpf_ringbuf_submit(e, 0);
-						return 0;
+						return value;
 					}
 					//bpf_printk("Skipped \n");
 					}
-					return 0;
+					return value;
 				}
 				
 		}
 	}
+	return 0;
 }
 
-static inline int inject_override(int pid,int fault,u64* counter, struct pt_regs* ctx){
+static inline void inject_override(int pid,int fault,u64* counter, struct pt_regs* ctx,int syscall_nr){
 	struct fault_key fault_to_inject = {
 		pid,
 		fault,
@@ -140,12 +141,19 @@ static inline int inject_override(int pid,int fault,u64* counter, struct pt_regs
 	description_of_fault = bpf_map_lookup_elem(&faulttype,&fault_to_inject);
 
 	if (description_of_fault){
+			bpf_printk("Syscall nr is %d and it is on %d\n",syscall_nr,description_of_fault->on);
 			if (description_of_fault->on){
 				if (*counter < description_of_fault->occurences){
 					*counter+=1;
 					u64 ts = bpf_ktime_get_ns();
-					bpf_printk("Injected fault with return value %d at ts %u \n",description_of_fault->return_value,ts);
-					bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
+					bpf_printk("Syscall_nr is %d and description_of_fault->syscall_nr is %d \n");
+					if(syscall_nr){
+						if(syscall_nr == description_of_fault->syscall_nr){
+							bpf_printk("Injected fault with return value %d at ts %u \n",description_of_fault->return_value,ts);
+							bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
+						}
+					}
+
 				}
 				else if(description_of_fault->occurences == 0){
 					u64 ts = bpf_ktime_get_ns();
@@ -177,7 +185,7 @@ int BPF_KSYSCALL(clone,int flags)
 		return 0;
 	}
 
-	inject_override(pid,CLONE,&threads_blocked,(struct pt_regs *) ctx);
+	inject_override(pid,CLONE,&threads_blocked,(struct pt_regs *) ctx,0);
 
 	int result = process_current_state(THREADS_CREATED,THREAD,pid);
 
@@ -204,7 +212,7 @@ int BPF_KSYSCALL(clone3,struct clone_args *cl_args)
 		return 0;
 	}
 
-	inject_override(pid,CLONE,&threads_blocked,(struct pt_regs *) ctx);
+	inject_override(pid,CLONE,&threads_blocked,(struct pt_regs *) ctx,0);
 
 
 	int result = process_current_state(THREADS_CREATED,THREAD,pid);
@@ -239,7 +247,7 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 			if(relevant_fd == fd){
 			
 				//bpf_printk("This fd is important but we already processed it \n");
-				inject_override(pid,WRITE_FILE,&writes_file_blocked,(struct pt_regs *) ctx);
+				inject_override(pid,WRITE_FILE,&writes_file_blocked,(struct pt_regs *) ctx,0);
 				break;
 			}
 		}
@@ -288,13 +296,13 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 					bpf_printk("This should not happen, main should init the structures \n");
 				}
 				
-				inject_override(pid,WRITE_FILE,&writes_file_blocked,(struct pt_regs *) ctx);
+				inject_override(pid,WRITE_FILE,&writes_file_blocked,(struct pt_regs *) ctx,0);
 
             }
         }
     }
 
-	inject_override(pid,WRITE,&writes_blocked,(struct pt_regs *) ctx);
+	inject_override(pid,WRITE,&writes_blocked,(struct pt_regs *) ctx,0);
 
 	int result = process_current_state(WRITES,WRITE_HOOK,pid);
 	
@@ -309,7 +317,7 @@ int BPF_KRETPROBE(__x64_sys_ret_write,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	inject_override(pid,WRITE_RET,&writes_ret_overrun,(struct pt_regs *) ctx);
+	inject_override(pid,WRITE_RET,&writes_ret_overrun,(struct pt_regs *) ctx,0);
 
 	return 0;
 
@@ -323,7 +331,7 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	inject_override(pid,READ,&reads_blocked,(struct pt_regs *) ctx);
+	inject_override(pid,READ,&reads_blocked,(struct pt_regs *) ctx,0);
 
 	int result = process_current_state(READS,READ_HOOK,pid);
 
@@ -370,7 +378,7 @@ int BPF_KPROBE(__x64_sys_open)
 
 	int result = process_current_state(OPENS,OPEN_HOOK,pid);
 
-	inject_override(pid,OPEN,&opens_blocked,(struct pt_regs *) ctx);
+	inject_override(pid,OPEN,&opens_blocked,(struct pt_regs *) ctx,0);
 
 	return 0;
 }
@@ -384,7 +392,7 @@ int BPF_KPROBE(__x64_sys_openat)
 
 	int result = process_current_state(OPENS,OPENNAT_COUNT,pid);
 
-	inject_override(pid,OPENAT,&openat_blocked,(struct pt_regs *) ctx);
+	inject_override(pid,OPENAT,&openat_blocked,(struct pt_regs *) ctx,0);
 
 	return 0;
 }
@@ -412,7 +420,7 @@ int BPF_KRETPROBE(__x64_sys_openat_ret)
 				u64 relevant_fd = fdrelevant->fds[i];
 				if (relevant_fd == fd){
 					//bpf_printk("This fd is important but we already processed it \n");
-					inject_override(pid,OPENAT_RET,&openat_ret_blocked,(struct pt_regs *) ctx);
+					inject_override(pid,OPENAT_RET,&openat_ret_blocked,(struct pt_regs *) ctx,0);
 				}
 			}
 			process_fd = 1;
@@ -467,14 +475,14 @@ int BPF_KRETPROBE(__x64_sys_openat_ret)
 					bpf_printk("This should not happen, main should init the structures \n");
 				}
 				
-				inject_override(pid,OPENAT_RET,&openat_ret_blocked,(struct pt_regs *) ctx);
+				inject_override(pid,OPENAT_RET,&openat_ret_blocked,(struct pt_regs *) ctx,0);
 
             }
         }
     }
 
 	//int result = process_current_state(OPENAT_COUNT,OPENNAT_HOOK,pid);
-	inject_override(pid,OPENAT_RET,&openat_ret_blocked,(struct pt_regs *) ctx);
+	inject_override(pid,OPENAT_RET,&openat_ret_blocked,(struct pt_regs *) ctx,0);
 
 	
 
@@ -491,22 +499,55 @@ int BPF_KPROBE(__x64_sys_mkdir)
 
 	int result = process_current_state(DIRCREATED,MKDIR_HOOK,pid);
 
-	inject_override(pid,MKDIR,&mkdir_blocked,(struct pt_regs *) ctx);
+	inject_override(pid,MKDIR,&mkdir_blocked,(struct pt_regs *) ctx,0);
 
 	return 0;
 }
 
 SEC("ksyscall/newfstatat")
-int BPF_KPROBE(__x64_sys_newfstatat)
+int BPF_KPROBE(__x64_sys_newfstatat,struct pt_regs *regs)
 
 {	
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
+	int syscall_nr = process_current_state(NEWFSTATAT_COUNT,NEWFSTATAT_HOOK,pid);
 
-	int result = process_current_state(NEWFSTATAT_COUNT,NEWFSTATAT_HOOK,tid);
-	inject_override(pid,NEWFSTATAT,&newfstatat_blocked,(struct pt_regs *) ctx);
+	int fd = PT_REGS_PARM1_CORE(regs);
+
+	char *path = PT_REGS_PARM2_CORE(regs);
+
+	struct info_key information = {
+		pid,
+		NEW_FSTATAT_SPECIFIC
+	};
+
+	struct info_state *current_state;
+
+	current_state = bpf_map_lookup_elem(&relevant_state_info,&information);
+
+	if (current_state){
+		struct file_info_simple *file_stat = bpf_map_lookup_elem(&files,&pid);
+		if(file_stat){
+			if(string_contains(file_stat,path,sizeof(path))){
+				bpf_printk("%s %s are similar and syscall_nr is %d\n",&file_stat->filename,path,syscall_nr);
+                struct event *e;
+
+				/* reserve sample from BPF ringbuf */
+				e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+				if (!e)
+					return 0;
+                bpf_probe_read(e->filename, sizeof(e->filename), path);
+
+				e->type = NEW_FSTATAT_SPECIFIC;
+				e->syscall_nr = syscall_nr;
+				bpf_ringbuf_submit(e, 0);
+
+            }
+		}
+	}
+	inject_override(pid,NEWFSTATAT,&newfstatat_blocked,(struct pt_regs *) ctx,syscall_nr);
 
 
 	return 0;
@@ -522,7 +563,7 @@ int BPF_KRETPROBE(__x64_sys_newfstatat_ret)
 
 
 	//int result = process_current_state(NEWFSTATAT_COUNT,NEWFSTATAT_HOOK,tid);
-	inject_override(pid,NEWFSTATAT_RET,&newfstatat_ret_blocked,(struct pt_regs *) ctx);
+	inject_override(pid,NEWFSTATAT_RET,&newfstatat_ret_blocked,(struct pt_regs *) ctx,0);
 
 
 	return 0;

@@ -102,6 +102,7 @@ static inline int process_current_state(int state_key, int type, int pid){
 				
 		}
 	}
+	return 0;
 }
 
 SEC("tp/sched/sched_process_exec")
