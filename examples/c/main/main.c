@@ -368,7 +368,7 @@ void build_faults(){
 	int occurrences = 3;
 	int repeat = 0;
 	int return_value = -20;
-	build_fault(&faults[0],repeat,NEWFSTATAT,occurrences,network_directions,return_value,args,0,binary_location);
+	build_fault(&faults[0],repeat,NEWFSTATAT_RET,occurrences,network_directions,return_value,args,0,binary_location);
 
 	faults[0].initial->fault_type_conditions[CALLCOUNT] = 1;
 	faults[0].initial->fault_type_conditions[NEW_FSTATAT_SPECIFIC] = 1;

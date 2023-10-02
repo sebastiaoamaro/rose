@@ -131,6 +131,22 @@ static inline int process_current_state(int state_key, int type, int pid){
 	return 0;
 }
 
+static inline int get_syscallnr(int pid,int state_key){
+		struct info_key information = {
+		pid,
+		state_key
+	};
+
+	struct info_state *current_state;
+
+	current_state = bpf_map_lookup_elem(&relevant_state_info,&information);
+	if (current_state){
+		u64 value = current_state->current_value;
+		return value;
+	}
+	return 0;
+}
+
 static inline void inject_override(int pid,int fault,u64* counter, struct pt_regs* ctx,int syscall_nr){
 	struct fault_key fault_to_inject = {
 		pid,
@@ -331,9 +347,9 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
+	int result = process_current_state(READS,READ_HOOK,pid);
 	inject_override(pid,READ,&reads_blocked,(struct pt_regs *) ctx,0);
 
-	int result = process_current_state(READS,READ_HOOK,pid);
 
 	return 0;
 }
@@ -561,6 +577,7 @@ int BPF_KRETPROBE(__x64_sys_newfstatat_ret)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
+	int syscall_nr = get_syscallnr(pid,NEWFSTATAT_COUNT);
 
 	//int result = process_current_state(NEWFSTATAT_COUNT,NEWFSTATAT_HOOK,tid);
 	inject_override(pid,NEWFSTATAT_RET,&newfstatat_ret_blocked,(struct pt_regs *) ctx,0);
