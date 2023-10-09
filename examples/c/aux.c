@@ -62,13 +62,13 @@ struct aux_bpf* start_aux_maps(){
 		printf("[ERROR] libbpf pin API: %d\n", err);
 	}
 
-    err = bpf_map__unpin(skel->maps.faulttype, "/sys/fs/bpf/faulttype");
+    err = bpf_map__unpin(skel->maps.faults_specification, "/sys/fs/bpf/faults_specification");
 	if(err) {
 		printf("[ERROR] libbpf unpin API: %d\n", err);
 		//return NULL;
 	}
 	
-	err = bpf_map__pin(skel->maps.faulttype, "/sys/fs/bpf/faulttype");
+	err = bpf_map__pin(skel->maps.faults_specification, "/sys/fs/bpf/faults_specification");
 	if(err) {
 		printf("[ERROR] libbpf pin API: %d\n", err);
 		return NULL;
@@ -218,24 +218,24 @@ void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,i
 	fault->repeat = repeat;
 	fault->pid = 0;
 	fault->faulttype = faulttype;
-	fault->initial = (struct faultstate*)malloc(sizeof(struct faultstate));
-	fault->end = (struct faultstate*)malloc(sizeof(struct faultstate));
+	// fault->initial = (struct faultstate*)malloc(sizeof(struct faultstate));
+	// fault->end = (struct faultstate*)malloc(sizeof(struct faultstate));
 	fault->network_directions = network_directions;
 	fault->return_value = return_value;
 	fault->container_pid = container_pid;
 
-	fault->binary_location = binary_location;
+	strcpy(fault->binary_location,binary_location);
 
 	//fault->initial->fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
-	fault->initial->conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
+	//fault->initial->conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
 
 	fault->faulttype_count = (int*)malloc(FAULTSSUPPORTED*sizeof(int));
 
 	for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
-		fault->initial->conditions_match[i] = 0;
+		fault->initial.conditions_match[i] = 0;
 	}
 	for (int i=0; i < STATE_PROPERTIES_COUNT;i++){
-		fault->initial->fault_type_conditions[i] = 0;
+		fault->initial.fault_type_conditions[i] = 0;
 	}
 
 	for (int i=0; i < FAULTSSUPPORTED;i++){
@@ -252,8 +252,13 @@ void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,i
 	for(int i=0;i<MAX_FUNCTIONS;i++){
 		strcpy(fault->func_names[i],string);
 	}
-
-	fault->command = command;
+	fault->command = (char**)malloc(FUNCNAME_MAX*MAX_ARGS*sizeof(char));
+	memcpy(fault->command,command,sizeof(command)*MAX_ARGS);
+	// for(int i = 0;i<MAX_ARGS;i++){
+	// 	if(!command[i])
+	// 		break;
+	// 	strcpy(fault->command[i],command[i]);
+	// }
 
 }
 

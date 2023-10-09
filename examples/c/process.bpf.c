@@ -49,7 +49,7 @@ const volatile unsigned long long min_duration_ns = 0;
 const volatile int fault_count = 0;
 
 
-static inline int process_current_state(int state_key, int type, int pid){
+static inline int process_current_state(int state_key, int pid){
 
 	struct info_key information = {
 		pid,
@@ -75,7 +75,7 @@ static inline int process_current_state(int state_key, int type, int pid){
 						if (!e)
 							return 0;
 
-						e->type = type;
+						e->type = state_key;
 						e->pid = pid;
 						e->state_condition = value;
 						bpf_ringbuf_submit(e, 0);
@@ -89,7 +89,7 @@ static inline int process_current_state(int state_key, int type, int pid){
 						if (!e)
 							return 0;
 
-						e->type = type;
+						e->type = state_key;
 						e->pid = pid;
 						e->state_condition = relevant_value;
 						bpf_ringbuf_submit(e, 0);
@@ -118,7 +118,7 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int result = process_current_state(PROCESSES_OPENED,EXEC,pid);
+	int result = process_current_state(PROCESSES_OPENED,pid);
 	
 	return 0;
 }
@@ -134,7 +134,7 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int result = process_current_state(PROCESSES_CLOSED,EXIT,pid);
+	int result = process_current_state(PROCESSES_CLOSED,pid);
 
 
 	return 0;

@@ -12,7 +12,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__uint(max_entries, 128);
 	__type(key, int);
-	__type(value, struct fault);
+	__type(value, struct simplified_fault);
 } faults SEC(".maps");
 
 //ARRAYS ARE NECESSARY AS VALUES BECAUSE DIFFERENT FAULT MIGHT HAVE THE SAME STATE PROPERTY
@@ -28,7 +28,7 @@ struct {
 	__uint(max_entries, 8192);
 	__type(key,struct fault_key);
 	__type(value, struct fault_description);
-} faulttype SEC(".maps");
+} faults_specification SEC(".maps");
 
 //Key is network device index, value is array of IPS to block incoming (for now)
 struct {

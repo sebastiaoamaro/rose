@@ -12,18 +12,23 @@
 #define FILENAME_MAX 64
 #define FAULTSSUPPORTED 22
 #define MAX_RELEVANT_FILES 256
+#define MAX_ARGS 16
+struct faultstate{
+    int fault_type_conditions[STATE_PROPERTIES_COUNT];
+    int conditions_match[STATE_PROPERTIES_COUNT];
+};
 
 struct fault {
     __u64 faulttype;
-    //I do not remember what this was for
+    //For occurrences of multiple faults, outdated not used
     int *faulttype_count;
     __be32 ips_blocked[MAX_IPS_BLOCKED];
     char *veth;
     char file_open[FILENAME_MAX];
     char func_names[MAX_FUNCTIONS][FUNCNAME_MAX];
     int done;
-    struct faultstate *initial;
-    struct faultstate *end;
+    struct faultstate initial;
+    struct faultstate end;
     int pid;
     int repeat;
     int occurrences;
@@ -31,7 +36,19 @@ struct fault {
     int return_value;
     int container_pid;
     char **command;
-    char *binary_location;
+    char binary_location[FUNCNAME_MAX];
+    int faults_injected_counter;
+};
+
+struct simplified_fault{
+    int faulttype;
+    int done;
+    struct faultstate initial;
+    struct faultstate end;
+    int pid;
+    int repeat;
+    int occurrences;
+    int return_value;
     int faults_injected_counter;
 };
 
@@ -59,12 +76,8 @@ struct info_state{
     int repeat;
 };
 
-struct faultstate{
-    int fault_type_conditions[STATE_PROPERTIES_COUNT];
-    int *conditions_match;
-};
 
-struct relevant_fds{
+struct  relevant_fds{
     __u64 fds[MAX_RELEVANT_FILES];
     int size;
 };
@@ -118,22 +131,6 @@ enum stateinfo{
     NEW_FSTATAT_SPECIFIC = 19
 };
 
-//TODO:To process different types of events in userspace, THIS CAN BE REFACTORED TO JUST BE THE SAME AS STATE_INFO
-enum eventype{
-    EXEC = 0,
-    EXIT = 7,
-    WRITE_HOOK = 1,
-    READ_HOOK = 4,
-    TC = 2,
-    FSYS = 3,
-    THREAD = 5,
-    NEWFSTATAT_HOOK = 6,
-    MKDIR_HOOK = 7,
-    OPEN_HOOK = 8,
-    OPENNAT_HOOK = 9,
-    FUNCTIONS = 10,
-    VFS_FSTATAT_HOOK = 11
-};
 
 enum generic{
     ANY_PID = 411
@@ -154,6 +151,7 @@ struct event {
 	__be32 src_addr;
 	__be32 dst_addr;
 };
+
 
 struct aux_bpf* start_aux_maps();
 int get_interface_index(char*);
