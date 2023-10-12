@@ -3,16 +3,18 @@
 
 #define MAX_ENTRIES 10240
 #define PATH_MAX	4096
-#define STATE_PROPERTIES_COUNT 20
+#define STATE_PROPERTIES_COUNT 21
 #define MAX_IPS_BLOCKED 16
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
 #define FUNCNAME_MAX 128
 #define MAX_FUNCTIONS 8
 #define FILENAME_MAX 64
-#define FAULTSSUPPORTED 22
+#define FAULTSSUPPORTED 21
 #define MAX_RELEVANT_FILES 256
 #define MAX_ARGS 16
+#define MAX_FAULTS 32
+
 struct faultstate{
     int fault_type_conditions[STATE_PROPERTIES_COUNT];
     int conditions_match[STATE_PROPERTIES_COUNT];
@@ -21,7 +23,7 @@ struct faultstate{
 struct fault {
     __u64 faulttype;
     //For occurrences of multiple faults, outdated not used
-    int *faulttype_count;
+    //int *faulttype_count;
     __be32 ips_blocked[MAX_IPS_BLOCKED];
     char *veth;
     char file_open[FILENAME_MAX];
@@ -38,6 +40,7 @@ struct fault {
     char **command;
     char binary_location[FUNCNAME_MAX];
     int faults_injected_counter;
+    int relevant_conditions;
 };
 
 struct simplified_fault{
@@ -50,6 +53,7 @@ struct simplified_fault{
     int occurrences;
     int return_value;
     int faults_injected_counter;
+    int relevant_conditions;
 };
 
 struct fault_key{
@@ -71,8 +75,8 @@ struct info_key{
 };
 
 struct info_state{
-    __u64 relevant_states[256];
-    __u64 current_value;
+    int relevant_states[256];
+    int current_value;
     int repeat;
 };
 
@@ -128,7 +132,8 @@ enum stateinfo{
     OPENNAT_COUNT = 16,
     VFS_FSTATAT_COUNT = 17,
     VFS_FSTATAT_SPECIFIC = 18,
-    NEW_FSTATAT_SPECIFIC = 19
+    NEW_FSTATAT_SPECIFIC = 19,
+    OPENAT_SPECIFIC = 20,
 };
 
 

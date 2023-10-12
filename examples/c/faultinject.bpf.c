@@ -53,7 +53,7 @@ struct {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__uint(max_entries, 128);
+	__uint(max_entries, MAX_FAULTS);
 	__type(key, int);
 	__type(value, struct simplified_fault);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -87,6 +87,7 @@ static u64 newfstatat_blocked = 0;
 static u64 newfstatat_ret_blocked = 0;
 static u64 openat_ret_blocked = 0;
 static u64 openat_blocked = 0;
+
 
 SEC("ksyscall/clone")
 int BPF_KSYSCALL(clone,int flags)
@@ -300,15 +301,37 @@ int BPF_KPROBE(__x64_sys_open)
 }
 
 SEC("ksyscall/openat")
-int BPF_KPROBE(__x64_sys_openat)
+int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 {	
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int result = process_current_state(OPENS,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
+	int syscall_nr = process_current_state(OPENNAT_COUNT,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
 
-	inject_override(pid,OPENAT,&openat_blocked,(struct pt_regs *) ctx,0,&faults_specification);
+	int fd = PT_REGS_PARM1_CORE(regs);
+
+	char *path = PT_REGS_PARM2_CORE(regs);
+
+	struct info_key information = {
+		pid,
+		OPENAT_SPECIFIC
+	};
+
+	struct info_state *current_state;
+
+	current_state = bpf_map_lookup_elem(&relevant_state_info,&information);
+	
+	if (current_state){
+		struct file_info_simple *file_stat = bpf_map_lookup_elem(&files,&pid);
+		if(file_stat){
+			if(string_contains(file_stat,path,sizeof(path))){
+				//bpf_printk("In open %s %s are similar and syscall_nr is %d\n",&file_stat->filename,path,syscall_nr);
+				process_current_state(OPENAT_SPECIFIC,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
+            }
+		}
+	}
+	inject_override(pid,OPENAT,&openat_blocked,(struct pt_regs *) ctx,syscall_nr,&faults_specification);
 
 	return 0;
 }
@@ -442,23 +465,12 @@ int BPF_KPROBE(__x64_sys_newfstatat,struct pt_regs *regs)
 	struct info_state *current_state;
 
 	current_state = bpf_map_lookup_elem(&relevant_state_info,&information);
-
+	
 	if (current_state){
 		struct file_info_simple *file_stat = bpf_map_lookup_elem(&files,&pid);
 		if(file_stat){
 			if(string_contains(file_stat,path,sizeof(path))){
-				bpf_printk("%s %s are similar and syscall_nr is %d\n",&file_stat->filename,path,syscall_nr);
-                // struct event *e;
-
-				// /* reserve sample from BPF ringbuf */
-				// e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-				// if (!e)
-				// 	return 0;
-                // bpf_probe_read(e->filename, sizeof(e->filename), path);
-
-				// e->type = NEW_FSTATAT_SPECIFIC;
-				// e->syscall_nr = syscall_nr;
-				// bpf_ringbuf_submit(e, 0);
+				//bpf_printk("%s %s are similar and syscall_nr is %d\n",&file_stat->filename,path,syscall_nr);
 				process_current_state(NEW_FSTATAT_SPECIFIC,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
             }
 		}

@@ -223,13 +223,14 @@ void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,i
 	fault->network_directions = network_directions;
 	fault->return_value = return_value;
 	fault->container_pid = container_pid;
+	fault->relevant_conditions = 0;
 
 	strcpy(fault->binary_location,binary_location);
 
 	//fault->initial->fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
 	//fault->initial->conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
 
-	fault->faulttype_count = (int*)malloc(FAULTSSUPPORTED*sizeof(int));
+	//fault->faulttype_count = (int*)malloc(FAULTSSUPPORTED*sizeof(int));
 
 	for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
 		fault->initial.conditions_match[i] = 0;
@@ -239,11 +240,11 @@ void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,i
 	}
 
 	for (int i=0; i < FAULTSSUPPORTED;i++){
-		fault->faulttype_count[i] = 0;
+		//fault->faulttype_count[i] = 0;
 	}
 
 	if(faulttype != TEMP_EMPTY){
-		fault->faulttype_count[faulttype] = occurrences;
+		//fault->faulttype_count[faulttype] = occurrences;
 		fault->occurrences = occurrences;
 	}
 	

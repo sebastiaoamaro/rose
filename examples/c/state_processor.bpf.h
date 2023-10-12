@@ -54,7 +54,6 @@ static inline int process_current_state(int state_key, int pid,int fault_count,s
 					}
 					//bpf_printk("Skipped \n");
 					}
-					return value;
 				}
 				
 		}
@@ -79,15 +78,13 @@ static inline  __u64 process(struct bpf_map *map, int *pos,struct simplified_fau
     int fault_count = data->fault_count;
 	if(*pos>=fault_count)
 		return 1;
-	bpf_printk("Looking at fault %d \n",*pos);
-
 	struct bpf_map *faults_specification = data->faults_specification;
 	int state_condition = data->state_condition;
 	int pid = data->pid;
 	int state_condition_value = data->state_condition_value;
 	int conditions[STATE_PROPERTIES_COUNT];
         
-	int relevant_conditions = 0;
+	int relevant_conditions = fault->relevant_conditions;
 	int run = 0;
 	if (fault){
 		if (fault->initial.fault_type_conditions){
@@ -96,28 +93,25 @@ static inline  __u64 process(struct bpf_map *map, int *pos,struct simplified_fau
                 return 1;
 			if (conditions[state_condition]){
 				int condition_value = conditions[state_condition];
-				bpf_printk("State condition value is %d condition value is %d PIDS:%d %d \n",state_condition_value,condition_value,pid,fault->pid);
 				if(state_condition_value > 0){
 					if (state_condition_value == condition_value && pid == fault->pid){
                         if ((state_condition > STATE_PROPERTIES_COUNT) || (state_condition < 0))
                             return 1;
-                        fault->initial.conditions_match[state_condition] = 1;
-						bpf_printk("Changed state_condition to true \n",state_condition);
+					 	__sync_fetch_and_add(&(fault->initial.conditions_match[state_condition]),1);
+						bpf_printk("Changing to true property for fault %d in state key %d \n",*pos,state_condition);
+                        //fault->initial.conditions_match[state_condition] = 1;
 					}
 				}
 			}
 		}
-		#pragma unroll
 		for(int i = 0;i <STATE_PROPERTIES_COUNT;i++ ){
 			if (fault->initial.fault_type_conditions[i]){
-				relevant_conditions+=1;
 				if (fault->initial.conditions_match[i]){
 					run+=1;
 				}
 			}
 		}
 
-		bpf_printk("Run and relevant_conditions are %d %d \n",run,relevant_conditions);
 		if (run == relevant_conditions){
 			if (!fault->done){
 				if (fault->faulttype == NETWORK_ISOLATION ||fault->faulttype == DROP_PACKETS ||fault->faulttype == BLOCK_IPS)
@@ -166,9 +160,9 @@ static inline void inject_fault(int fault_type,int pid,int syscall_nr,struct sim
 			fault->faults_injected_counter++;
 			if (fault->repeat){
 				fault->done = 0;
-				for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
-					fault->initial.conditions_match[i] = 0;
-				}
+			}
+			for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
+				fault->initial.conditions_match[i] = 0;
 			}
 
 
@@ -207,3 +201,4 @@ static inline void inject_override(int pid,int fault,u64* counter, struct pt_reg
 			}
 	}
 }
+
