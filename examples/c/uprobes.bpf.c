@@ -71,6 +71,7 @@ struct {
 
 __u32 hist[MAX_SLOTS] = {};
 const volatile int fault_count = 0;
+const volatile int time_only = 0;
 
 // static inline int process_current_state(int state_key, int pid){
 
@@ -137,7 +138,7 @@ static void entry(struct pt_regs *ctx)
 	u32 tgid = id >> 32;
 	u32 pid = id;
 
-	int result = process_current_state(CALLCOUNT,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
+	int result = process_current_state(CALLCOUNT,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults);
 
 }
 

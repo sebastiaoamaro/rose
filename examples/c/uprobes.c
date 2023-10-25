@@ -189,7 +189,7 @@ out_binary:
 	return ret;
 }
 
-struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faultcount)
+struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faultcount,int timemode)
 {
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
 
@@ -218,6 +218,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 		return NULL;
 	}
 	obj->rodata->fault_count = faultcount;
+	obj->rodata->time_only = timemode;
 	obj->rodata->units = MSEC;
 	obj->rodata->targ_tgid = pid;
 	obj->rodata->filter_cg = 0;

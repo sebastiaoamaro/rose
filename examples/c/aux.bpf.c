@@ -15,6 +15,15 @@ struct {
 	__type(value, struct simplified_fault);
 } faults SEC(".maps");
 
+
+//Struct to hold faults
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(max_entries, 1);
+	__type(key, int);
+	__type(value, int);
+} time SEC(".maps");
+
 //ARRAYS ARE NECESSARY AS VALUES BECAUSE DIFFERENT FAULT MIGHT HAVE THE SAME STATE PROPERTY
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);

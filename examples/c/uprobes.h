@@ -10,4 +10,4 @@ enum units {
 	MSEC,
 };
 
-struct uprobes_bpf* uprobe(int pid,char* funcname,char* binary_location, int faultcount);
+struct uprobes_bpf* uprobe(int pid,char* funcname,char* binary_location, int faultcount,int time_mode);

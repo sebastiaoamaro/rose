@@ -54,6 +54,7 @@ static const struct argp_option opts[] = {
 	{ "tracing only",'t',0,0,"With this flag no fault will be processed"},
 	{ "maintain pid",'m',0,0,"With this flag the PID for fault 0 is used for all the other faults (no input file only flag)"},
 	{ "verbose",'v',0,0,"With this flag extra information is shown in stdout"},
+	{ "time",'T',0,0,"With this flag the tool will always check time"},
 	{ NULL, 'h', NULL, OPTION_HIDDEN, "Show the full help" },
 	{},
 };
@@ -74,6 +75,9 @@ static struct constants {
 	int faultsverbose;
 	int target_pid;
 	int maintainpid;
+	int time;
+	int time_map_fd;
+	int timemode;
 
 } constants;
 
@@ -113,6 +117,10 @@ static void sig_handler(int sig)
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
 	switch (key) {
+		case 'T':
+			printf("Changing time mode to 1 \n");
+			constants.timemode =1;
+			break;
 		case 'f':
 			FAULT_COUNT = strtol(arg,NULL,10);
 			faults = (struct fault*)malloc(FAULT_COUNT*sizeof(struct fault));
@@ -229,12 +237,15 @@ void build_faults(){
 	int occurrences = 1;
 	int repeat = 0;
 	int return_value = -20;
-	build_fault(&faults[0],repeat,NEWFSTATAT,occurrences,network_directions,return_value,args,0,binary_location);
+	build_fault(&faults[0],repeat,TEMP_EMPTY,occurrences,network_directions,return_value,args,0,binary_location);
 
-	faults[0].initial.fault_type_conditions[CALLCOUNT] = 1;
+	//faults[0].initial.fault_type_conditions[CALLCOUNT] = 1;
 	//faults[0].initial.fault_type_conditions[NEWFSTATAT_COUNT] = 1;
-	faults[0].initial.fault_type_conditions[NEW_FSTATAT_SPECIFIC] = 1;
+	//faults[0].initial.fault_type_conditions[NEW_FSTATAT_SPECIFIC] = 1;
+	faults[0].initial.fault_type_conditions[TIME_FAULT] = 5;
 	
+	
+
 	char file_name[FILENAME_MAX] = "/root/.tendermint/data";
 
 	strcpy(faults[0].file_open,file_name);
@@ -245,14 +256,14 @@ void build_faults(){
 
 	//FAULT 1
 
-	char *binary_location2 = "";
-	char *args2[] = {""};
+	// char *binary_location2 = "";
+	// char *args2[] = {""};
 
-	build_fault(&faults[1],1,OPENAT,1,2,-2,args2,0,binary_location2);
+	// build_fault(&faults[1],1,OPENAT,1,2,-2,args2,0,binary_location2);
 	
-	strcpy(faults[1].file_open,file_name);
-	faults[1].initial.fault_type_conditions[CALLCOUNT] = 3;
-	faults[1].initial.fault_type_conditions[OPENAT_SPECIFIC] = 1;
+	// strcpy(faults[1].file_open,file_name);
+	// faults[1].initial.fault_type_conditions[CALLCOUNT] = 3;
+	// faults[1].initial.fault_type_conditions[OPENAT_SPECIFIC] = 1;
 
 
 	//GET PIDS AND NETDEVICES from a file
@@ -332,6 +343,8 @@ void get_fd_of_maps (struct aux_bpf *bpf){
 	constants.files = bpf_map__fd(bpf->maps.files);
 	constants.relevant_fd = bpf_map__fd(bpf->maps.relevant_fd);
 	constants.bpf_map_fault_fd = bpf_map__fd(bpf->maps.faults);
+	constants.time_map_fd = bpf_map__fd(bpf->maps.time);
+
 };
 
 //Add state info to relevant_state_info_map
@@ -591,6 +604,39 @@ void resume_processes(){
 	}
 }
 
+void count_time(){
+
+	while(1){
+		usleep(50000);
+		constants.time += 50;
+		//int error = bpf_map_update_elem(constants.time_map_fd,&pos,&constants.time,BPF_ANY);
+		// if (error){
+		// 	printf("Error of update in count_time is %d\n",error);	
+		// }
+		printf("New time is %d \n",(constants.time/1000));
+
+		for (int i = 0; i< FAULT_COUNT;i++){
+			int fault_time = faults[i].initial.fault_type_conditions[TIME_FAULT];
+			int time_sec = (constants.time/1000);
+			if (fault_time == time_sec){
+				struct simplified_fault fault;
+
+				int err_lookup;
+				err_lookup = bpf_map_lookup_elem(constants.bpf_map_fault_fd, &i,&fault);
+				if (err_lookup){
+					printf("Did not find elem in count_time errno is %d \n",errno);
+				}
+
+				fault.initial.conditions_match[TIME_FAULT] = 1;
+				printf("Changing Time to true \n");
+				int error = bpf_map_update_elem(constants.bpf_map_fault_fd,&i,&fault,BPF_ANY);
+				if(error)
+					printf("Error of update in adding fault to bpf is %d \n",error);
+			}
+		}
+	}
+}
+
 int main(int argc, char **argv)
 {
 
@@ -719,7 +765,7 @@ int main(int argc, char **argv)
 			if (constants.faultsverbose)
 				printf("Fault is %d funcame is %s, pid is %d \n",i,faults[i].func_names[j],faults[i].pid);
 
-			uprobes[i][j] = uprobe(faults[i].pid,faults[i].func_names[j],faults[i].binary_location,FAULT_COUNT);			
+			uprobes[i][j] = uprobe(faults[i].pid,faults[i].func_names[j],faults[i].binary_location,FAULT_COUNT,constants.timemode);			
 		}
 
 
@@ -734,7 +780,7 @@ int main(int argc, char **argv)
 	if(!constants.uprobemode){
 		fs_bpf = monitor_fs();
 		process_bpf = exec_and_exit(FAULT_COUNT);
-		faultinject_bpf = fault_inject(FAULT_COUNT);
+		faultinject_bpf = fault_inject(FAULT_COUNT,constants.timemode);
 		block_bpf = monitor_disk();
 
 		printf("Created all structs \n");
@@ -762,9 +808,13 @@ int main(int argc, char **argv)
 	
 	int err;
 	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
-
+	
+	constants.time=0;
+	pthread_t thread_id;
+	pthread_create(&thread_id, NULL, count_time, NULL);
 	if(constants.target_pid)
 		resume_processes();
+
 	while (!exiting) {
 		err = ring_buffer__poll(rb, -1 /* timeout, ms */);
 		/* Ctrl-C will cause -EINTR */

@@ -26,7 +26,7 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 //////////////////////////////////STATE_PROCESSING/////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
-static inline int process_current_state(int state_key, int pid,int fault_count,struct bpf_map *relevant_state_info,struct bpf_map *faults_specification,struct bpf_map *faults){
+static inline int process_current_state(int state_key, int pid,int fault_count,int time_mode,struct bpf_map *relevant_state_info,struct bpf_map *faults_specification,struct bpf_map *faults){
 
 	struct info_key information = {
 		pid,
@@ -35,7 +35,6 @@ static inline int process_current_state(int state_key, int pid,int fault_count,s
 	struct info_state *current_state;
 
 	current_state = bpf_map_lookup_elem(relevant_state_info,&information);
-	
 	if (current_state){
 		current_state->current_value++;
 		int value = current_state->current_value;
@@ -58,7 +57,9 @@ static inline int process_current_state(int state_key, int pid,int fault_count,s
 				
 		}
 	}else{
-		//bpf_printk("No relevant_state pid %d and state_key %d\n",pid,state_key);
+		if(time_mode){
+			process_counter(0,0,pid,fault_count,faults_specification,faults);
+		}
 	}
 	return 0;
 }

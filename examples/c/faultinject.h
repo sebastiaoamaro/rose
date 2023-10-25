@@ -9,6 +9,6 @@ struct event_faultinject {
 	int injected;
 };
 
-struct faultinject_bpf* fault_inject(int faults);
+struct faultinject_bpf* fault_inject(int faults,int timemode);
 
 #endif /* __FAULTINJECT_H */

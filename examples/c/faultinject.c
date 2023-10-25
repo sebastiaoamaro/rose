@@ -30,7 +30,7 @@ static int get_int(const char *arg, int *ret, int min, int max)
 
 
 
-struct faultinject_bpf* fault_inject(int faults)
+struct faultinject_bpf* fault_inject(int faults,int timemode)
 {
 	struct faultinject_bpf *skel;
 	int err;
@@ -47,6 +47,7 @@ struct faultinject_bpf* fault_inject(int faults)
 	// skel->rodata->probability = env.probability;
 	// skel->rodata->syscall_idx = env.syscall_idx;
 	skel->rodata->fault_count = faults;
+	skel->rodata->time_only = timemode;
 	/* Load & verify BPF programs */
 	err = faultinject_bpf__load(skel);
 	if (err) {

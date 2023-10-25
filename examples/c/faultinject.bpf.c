@@ -68,6 +68,15 @@ struct {
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } active_write_fd SEC(".maps");
 
+//Struct to hold time
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(max_entries, 1);
+	__type(key, int);
+	__type(value, int);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} time SEC(".maps");
+
 // struct callback_ctx {
 // 	int state_condition;
 // 	int state_condition_value;
@@ -75,6 +84,8 @@ struct {
 // };
 
 const volatile int fault_count = 0;
+
+const volatile int time_only = 0;
 
 static u64 writes_blocked = 0;
 static u64 reads_blocked = 0;
@@ -104,7 +115,7 @@ int BPF_KSYSCALL(clone,int flags)
 		return 0;
 	}
 
-	int result = process_current_state(THREADS_CREATED,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
+	int result = process_current_state(THREADS_CREATED,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults);
 	inject_override(pid,CLONE,&threads_blocked,(struct pt_regs *) ctx,0,&faults_specification);
 
 
@@ -134,7 +145,7 @@ int BPF_KSYSCALL(clone3,struct clone_args *cl_args)
 	inject_override(pid,CLONE,&threads_blocked,(struct pt_regs *) ctx,0,&faults_specification);
 
 
-	int result = process_current_state(THREADS_CREATED,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
+	int result = process_current_state(THREADS_CREATED,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults);
 
 	return 0;
 }
@@ -220,7 +231,7 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
             }
         }
     }
-	int result = process_current_state(WRITES,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
+	int result = process_current_state(WRITES,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults);
 	inject_override(pid,WRITE,&writes_blocked,(struct pt_regs *) ctx,0,&faults_specification);
 	
 
@@ -248,7 +259,7 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int result = process_current_state(READS,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
+	int result = process_current_state(READS,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults);
 
 	inject_override(pid,READ,&reads_blocked,(struct pt_regs *) ctx,0,&faults_specification);
 
@@ -293,7 +304,7 @@ int BPF_KPROBE(__x64_sys_open)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int result = process_current_state(OPENS,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
+	int result = process_current_state(OPENS,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults);
 
 	inject_override(pid,OPEN,&opens_blocked,(struct pt_regs *) ctx,0,&faults_specification);
 
@@ -307,7 +318,7 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int syscall_nr = process_current_state(OPENNAT_COUNT,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
+	int syscall_nr = process_current_state(OPENNAT_COUNT,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults);
 
 	int fd = PT_REGS_PARM1_CORE(regs);
 
@@ -327,7 +338,7 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 		if(file_stat){
 			if(string_contains(file_stat,path,sizeof(path))){
 				//bpf_printk("In open %s %s are similar and syscall_nr is %d\n",&file_stat->filename,path,syscall_nr);
-				process_current_state(OPENAT_SPECIFIC,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
+				process_current_state(OPENAT_SPECIFIC,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults);
             }
 		}
 	}
@@ -436,7 +447,7 @@ int BPF_KPROBE(__x64_sys_mkdir)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int result = process_current_state(DIRCREATED,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
+	int result = process_current_state(DIRCREATED,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults);
 
 	inject_override(pid,MKDIR,&mkdir_blocked,(struct pt_regs *) ctx,0,&faults_specification);
 
@@ -451,7 +462,7 @@ int BPF_KPROBE(__x64_sys_newfstatat,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int syscall_nr = process_current_state(NEWFSTATAT_COUNT,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
+	int syscall_nr = process_current_state(NEWFSTATAT_COUNT,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults);
 
 	int fd = PT_REGS_PARM1_CORE(regs);
 
@@ -471,7 +482,7 @@ int BPF_KPROBE(__x64_sys_newfstatat,struct pt_regs *regs)
 		if(file_stat){
 			if(string_contains(file_stat,path,sizeof(path))){
 				//bpf_printk("%s %s are similar and syscall_nr is %d\n",&file_stat->filename,path,syscall_nr);
-				process_current_state(NEW_FSTATAT_SPECIFIC,pid,fault_count,&relevant_state_info,&faults_specification,&faults);
+				process_current_state(NEW_FSTATAT_SPECIFIC,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults);
             }
 		}
 	}
