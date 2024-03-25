@@ -9,15 +9,15 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 8192);
-	__type(key, int);
+	__uint(max_entries, MAP_SIZE);
+	__type(key, struct info_key);
 	__type(value, struct file_info_simple);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } files SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 8192);
+	__uint(max_entries, MAP_SIZE);
 	__type(key, struct info_key);
 	__type(value, struct info_state);
 	 __uint(pinning, LIBBPF_PIN_BY_NAME);

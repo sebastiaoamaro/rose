@@ -27,7 +27,7 @@ char __license[] SEC("license") = "GPL";
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 8192);
+	__uint(max_entries, MAP_SIZE);
 	__type(key, struct info_key);
 	__type(value, struct info_state);
 	 __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -35,11 +35,11 @@ struct {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 8192);
+	__uint(max_entries, MAP_SIZE);
 	__type(key, struct fault_key);
 	__type(value, struct fault_description);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
-} faulttype SEC(".maps");
+} faults_specification SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -49,14 +49,14 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, MAX_ENTRIES);
+    __uint(max_entries, MAP_SIZE);
     __type(key, struct pair);
     __type(value, __u32);
 } network SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 8192);
+	__uint(max_entries, MAP_SIZE);
 	__type(key, __u32);
 	__type(value, __be32[MAX_IPS_BLOCKED]);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -89,7 +89,8 @@ int monitor(struct __sk_buff *ctx)
 
 	struct fault_description *description_of_fault_netiso;
 
-	description_of_fault_netiso = bpf_map_lookup_elem(&faulttype,&fault_to_inject_networkiso);
+	description_of_fault_netiso = bpf_map_lookup_elem(&faults_specification,&fault_to_inject_networkiso);
+
 
 	if (description_of_fault_netiso){
 		if (description_of_fault_netiso->on){
@@ -105,7 +106,7 @@ int monitor(struct __sk_buff *ctx)
 
 	struct fault_description *description_of_fault_drop;
 
-	description_of_fault_drop = bpf_map_lookup_elem(&faulttype,&fault_to_inject_droppacket);
+	description_of_fault_drop = bpf_map_lookup_elem(&faults_specification,&fault_to_inject_droppacket);
 	
 
 	if (description_of_fault_drop){
@@ -172,25 +173,26 @@ int monitor(struct __sk_buff *ctx)
 	//check if we are at the state to block ips
 	struct fault_description *description_of_fault_block;
 
-	description_of_fault_block = bpf_map_lookup_elem(&faulttype,&fault_to_inject_blockips);
+	description_of_fault_block = bpf_map_lookup_elem(&faults_specification,&fault_to_inject_blockips);
 
 	if (description_of_fault_block){
 		//bpf_printk("Time to block_ips \n");
 		if (description_of_fault_block->on){
 			ips = bpf_map_lookup_elem(&blocked_ips,&if_index);
 			if(ips){
-				//bpf_printk("Have list of ips \n");
 				for(int i=0;i<MAX_IPS_BLOCKED;i++){
 					if (ips[i]){
-						if (network_direction == 1){
+						if (network_direction == 2){
 							if(ips[i] == pair.src_addr){
-								//bpf_printk("Blocked packet \n");
+								bpf_printk("e->src_addr is %d and e->dst_addr is %d ip is %d and network dir is %d \n",pair.src_addr,pair.dst_addr,ips[i],network_direction);
+								bpf_printk("Blocked packet \n");
 								return TC_ACT_SHOT;
 							}
 						}
-						if (network_direction == 2){
+						if (network_direction == 1){
 							if(ips[i] == pair.dst_addr){
-								//bpf_printk("Blocked packet \n");
+								bpf_printk("e->src_addr is %d and e->dst_addr is %d ip is %d and network dir is %d \n",pair.src_addr,pair.dst_addr,ips[i],network_direction);
+								bpf_printk("Blocked packet \n");
 								return TC_ACT_SHOT;
 							}
 						}

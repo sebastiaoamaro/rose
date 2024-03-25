@@ -6,6 +6,7 @@
 #include <time.h>
 #include <sys/resource.h>
 #include <bpf/libbpf.h>
+#include "aux.h"
 #include "faultinject.h"
 #include "faultinject.skel.h"
 

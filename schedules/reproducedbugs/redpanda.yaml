@@ -1,0 +1,11 @@
+nodes:
+  redpanda1:
+    pid: 2007175
+faults:
+  process_pause:
+    type: process_pause
+    target: redpanda1
+    duration: 5
+    begin_conditions:
+      time: 5
+      trigger_statement: 1

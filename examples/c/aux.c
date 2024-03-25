@@ -7,7 +7,6 @@
 #include <bpf/libbpf.h>
 #include "aux.skel.h"
 #include <pthread.h>
-#include "aux.h"
 #include <errno.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -18,6 +17,8 @@
 #include <linux/in.h>
 #include <net/if.h>
 #include <ifaddrs.h>
+#include "faultschedule.h"
+#include "aux.h"
 
 static struct env {
 	bool verbose;
@@ -202,7 +203,7 @@ int get_interface_index(char* if_name){
 }
 
 int get_interface_names(char** device_names,int device_count){
-		//Add to all networkdevices
+	//Add to all networkdevices
 	struct ifaddrs *ifaddr;
 
 	int count_devices = 0;
@@ -225,7 +226,7 @@ int get_interface_names(char** device_names,int device_count){
 	return count_devices;
 }
 
-void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,int network_directions,int return_value,char **command,int container_pid,char *binary_location){
+void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,int duration, int network_directions,int return_value,char **command,int container_pid,char *binary_location){
 	fault->done = 0;
 	fault->repeat = repeat;
 	fault->pid = 0;
@@ -236,9 +237,10 @@ void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,i
 	fault->return_value = return_value;
 	fault->container_pid = container_pid;
 	fault->relevant_conditions = 0;
+	fault->duration = duration;
 
-	strcpy(fault->binary_location,binary_location);
-
+	if(binary_location)
+		strcpy(fault->binary_location,binary_location);
 	//fault->initial->fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
 	//fault->initial->conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
 
@@ -265,8 +267,11 @@ void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,i
 	for(int i=0;i<MAX_FUNCTIONS;i++){
 		strcpy(fault->func_names[i],string);
 	}
-	fault->command = (char**)malloc(FUNCNAME_MAX*MAX_ARGS*sizeof(char));
-	memcpy(fault->command,command,sizeof(command)*MAX_ARGS);
+
+	if(command){
+		fault->command = (char**)malloc(FUNCNAME_MAX*MAX_ARGS*sizeof(char));
+		memcpy(fault->command,command,sizeof(command)*MAX_ARGS);
+	}
 	// for(int i = 0;i<MAX_ARGS;i++){
 	// 	if(!command[i])
 	// 		break;
@@ -275,14 +280,6 @@ void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,i
 
 }
 
-void add_ip_to_block(struct fault* fault,char *string_ip,int pos){
-
-		struct sockaddr_in sa;
-
-		inet_pton(AF_INET,string_ip,&(sa.sin_addr));
-
-		fault->ips_blocked[pos] = sa.sin_addr.s_addr;
-}
 
 void set_if_name(struct fault* fault, char*if_name){
 		fault->veth = (char*)malloc(sizeof(char)*sizeof(if_name));
@@ -343,4 +340,88 @@ int translate_pid(int pid){
 
 
 	return pid;
+}
+
+void pause_process(void* args){
+
+	int pid = *((struct process_pause_args*)args)->pid;
+	int duration = *((struct process_pause_args*)args)->duration;
+	send_signal(pid,SIGSTOP);
+	printf("Sleeping for %d \n",duration);
+	sleep(duration);
+	send_signal(pid,SIGCONT);
+}
+int send_signal(int pid, int signal){
+	printf("Sending %d to %d \n",signal,pid);
+	kill(pid,signal);
+}
+
+
+void print_fault_schedule(node* nodes, fault * faults){
+
+	for(int i = 0;i<get_node_count();i++){
+		printf("Node name:%s | pid:%d | veth:%s | script:%s \n", nodes[i].name,nodes[i].pid,nodes[i].veth,nodes[i].script);
+	}
+
+	for(int i=0;i<get_fault_count();i++){
+		printf("Fault name:%s | type:%d | target:%d \n",faults[i].name,faults[i].faulttype,faults[i].target);
+
+		switch(faults[i].faulttype){
+			case WRITE: case READ: case CLONE:
+				break;
+			case NETWORK_ISOLATION:
+				break;
+			case BLOCK_IPS:
+				block_ips block_ips = faults[i].fault_details.block_ips;
+				printf("block_ips count is %d \n",block_ips.count);
+				for(int i = 0; i < block_ips.count; i++){
+					if (block_ips.ips_blocked[i])
+						printf("ip_blocked: %u \n",block_ips.ips_blocked[i]);
+				}
+				break;
+			case DROP_PACKETS:
+				break;
+			case WRITE_FILE: case READ_FILE: case WRITE_RET: case READ_RET: case OPEN:
+			case MKDIR: case NEWFSTATAT:  case OPENAT: case NEWFSTATAT_RET: case OPENAT_RET:
+				break;
+			case PROCESS_KILL: case PROCESS_STOP:
+				break;
+		}
+
+		for(int j = 0; j < faults[i].relevant_conditions; j++){
+			int condition_type = faults[i].fault_conditions_begin[j].type;
+
+			switch(condition_type){
+				case 0:
+					user_function user_function = faults[i].fault_conditions_begin[j].condition.user_function;
+
+					printf("User function condition symbol: %s | binary: %s | call_count: %d \n",user_function.symbol,user_function.binary_location,user_function.call_count);
+
+					break;
+				case 1:
+					file_system_call file_system_call = faults[i].fault_conditions_begin[j].condition.file_system_call;
+
+					printf("File syscall nr: %d | dir_name: %s | file_name: %s | call_couunt: %d \n",file_system_call.syscall,file_system_call.directory_name,file_system_call.file_name,file_system_call.call_count);
+					break;
+				case 2:
+					systemcall syscall = faults[i].fault_conditions_begin[j].condition.syscall;
+
+					printf("Syscall nr: %d | call_count:%d \n",syscall.syscall,syscall.call_count);
+					break;
+				case 3:
+					int time = faults[i].fault_conditions_begin[j].condition.time;
+					printf("Time is %d \n",time);
+
+					break;
+			}
+		}
+	}
+}
+
+void print_block(char* sentence){
+	printf("###########################################################\n");
+	printf("###########################################################\n");
+	printf("%s\n",sentence);
+	printf("###########################################################\n");
+	printf("###########################################################\n");
 }

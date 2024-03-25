@@ -7,11 +7,10 @@
 #include <time.h>
 #include <sys/resource.h>
 #include <bpf/libbpf.h>
+#include "aux.h"
 #include "process.h"
 #include "process.skel.h"
 #include <pthread.h>
-#include "aux.h"
-
 
 static struct env {
 	bool verbose;

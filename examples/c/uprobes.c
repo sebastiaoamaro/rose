@@ -21,6 +21,7 @@
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 #include "uprobes.h"
+#include "aux.h"
 #include "uprobes.skel.h"
 #include "trace_helpers.h"
 #include "map_helpers.h"
@@ -134,20 +135,20 @@ static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location)
 	int ret = -1;
 	long err;
 
-	binary = strdup(env.funcname);
+	function = strdup(env.funcname);
 
 
-	if (!binary) {
-		warn("strdup failed");
-		return -1;
-	}
-	function = strchr(binary, ':');
-	if (!function) {
-		warn("Binary should have contained ':' (internal bug!)\n");
-		return -1;
-	}
-	*function = '\0';
-	function++;
+	// if (!binary) {
+	// 	warn("strdup failed");
+	// 	return -1;
+	// }
+	// function = strchr(binary, ':');
+	// if (!function) {
+	// 	warn("Binary should have contained ':' (internal bug!)\n");
+	// 	return -1;
+	// }
+	// *function = '\0';
+	// function++;
 
 	printf("Binary location in uprobe is %s \n",binary_location);
 
@@ -189,11 +190,11 @@ out_binary:
 	return ret;
 }
 
-struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faultcount,int timemode)
+struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faultcount,int cond_pos,int timemode)
 {
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
 
-	printf("In uprobe for function %s \n",funcname);
+	printf("In uprobe for function %s in binary %s \n",funcname,binary_location);
 	
 	struct uprobes_bpf *obj;
 	int i, err;
@@ -204,7 +205,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 	int cgfd = -1;
 	bool used_fentry = false;
 
-	env.is_kernel_func = !strchr(funcname, ':');
+	env.is_kernel_func = 0;
 
 	err = ensure_core_btf(&open_opts);
 	if (err) {
@@ -222,7 +223,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 	obj->rodata->units = MSEC;
 	obj->rodata->targ_tgid = pid;
 	obj->rodata->filter_cg = 0;
-	strcpy(obj->rodata->funcname,funcname);
+	obj->rodata->cond_pos = cond_pos;
 
 	env.pid = pid;
 	env.funcname = funcname;
@@ -273,7 +274,6 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 			return NULL;
 	}
 	printf("Attached \n");
-
 
 	return obj;
 }

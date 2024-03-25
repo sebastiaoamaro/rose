@@ -1,0 +1,14 @@
+nodes:
+  test_node:
+    script: "/home/sebastiaoamaro/phd/torefidevel/tests/random/uprobe"
+faults:
+  simple_test:
+    type: process_pause
+    target: test_node
+    duration: 5
+    begin_conditions:
+      user_function:
+        binary_location: "/home/sebastiaoamaro/phd/torefidevel/tests/random/uprobe"
+        symbol: "uprobing"
+        call_count: 1
+      trigger_statement: 1

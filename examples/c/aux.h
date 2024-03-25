@@ -1,6 +1,6 @@
 #ifndef __AUX_H_
 #define __AUX_H_
-
+#define STRING_SIZE 64
 #define MAX_ENTRIES 10240
 #define PATH_MAX	4096
 #define STATE_PROPERTIES_COUNT 22
@@ -14,46 +14,26 @@
 #define MAX_RELEVANT_FILES 256
 #define MAX_ARGS 16
 #define MAX_FAULTS 32
+#define MAP_SIZE 128
 
-struct faultstate{
-    int fault_type_conditions[STATE_PROPERTIES_COUNT];
-    int conditions_match[STATE_PROPERTIES_COUNT];
-};
-
-struct fault {
-    __u64 faulttype;
-    //For occurrences of multiple faults, outdated not used
-    //int *faulttype_count;
-    __be32 ips_blocked[MAX_IPS_BLOCKED];
-    char *veth;
-    char file_open[FILENAME_MAX];
-    char func_names[MAX_FUNCTIONS][FUNCNAME_MAX];
-    int done;
-    struct faultstate initial;
-    struct faultstate end;
-    int pid;
-    int repeat;
-    int occurrences;
-    int network_directions;
-    int return_value;
-    int container_pid;
-    char **command;
-    char binary_location[FUNCNAME_MAX];
-    int faults_injected_counter;
-    int relevant_conditions;
+struct faultstate_simple{
+    int fault_type_conditions[STATE_PROPERTIES_COUNT+MAX_FUNCTIONS];
+    int conditions_match[STATE_PROPERTIES_COUNT+MAX_FUNCTIONS];
 };
 
 struct simplified_fault{
     int faulttype;
     int done;
-    struct faultstate initial;
-    struct faultstate end;
+    struct faultstate_simple initial;
+    struct faultstate_simple end;
     int pid;
     int repeat;
     int occurrences;
     int return_value;
     int faults_injected_counter;
     int relevant_conditions;
+    int fault_nr;
+    int run;
 };
 
 struct fault_key{
@@ -64,6 +44,7 @@ struct fault_key{
 struct fault_description{
     int on;
     int occurences;
+    int counter;
     int return_value;
     int syscall_nr;
 };
@@ -86,28 +67,31 @@ struct  relevant_fds{
     int size;
 };
 
-//syscall to fail, rename to faulttype
 enum faulttype{
     FORK = 1,
     WRITE = 2,
+    WRITE_FILE = 8,
     READ = 3,
+    READ_FILE = 9,
     NETWORK_ISOLATION = 4,
     BLOCK_IPS = 5,
     DROP_PACKETS = 6,
     CLONE = 7,
-    WRITE_FILE = 8,
-    READ_FILE = 9,
     PROCESS_KILL = 11,
     WRITE_RET = 12,
     READ_RET = 13,
-    STOP = 14,
+    PROCESS_STOP = 14,
     OPEN = 15,
+    OPEN_FILE = 20,
     MKDIR = 16,
+    MKDIR_FILE = 23,
     NEWFSTATAT = 17,
+    NEWFSTATAT_FILE = 24,
     OPENAT = 18,
-    NEWFSTATAT_RET = 19,
-    VFSTATAT_FILE = 20,
     OPENAT_RET = 21,
+    OPENAT_FILE = 25,
+    NEWFSTATAT_RET = 19,
+    PROCESS_RESTART = 22,
     TEMP_EMPTY = 999,
 };
 
@@ -121,17 +105,14 @@ enum stateinfo{
     FILES_CLOSED_ANY = 5,
     WRITES = 6,
     READS = 7,
-    IPS_BLOCKED = 8,
-    FUNCNAMES = 9,
     CALLCOUNT = 10,
     THREADS_CREATED = 11,
-    PROCESS_TO_KILL = 12,
     OPENS = 13,
     DIRCREATED =14,
     NEWFSTATAT_COUNT = 15,
     OPENNAT_COUNT = 16,
-    VFS_FSTATAT_COUNT = 17,
-    VFS_FSTATAT_SPECIFIC = 18,
+    // VFS_FSTATAT_COUNT = 17,
+    // VFS_FSTATAT_SPECIFIC = 18,
     NEW_FSTATAT_SPECIFIC = 19,
     OPENAT_SPECIFIC = 20,
     TIME_FAULT = 21,
@@ -146,6 +127,7 @@ struct event {
 	int type;
 	int pid;
 	int ppid;
+    int fault_nr;
 	unsigned exit_code;
 	unsigned long long duration_ns;
 	char comm[TASK_COMM_LEN];
@@ -159,13 +141,20 @@ struct event {
 };
 
 
+struct process_pause_args{
+	int *pid;
+	int *duration;
+};
+
+
 struct aux_bpf* start_aux_maps();
 int get_interface_index(char*);
-void build_fault(struct fault* ,int,int,int,int,int,char**,int,char *);
-void add_ip_to_block(struct fault*,char *,int);
+void build_fault(struct fault* ,int,int,int,int,int,int,char**,int,char *);
 void set_if_name(struct fault*,char *);
 void add_function_to_monitor(struct fault*,char*,int);
 int bpf_map_lookup_or_try_init_user(int, const void *, void *,void *);
 int get_interface_names(char **,int);
 int translate_pid(int);
+void pause_process(void* args);
+void print_block(char*);
 #endif /* __AUX_H */

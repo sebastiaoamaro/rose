@@ -20,11 +20,12 @@ void sig_handler(int signum){
 }
 
 FILE * custom_popen(char* command, char **args, char type, pid_t* pid)
-{
+{   
+    printf("%s %s\n",command,args[1]);
+
     pid_t child_pid;
     int fd[2];
     pipe(fd);
-
     if((child_pid = fork()) == -1)
     {
         perror("fork \n");
@@ -50,13 +51,14 @@ FILE * custom_popen(char* command, char **args, char type, pid_t* pid)
 
         while(true){
             if(ready){
+                printf("Received signal \n");
                 break;
             }
             sleep(0.000001);
 
         }
         //desligar signal
-        int err = execv(command,args);
+        int err = execvp(command,args);
         printf("Err in execv is %d and errno is %d \n",err,errno);
         exit(0);
     }

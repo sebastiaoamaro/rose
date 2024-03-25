@@ -18,7 +18,6 @@
 #include <string.h>
 
 //Modules
-#include <aux.h>
 #include <aux.skel.h>
 #include <process.h>
 #include <process.skel.h>
@@ -33,11 +32,19 @@
 #include <uprobes.h>
 #include <uprobes.skel.h>
 #include <popen.h>
+#include <faultschedule.h>
+#include <aux.h>
 
 void process_counter(const struct event *event,int stateinfo);
 int process_tc(const struct event*);
 void process_fs(const struct event*);
 void inject_fault(int faulttype,int pid,int fault_id,int syscall_nr);
+void setup_begin_conditions();
+void setup_node_scripts();
+void start_node_scripts();
+FILE* start_target_process(int node_number);
+int setup_tc_progs(struct tc_bpf **tc_ebpf_progs);
+void insert_relevant_condition_in_ebpf(int fault_nr,int pid,int cond_nr,int call_count);
 
 const char *argp_program_version = "Tool for FI 0.01";
 const char *argp_program_bug_address = "sebastiao.amaro@ŧecnico.ulisboa.pt";
@@ -81,9 +88,16 @@ static struct constants {
 
 } constants;
 
-static struct fault *faults;
+struct process_args {
+	int *pid;
+	FILE* fp;
+};
+
+static fault* faults;
+static node* nodes;
 static int FAULT_COUNT = 0;
 static int DEVICE_COUNT = 0;
+static int NODE_COUNT = 0;
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
@@ -117,10 +131,6 @@ static void sig_handler(int sig)
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
 	switch (key) {
-		case 'T':
-			printf("Changing time mode to 1 \n");
-			constants.timemode =1;
-			break;
 		case 'f':
 			FAULT_COUNT = strtol(arg,NULL,10);
 			faults = (struct fault*)malloc(FAULT_COUNT*sizeof(struct fault));
@@ -172,6 +182,26 @@ static const struct argp argp = {
 //TODO refactor this part of the code no longer usefull, except to process the crashing of processes
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
+	const struct event *e = data;
+	int fault_nr = e->fault_nr;
+	struct fault *fault = &faults[fault_nr];
+
+	int pid = nodes[fault->target].pid;
+	switch(e->type){
+		case PROCESS_STOP:
+			
+			pthread_t thread_id;
+
+			struct process_pause_args *args = (struct process_pause_args*)malloc(sizeof(struct process_pause_args));
+			
+			args->duration= &fault->duration;
+			args->pid = &pid;
+
+			pthread_create(&thread_id, NULL, pause_process, (void*)args);
+
+			fault->done = 1;
+			break;
+	}
 	return 0;
 }
 
@@ -199,21 +229,22 @@ void build_faults(){
     size_t len = 0;
     ssize_t read;
 
-	for(int i = 0; i < FAULT_COUNT;i++){
+	for(int i = 0; i < 0;i++){
 		int repeat = 0;
 		int occurrences = 1;
 		int network_directions = 2;
 		int return_value = 0;
+		int duration = 0;
 
 		// char *binary_location = "/home/sebastiaoamaro/phd/tendermint/build/tendermint";
 		// char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","init",NULL};
-		//char *binary_location;
+		char *binary_location;
 		//char args[4][64];
 		// char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","node","--proxy_app=kvstore",NULL};
-		//build_fault(&faults[i],repeat,WRITE,occurrences,network_directions,return_value,NULL,0,binary_location);
+		build_fault(&faults[i],repeat,TEMP_EMPTY,occurrences,duration,network_directions,return_value,NULL,0,binary_location);
 
-		//faults[i].initial.fault_type_conditions[WRITES] = 1;
-		//faults[i].initial->fault_type_conditions[PROCESS_TO_KILL] = 225183;
+		// faults[i].initial.fault_type_conditions[WRITES] = 1;
+		// faults[i].initial->fault_type_conditions[PROCESS_TO_KILL] = 225183;
 	
 		// char string_ips[32] = "172.19.0.2";
 
@@ -231,28 +262,28 @@ void build_faults(){
 
 	}
 	//FAULT 0
-	char *binary_location = "/home/sebastiaoamaro/phd/tendermint/build/tendermint";
-	char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","node","--proxy_app=kvstore",NULL};
-	int network_directions = 2;
-	int occurrences = 1;
-	int repeat = 0;
-	int return_value = -20;
-	build_fault(&faults[0],repeat,TEMP_EMPTY,occurrences,network_directions,return_value,args,0,binary_location);
+	// char *binary_location = "/home/sebastiaoamaro/phd/tendermint/build/tendermint";
+	// char *args[] = {"/home/sebastiaoamaro/phd/tendermint/build/tendermint","node","--proxy_app=kvstore",NULL};
+	// int network_directions = 2;
+	// int occurrences = 1;
+	// int repeat = 0;
+	// int return_value = -20;
+	// build_fault(&faults[0],repeat,NEWFSTATAT,occurrences,network_directions,return_value,args,0,binary_location);
 
 	//faults[0].initial.fault_type_conditions[CALLCOUNT] = 1;
 	//faults[0].initial.fault_type_conditions[NEWFSTATAT_COUNT] = 1;
 	//faults[0].initial.fault_type_conditions[NEW_FSTATAT_SPECIFIC] = 1;
-	faults[0].initial.fault_type_conditions[TIME_FAULT] = 5;
+	// faults[0].initial.fault_type_conditions[TIME_FAULT] = 5;
 	
 	
 
-	char file_name[FILENAME_MAX] = "/root/.tendermint/data";
+	// char file_name[FILENAME_MAX] = "/root/.tendermint/data";
 
-	strcpy(faults[0].file_open,file_name);
+	// strcpy(faults[0].file_open,file_name);
 
 	//TODO:This is causing overflows fix!!!
-	char *func_names[] = {":github.com/tendermint/tendermint/libs/os.EnsureDir",NULL};
-	add_function_to_monitor(&faults[0],func_names[0],0);
+	// char *func_names[] = {":github.com/tendermint/tendermint/libs/os.EnsureDir",NULL};
+	// add_function_to_monitor(&faults[0],func_names[0],0);
 
 	//FAULT 1
 
@@ -266,7 +297,32 @@ void build_faults(){
 	// faults[1].initial.fault_type_conditions[OPENAT_SPECIFIC] = 1;
 
 
+	//FAULT 0
+	char *binary_location = "";
+	//char *args[] = {"/usr/bin/docker","exec", "-dit","redpanda0","ping","google.pt",NULL};
+	//char *args[] = {"/usr/bin/nsenter", "-t", "82112", "-i", "-u", "-m", "-n", "-p", "-r", "./test.sh",NULL};
+	char *args[] = {""};
+	int network_directions = 0;
+	int occurrences = 0;
+	int repeat = 0;
+	int return_value = 0;
+	int duration = 5;
+	build_fault(&faults[0],repeat,PROCESS_STOP,occurrences,duration,network_directions,return_value,args,0,binary_location);
+
+
+	//char ip1[32] = "172.19.1.10";
+	//char ip2[32] = "172.19.1.11";
+
+	//add_ip_to_block(&faults[0],ip1,0);
+	//add_ip_to_block(&faults[0],ip2,1);
+
+
+	//faults[0].initial.fault_type_conditions[WRITES] = 1;
+	faults[0].initial.fault_type_conditions[TIME_FAULT] = 5;
+
+
 	//GET PIDS AND NETDEVICES from a file
+	printf("Checking input file \n");
 	int fault_count = 0;
 	int checkfile = 1;
 	fp = fopen(constants.inputfilename, "r");
@@ -276,6 +332,7 @@ void build_faults(){
 		checkfile = 0;
 	}
 	if (checkfile){
+		printf("Checking input file \n");
 		for(int i =0; i<FAULT_COUNT;i++){
 
 			getline(&line, &len, fp);
@@ -307,30 +364,6 @@ void build_faults(){
 
 		}
 
-	}
-	
-}
-
-//Adds fault info eBPF Maps fault into simplified_fault
-void add_faults_to_bpf(){
-	for (int i = 0; i < FAULT_COUNT; i++){
-
-		//TODO ONLY ONE MEM COPY WOULD SUFFICE...
-		struct simplified_fault new_fault;
-		new_fault.faulttype = faults[i].faulttype;
-		new_fault.done = faults[i].done;
-		memcpy(new_fault.initial.fault_type_conditions,faults[i].initial.fault_type_conditions,sizeof(faults[i].initial.fault_type_conditions));
-		memcpy(new_fault.end.fault_type_conditions,faults[i].end.fault_type_conditions,sizeof(faults[i].end.fault_type_conditions));
-		memcpy(new_fault.initial.conditions_match,faults[i].initial.conditions_match,sizeof(faults[i].initial.conditions_match));
-		memcpy(new_fault.end.conditions_match,faults[i].end.conditions_match,sizeof(faults[i].end.conditions_match));
-		new_fault.pid = faults[i].pid;
-		new_fault.occurrences = faults[i].occurrences;
-		new_fault.return_value = faults[i].return_value;
-		new_fault.relevant_conditions = faults[i].relevant_conditions;
-
-		int error = bpf_map_update_elem(constants.bpf_map_fault_fd,&i,&new_fault,BPF_ANY);
-		if (error)
-			printf("Error of update in adding fault to bpf is %d \n",error);
 	}
 	
 }
@@ -406,219 +439,52 @@ void populate_stateinfo_map(){
 }
 
 //Add name of files to eBPF map, one per pid
-void populate_files_map(){
-	for(int i=0;i<FAULT_COUNT;i++){
-		if(!faults[i].file_open)
-			continue;
-		if (strlen(faults[i].file_open)!=0){
-			int error;
-			//We pass the pid to filter out irrelevant pids opening
-			int pid = faults[i].pid;
+// void populate_files_map(){
+// 	for(int i=0;i<FAULT_COUNT;i++){
+// 		if(!faults[i].file_open)
+// 			continue;
+// 		if (strlen(faults[i].file_open)!=0){
+// 			int error;
+// 			//We pass the pid to filter out irrelevant pids opening
+// 			int pid = faults[i].pid;
 
-			struct file_info_simple file_info = {};
-			strcpy(file_info.filename,faults[i].file_open);
-			file_info.size = strlen(file_info.filename);
+// 			struct file_info_simple file_info = {};
+// 			strcpy(file_info.filename,faults[i].file_open);
+// 			file_info.size = strlen(file_info.filename);
 
-			error = bpf_map_update_elem(constants.files,&pid,&file_info,BPF_ANY);
-			if (error){
-				printf("Error of update in files_opened is %d, value->%s \n",error,faults[i].file_open);	
-			}
+// 			error = bpf_map_update_elem(constants.files,&pid,&file_info,BPF_ANY);
+// 			if (error){
+// 				printf("Error of update in files_opened is %d, value->%s \n",error,faults[i].file_open);	
+// 			}
 
-			int zero = 0;
+// 			struct relevant_fds relevant_fd_init = {};
+// 			bpf_map_update_elem(constants.relevant_fd,&pid,&relevant_fd_init);
 
-			error = bpf_map_update_elem(constants.relevant_fd,&pid,&zero,BPF_ANY);
-			if (error){
-				printf("Error of update in files_opened is %d, value->%d \n",error,pid);	
-			}
+// 			error = bpf_map_update_elem(constants.relevant_fd,&pid,&relevant_fd_init,BPF_ANY);
+// 			if (error){
+// 				printf("Error of update in files_opened is %d, value->%d \n",error,pid);	
+// 			}
 
-		}
-	}
-}
-
-//Create TC programs, one for each interface 
-int setup_tc_progs(struct tc_bpf **tc_ebpf_progs,struct tc_bpf **tc_ebpf_progs_tracking){
-	int handle = 1;
-	//Insert IPS to block in a network device, key->if_index value->list of ips
-	int tc_ebpf_progs_counter = 0;
-	for (int i =0; i<FAULT_COUNT;i++){
-
-		if(!faults[i].veth)
-			continue;
-		if(strlen(faults[i].veth) == 0){
-			continue;
-		}
-
-		int index = get_interface_index(faults[i].veth);
-
-		__be32 ips_to_block[MAX_IPS_BLOCKED] = {0};
-
-		for (int k = 0; k < MAX_IPS_BLOCKED; k++){
-				
-				__be32 ip = faults[i].ips_blocked[k];
-
-				if(ip){	
-
-					//printf("IP to block is %u \n",ip);
-					char str[INET_ADDRSTRLEN];
-
-					inet_ntop(AF_INET,&ip, str, INET_ADDRSTRLEN);
-
-					ips_to_block[k]=ip;
-					printf("Going to block ip %s \n",str);
-				}
-		}
-
-		__u32 index_in_unsigned = (__u32)index;
-		int error = bpf_map_update_elem(constants.blocked_ips,&index_in_unsigned,&ips_to_block,BPF_ANY);
-		if (error){
-			printf("Error of update in blocked_ips is %d, key->%d \n",error,index);	
-		}
-
-		struct tc_bpf* tc_prog;
-		if (constants.verbose)
-			printf("Inserted in %s for faults \n",faults[i].veth);
-
-
-		//Only ingress
-		if (faults[i].network_directions == 0){
-
-			tc_prog = traffic_control(index_in_unsigned,tc_ebpf_progs_counter,tc_ebpf_progs_counter+handle,FAULT_COUNT,BPF_TC_INGRESS);
-
-			if (!tc_prog){
-				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
-				return -1;		
-			}
-			tc_ebpf_progs[tc_ebpf_progs_counter] = tc_prog;
-			tc_ebpf_progs_counter++;
-			
-		}
-		//Only egress
-		if(faults[i].network_directions == 1){
-
-			tc_prog = traffic_control(index_in_unsigned,tc_ebpf_progs_counter,tc_ebpf_progs_counter+handle,FAULT_COUNT,BPF_TC_EGRESS);
-
-			if (!tc_prog){
-				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
-				return -1;		
-			}
-			tc_ebpf_progs[tc_ebpf_progs_counter] = tc_prog;
-			tc_ebpf_progs_counter++;
-		}
-		//Both ingress and egress
-		if(faults[i].network_directions == 2){
-
-
-			tc_prog = traffic_control(index_in_unsigned,tc_ebpf_progs_counter,tc_ebpf_progs_counter+handle,FAULT_COUNT,BPF_TC_INGRESS);
-
-			if (!tc_prog){
-				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
-				return -1;		
-			}
-			tc_ebpf_progs[tc_ebpf_progs_counter] = tc_prog;
-			tc_ebpf_progs_counter++;
-
-			tc_prog = traffic_control(index_in_unsigned,tc_ebpf_progs_counter,tc_ebpf_progs_counter+handle,FAULT_COUNT,BPF_TC_EGRESS);
-
-			if (!tc_prog){
-				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
-				return -1;		
-			}
-			tc_ebpf_progs[tc_ebpf_progs_counter] = tc_prog;
-			tc_ebpf_progs_counter++;
-		}
-
-
-	}
-	return 0;
-}
-
-//prints output of process we started
-void print_output(FILE *fp){
-
-	char inLine[1024];
-    while (fgets(inLine, sizeof(inLine), fp) != NULL)
-    {
-        printf("%s\n", inLine);
-    }
-}
-
-FILE* start_target_process(int fault_number){
-
-	FILE *fp = custom_popen(faults[fault_number].command[0],faults[fault_number].command,'r',&constants.target_pid);
-
-	if (!fp)
-    {
-        perror("popen failed:");
-        exit(1);
-    }
-
-	pthread_t thread_id;
-	pthread_create(&thread_id, NULL, print_output, (void *)fp);
-
-	return fp;
-
-}
-
-void start_processes(){
-	if(constants.faultsverbose)
-		printf("Starting processes \n");
-	for(int i=0;i<FAULT_COUNT;i++){
-		if(!faults[i].command){
-			printf("Command is NULL \n");
-			continue;
-		}
-		if(!faults[i].command[0]){
-			printf("No command in this fault %d \n",i);
-			continue;
-		}
-		if(constants.faultsverbose)
-			printf("Command[0] is not NULL and its value %s \n",faults[i].command[0]) ;
-
-		if (!strlen(faults[i].command[0])){
-			printf("Empty command \n");
-			continue;
-		} 
-		if(constants.faultsverbose)
-			printf("Starting processes with command %s \n",faults[i].command[0]);
-		FILE *fp = start_target_process(i);
-		faults[i].pid = constants.target_pid;
-		//TODO CHANGE PID IN EBPF
-		printf("Starting process with pid is %d \n",faults[i].pid);
-	}
-	//Make pid of all faults same as the first one that started the command
-	for (int i=0;i<FAULT_COUNT;i++){
-		if(i==0)
-			continue;
-		faults[i].pid = faults[0].pid;
-	}
-	if(constants.faultsverbose)
-		printf("End of start_processes\n");
-}
-
-void resume_processes(){
-	printf("Resuming Processes \n");
-	for(int i=0;i<FAULT_COUNT;i++){
-		if(faults[i].pid){
-			kill(faults[i].pid,SIGUSR1);
-		}
-	}
-}
+// 		}
+// 	}
+// }
 
 void count_time(){
 
 	while(1){
-		usleep(50000);
-		constants.time += 50;
+		sleep(1);
+		constants.time += 1000;
 		//int error = bpf_map_update_elem(constants.time_map_fd,&pos,&constants.time,BPF_ANY);
 		// if (error){
 		// 	printf("Error of update in count_time is %d\n",error);	
 		// }
-		printf("New time is %d \n",(constants.time/1000));
+		//printf("New time is %d \n",(constants.time/1000));
 
 		for (int i = 0; i< FAULT_COUNT;i++){
 			int fault_time = faults[i].initial.fault_type_conditions[TIME_FAULT];
 			int time_sec = (constants.time/1000);
 			if (fault_time == time_sec){
+
 				struct simplified_fault fault;
 
 				int err_lookup;
@@ -626,6 +492,9 @@ void count_time(){
 				if (err_lookup){
 					printf("Did not find elem in count_time errno is %d \n",errno);
 				}
+				printf("Fault %d done:%d \n",i,fault.done);
+				if (fault.done)
+					continue;
 
 				fault.initial.conditions_match[TIME_FAULT] = 1;
 				printf("Changing Time to true \n");
@@ -640,8 +509,6 @@ void count_time(){
 int main(int argc, char **argv)
 {
 
-	//translate_pid(5);
-	
 	/* Set up libbpf errors and debug info callback */
 	libbpf_set_print(libbpf_print_fn);
 
@@ -656,132 +523,67 @@ int main(int argc, char **argv)
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
 
-
 	struct aux_bpf *aux_bpf = start_aux_maps();
 
 	if(!aux_bpf){
-		printf("Error in creating aux_bpf_maps \n");
+		printf("Error in creating aux_bpf_maps\n");
 		return 0;
 	}
 
 	get_fd_of_maps(aux_bpf);
 
-	if(constants.faultsverbose)
-		printf("Building faults \n");
+	//if(constants.faultsverbose)
+	print_block("Building Faults and Nodes");
+		
+	nodes = build_nodes();
+	faults = build_faults_extra();
+	NODE_COUNT = get_node_count();
+	FAULT_COUNT = get_fault_count();
 
-	build_faults();
+	print_fault_schedule(nodes,faults);
 	
-	if(constants.faultsverbose)
-		printf("Built faults \n");
-	
-	//start process where we will inject faults
-	start_processes();
-	
-	if(!constants.tracingmode){
-		populate_stateinfo_map();
 
-		populate_files_map();
-		if (constants.faultsverbose)
-			printf("Populated eBPF Maps \n");	
-	}
+	setup_node_scripts();
+	
+	setup_begin_conditions();
 
 	add_faults_to_bpf();
-	
 
 	//Add to all networkdevices
 
 	char **device_names = get_device_names(DEVICE_COUNT);
-	if (constants.faultsverbose)
-		printf("Starting TC \n");
-	init_tc((FAULT_COUNT+DEVICE_COUNT)*2);
-	if (constants.faultsverbose)
-		printf("TC done \n");
-	struct tc_bpf *tc_ebpf_progs[FAULT_COUNT];
-	struct tc_bpf *tc_ebpf_progs_tracking[DEVICE_COUNT];
-
-	//Create uprobes
-	struct uprobes_bpf *uprobes[FAULT_COUNT][MAX_FUNCTIONS];
-
-	for (int i = 0;i<FAULT_COUNT;i++)
-		for (int j = 0;j<MAX_FUNCTIONS;j++)
-			uprobes[i][j] = NULL;
+	init_tc((NODE_COUNT)*2);
+	struct tc_bpf *tc_ebpf_progs[NODE_COUNT];
+	//struct tc_bpf *tc_ebpf_progs_tracking[DEVICE_COUNT];
 
 
-	//We have different lists for devices from faults or generic insertion
-
-	for (int i = 0;i<FAULT_COUNT;i++)
+	for (int i = 0;i<NODE_COUNT;i++)
 		tc_ebpf_progs[i] = NULL;
 	
-	for (int i = 0;i<DEVICE_COUNT;i++)
-		tc_ebpf_progs_tracking[i] = NULL;
+	// for (int i = 0;i<DEVICE_COUNT;i++)
+	// 	tc_ebpf_progs_tracking[i] = NULL;
 		
 		
-	if(setup_tc_progs(tc_ebpf_progs,tc_ebpf_progs_tracking))
+	if(setup_tc_progs(tc_ebpf_progs	))
 		goto cleanup;
 
-	int handle = 1;
 	int tc_ebpf_progs_counter = 0;
 
-	for (int i =0; i<DEVICE_COUNT;i++){
-
-		bool already_exists = false;
-
-		for (int j=0;j<FAULT_COUNT;j++){
-			if (strlen(faults[j].veth)){
-				if (strcmp(device_names[i],faults[j].veth) == 0){
-					already_exists = true;
-				}
-			}	
-		}
-		if (already_exists)
-			continue;
-
-		int index = get_interface_index(device_names[i]);
-
-		__u32 index_in_unsigned = (__u32)index;
-
-		struct tc_bpf* tc_prog;
-
-		//printf("Inserted in %s for tracking \n",device_names[i]);
-		//handle must be different than 0 so add 1
-		tc_prog = traffic_control(index_in_unsigned,i+FAULT_COUNT,i+FAULT_COUNT+handle,FAULT_COUNT,BPF_TC_INGRESS);
-
-		if (!tc_prog){
-			printf("Error in creating tc_prog_tracking with interface %s \n",device_names[i]);
-			goto cleanup;		
-		}
-		tc_ebpf_progs_tracking[i] = tc_prog;
-
-	}
 	free(device_names);
 
-	if (constants.faultsverbose)
-		printf("Creating uprobes \n");
-	for(int i = 0; i < FAULT_COUNT;i++){
-
-		for (int j = 0; j<MAX_FUNCTIONS;j++){
-			if (!strcmp(faults[i].func_names[j],"empty"))
-				continue;
-			if (constants.faultsverbose)
-				printf("Fault is %d funcame is %s, pid is %d \n",i,faults[i].func_names[j],faults[i].pid);
-
-			uprobes[i][j] = uprobe(faults[i].pid,faults[i].func_names[j],faults[i].binary_location,FAULT_COUNT,constants.timemode);			
-		}
-
-
-	}
 
 	struct fs_bpf* fs_bpf;
 	struct process_bpf* process_bpf;
 	struct faultinject_bpf* faultinject_bpf;
 	struct block_bpf* block_bpf;
-	struct ring_buffer *rb = NULL;
+	struct javagc_bpf* usdtjava_bpf;
 
 	if(!constants.uprobemode){
 		fs_bpf = monitor_fs();
 		process_bpf = exec_and_exit(FAULT_COUNT);
 		faultinject_bpf = fault_inject(FAULT_COUNT,constants.timemode);
 		block_bpf = monitor_disk();
+		//usdtjava_bpf = usdtjava(faults[0].pid,FAULT_COUNT,constants.timemode);
 
 		printf("Created all structs \n");
 		
@@ -807,13 +609,13 @@ int main(int argc, char **argv)
 	
 	
 	int err;
+	struct ring_buffer *rb = NULL;
 	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
 	
 	constants.time=0;
 	pthread_t thread_id;
 	pthread_create(&thread_id, NULL, count_time, NULL);
-	if(constants.target_pid)
-		resume_processes();
+	start_node_scripts();
 
 	while (!exiting) {
 		err = ring_buffer__poll(rb, -1 /* timeout, ms */);
@@ -831,9 +633,11 @@ int main(int argc, char **argv)
 
 	cleanup:
 
-	//Kill process we started
-	if(constants.target_pid)
-		kill(constants.target_pid,9);
+	for(int i =0; i< NODE_COUNT;i++){
+		if(strlen(nodes[i].script)){
+			kill(nodes[i].pid,9);
+		}
+	}
 
 	//Destroy eBPF stuff
     printf("Running cleanup \n"); 
@@ -854,33 +658,14 @@ int main(int argc, char **argv)
 
 	tc_ebpf_progs_counter = 0;
 	for(int i = 0; i <FAULT_COUNT;i++){
-		if(!faults[i].veth)
-			continue;
-		if(strlen(faults[i].veth) != 0){
-			tc_ebpf_progs_counter = delete_tc_hook(tc_ebpf_progs,faults[i].network_directions,tc_ebpf_progs_counter);
-		}
+		tc_ebpf_progs_counter = delete_tc_hook(tc_ebpf_progs,faults[i].faulttype,tc_ebpf_progs_counter);
 	}
-	printf("Deleting tc_hooks_tracking \n");
-	for(int i=0; i<DEVICE_COUNT;i++){
 
-		if (tc_ebpf_progs_tracking[i] == NULL)
-			continue;
-		//printf("Deleting prog %d with pointer %u \n",i,tc_ebpf_progs[i]);
-		err = bpf_tc_detach(get_tc_hook(i+FAULT_COUNT), get_tc_opts(i+FAULT_COUNT));
-		if (err) {
-			fprintf(stderr, "Failed to detach TC %d: %d\n", i,err);
-		}
-		//printf("Deleting hook_tracking %d \n",i);
-		bpf_tc_hook_destroy(get_tc_hook(i+FAULT_COUNT));
-
-		//printf("Destroying prog_tracking %d \n",i);
-		tc_bpf__destroy(tc_ebpf_progs_tracking[i]);
-	}
 	printf("Deleting uprobes \n");
 	for (int i = 0;i<FAULT_COUNT;i++){
 		for (int j=0;j<MAX_FUNCTIONS;j++){
-			if(uprobes[i][j] != NULL)
-				uprobes_bpf__destroy(uprobes[i][j]);
+			if(faults[i].list_of_functions[j] != NULL)
+				uprobes_bpf__destroy(faults[i].list_of_functions[j]);
 		}
 	}
 
@@ -891,5 +676,443 @@ int main(int argc, char **argv)
 	printf("Finished cleanup \n"); 
 
 	
+	return 0;
+}
+
+void setup_node_scripts(){
+	print_block("Setting up scripts");
+
+	for(int i=0;i<NODE_COUNT;i++){
+		if(!nodes[i].script){
+			printf("Command is NULL \n");
+			continue;
+		}
+		if(!nodes[i].script[0]){
+			//printf("No command in this node %d \n",i);
+			continue;
+		}
+		if (!strlen(nodes[i].script)){
+			printf("Empty command \n");
+			continue;
+		} 
+		if(constants.faultsverbose)
+			printf("Starting processes with command %s \n",nodes[i].script);
+
+		FILE *fp = start_target_process(i);
+		nodes[i].pid = constants.target_pid;
+		//TODO CHANGE PID IN EBPF
+		printf("Starting process with pid is %d \n",nodes[i].pid);
+	}
+}
+
+
+void start_node_scripts(){
+	printf("Resuming Processes \n");
+	for(int i=0;i<NODE_COUNT;i++){
+		if(nodes[i].pid){
+			printf("Sending signal to %d \n",nodes[i].pid);
+			kill(nodes[i].pid,SIGUSR1);
+		}
+	}
+}
+
+//prints output of process we started
+void print_output(void* args){
+	char inLine[1024];
+	FILE *fp = ((struct process_args*)args)->fp;
+	int counter = 0;
+	printf("Reading input for pid %d \n",((struct process_args*)args)->pid);
+
+    while (fgets(inLine, sizeof(inLine), fp) != NULL)
+    {
+		if(counter==0){
+			((struct process_args*)args)->pid= atoi(inLine);
+			printf("PID is %d \n",atoi(inLine));
+			counter++;
+		}else{
+       		printf("%s\n", inLine);
+		}
+    }
+}
+
+FILE* start_target_process(int node_number){
+
+	char script[STRING_SIZE];
+
+	char *args_script[STRING_SIZE];
+
+	char *token = strtok(nodes[node_number].script," ");
+	
+	strcpy(script,token);
+	args_script[0]=(char*)malloc(STRING_SIZE*sizeof(char));
+	strcpy(args_script[0],token);
+
+	int pos = 1;
+	token = strtok(NULL," ");
+	
+	while( token != NULL ) {
+
+		args_script[pos]=(char*)malloc(STRING_SIZE*sizeof(char));
+		strcpy(args_script[pos],token);
+
+		token = strtok(NULL," ");
+		pos++;
+   }
+   args_script[pos]= NULL;
+
+	FILE *fp = custom_popen(script,args_script,'r',&constants.target_pid);
+
+	if (!fp)
+    {
+        perror("popen failed:");
+        exit(1);
+    }
+
+	pthread_t thread_id;
+
+	struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
+
+	args->fp= fp;
+	args->pid = constants.target_pid;
+	pthread_create(&thread_id, NULL, print_output, (void*)args);
+
+	return fp;
+
+}
+
+
+void setup_begin_conditions(){
+
+	print_block("Adding relevant conditions, file_names and uprobes to kernel");
+
+	for(int i = 0; i < FAULT_COUNT; i++){
+
+		int user_func_cond_nr = 0;
+		int has_time_condition = 0;
+		for(int j = 0; j <faults[i].relevant_conditions;j++){
+			int type = faults[i].fault_conditions_begin[j].type;
+			int target = faults[i].target;
+			int pid = nodes[target].pid;
+			int error;
+			if(type == SYSCALL){
+
+				systemcall syscall = faults[i].fault_conditions_begin[j].condition.syscall;
+
+				int syscall_nr = syscall.syscall;
+				insert_relevant_condition_in_ebpf(i,pid,syscall_nr,syscall.call_count);
+			}
+			if (type == FILE_SYSCALL){
+
+				file_system_call syscall = faults[i].fault_conditions_begin[j].condition.file_system_call;
+
+				struct file_info_simple file_info = {};
+				if (strlen(syscall.file_name)){
+					strcpy(file_info.filename,syscall.file_name);
+					file_info.size = strlen(file_info.filename);
+					printf("Created fileinfo with filename %s \n",file_info.filename);
+				}
+				if (strlen(syscall.directory_name)){
+					strcpy(file_info.filename,syscall.directory_name);
+					file_info.size = strlen(file_info.filename);
+					printf("Created fileinfo with dirname %s \n",file_info.filename);
+				}
+				
+				int syscall_nr = syscall.syscall;
+
+				struct info_key info_key = {
+					pid,
+					syscall_nr
+				};
+
+				error = bpf_map_update_elem(constants.files,&info_key,&file_info,BPF_ANY);
+				if (error){
+					printf("Error of update in files_opened is %d, value->%s \n",error,file_info.filename);	
+				}
+
+				struct relevant_fds relevant_fd_init = {};
+				
+				error = bpf_map_update_elem(constants.relevant_fd,&pid,&relevant_fd_init,BPF_ANY);
+				if (error){
+					printf("Error of update in files_opened is %d, value->%d \n",error,pid);	
+				}
+
+				insert_relevant_condition_in_ebpf(i,pid,syscall_nr,syscall.call_count);
+
+			}
+			if(type == USER_FUNCTION){
+				//user_func_cond_nr is the position where the call_count will reside in fault_type_conditions
+				user_function user_function = faults[i].fault_conditions_begin[j].condition.user_function;
+				faults[i].fault_conditions_begin[j].condition.user_function.cond_nr = user_func_cond_nr+STATE_PROPERTIES_COUNT;
+				faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode);
+				insert_relevant_condition_in_ebpf(i,pid,faults[i].fault_conditions_begin[j].condition.user_function.cond_nr,user_function.call_count);
+				user_func_cond_nr++;
+			}
+			if(type == TIME){
+				int time = faults[i].fault_conditions_begin[j].condition.time;
+				has_time_condition = time;
+				insert_relevant_condition_in_ebpf(i,pid,TIME_FAULT,1);
+			}
+		}
+		//printf("has_time_condition %d and relevant conditions %d \n",has_time_condition,faults[i].rel)
+		if (has_time_condition && (faults[i].relevant_conditions == 1)){
+			printf("Need to process all syscalls to check time \n");
+			constants.timemode = 1;
+		}
+		
+
+	}
+}
+
+void insert_relevant_condition_in_ebpf(int fault_nr,int pid,int cond_nr,int call_count){
+	int error;
+	struct info_key information = {
+		pid,
+		cond_nr
+	};
+	struct info_state *new_information_state = (struct info_state*)malloc(sizeof(struct info_state));
+
+	new_information_state->current_value = 0;
+
+	new_information_state->relevant_states[fault_nr] = call_count;
+
+	new_information_state->repeat = faults[fault_nr].repeat;
+
+	if (constants.faultsverbose)
+		printf("FAULT %d state info pos[%d] is %d conditions match is [%d] with pid %d \n",fault_nr,cond_nr,new_information_state->relevant_states[fault_nr],faults[fault_nr].initial.conditions_match[fault_nr],pid);
+	struct info_state *old_information_state = (struct info_state*)malloc(sizeof(struct info_state));
+
+	old_information_state->current_value = 0;
+
+	int exists = 0;
+	exists = bpf_map_lookup_or_try_init_user(constants.relevant_state_info_fd,&information,new_information_state,old_information_state);
+
+	//if already exists add
+	if(exists){
+		printf("It already exists \n");
+		old_information_state->relevant_states[fault_nr] = call_count;
+		printf("State info is %llu \n",old_information_state->relevant_states[fault_nr]);
+		error = bpf_map_update_elem(constants.relevant_state_info_fd,&information,old_information_state,BPF_ANY);
+		if (error){
+			printf("Error of update is %d, key->%d \n",error,cond_nr);	
+		}
+		free(new_information_state->relevant_states);
+	}else{
+		free(old_information_state->relevant_states);
+	}
+}
+
+//Adds fault info eBPF Maps fault into simplified_fault
+void add_faults_to_bpf(){
+	print_block("Adding Faults to eBPF Maps");
+
+	for (int i = 0; i < FAULT_COUNT; i++){
+		printf("Adding fault with type %d \n",faults[i].faulttype);
+		struct simplified_fault new_fault;
+		new_fault.faulttype = faults[i].faulttype;
+		new_fault.done = faults[i].done;
+
+		for(int j = 0; j <faults[i].relevant_conditions;j++){
+			int type = faults[i].fault_conditions_begin[j].type;
+			if(type == SYSCALL){
+				systemcall syscall = faults[i].fault_conditions_begin[j].condition.syscall;
+				int cond_nr = syscall.syscall;
+				new_fault.initial.fault_type_conditions[cond_nr] = syscall.call_count;
+				printf("Fault %d has condition system call %d with call_count %d \n",i,cond_nr,syscall.call_count);
+			}
+			if (type == FILE_SYSCALL){
+				file_system_call syscall = faults[i].fault_conditions_begin[j].condition.file_system_call;
+				int cond_nr = syscall.syscall;
+				new_fault.initial.fault_type_conditions[cond_nr] = syscall.call_count;
+				printf("Fault %d has condition file_system_call %d with call_count %d \n",i,cond_nr,syscall.call_count);
+			}
+			if(type == USER_FUNCTION){
+				user_function user_function = faults[i].fault_conditions_begin[j].condition.user_function;
+				int cond_nr = user_function.cond_nr;
+				new_fault.initial.fault_type_conditions[cond_nr] = user_function.call_count;
+				printf("Fault %d has condition user_function %d with call_count %d \n",i,cond_nr,user_function.call_count);
+			}
+			if(type == TIME){
+				new_fault.initial.fault_type_conditions[TIME_FAULT] = 1;
+				printf("Fault %d has condition time %d with call_count %d \n",i,TIME_FAULT,1);
+			}
+		}
+
+		if (faults[i].category == SYSCALL_FAULT){
+			
+		}
+		if(faults[i].category == FILE_SYS_OP){
+
+			int error;
+			int pid = nodes[faults[i].target].pid;
+
+			file_system_operation file_system_op;
+			
+			file_system_op = faults[i].fault_details.file_system_op;
+
+			struct file_info_simple file_info = {};
+			if (strlen(file_system_op.file_name)){
+				strcpy(file_info.filename,file_system_op.file_name);
+				file_info.size = strlen(file_info.filename);
+				printf("Created fileinfo with filename %s with size %d\n",file_info.filename,file_info.size);
+			}
+			if (strlen(file_system_op.directory_name)){
+				strcpy(file_info.filename,file_system_op.directory_name);
+				file_info.size = strlen(file_info.filename);
+				printf("Created fileinfo with dirname %s with size %d\n",file_info.filename,file_info.size);
+			}
+			
+			int syscall_nr = file_system_op.syscall;
+
+			struct info_key info_key = {
+				pid,
+				syscall_nr
+			};
+			//Add name of file to eBPF
+			error = bpf_map_update_elem(constants.files,&info_key,&file_info,BPF_ANY);
+			if (error){
+				printf("Error of update in files_opened is %d, value->%s \n",error,file_info.filename);	
+			}
+
+			//Init relevant fd struct for this pid
+			struct relevant_fds relevant_fd_init = {};
+
+			relevant_fd_init.size = 0;
+			
+			error = bpf_map_update_elem(constants.relevant_fd,&pid,&relevant_fd_init,BPF_ANY);
+			if (error){
+				printf("Error of update in files_opened is %d, value->%d \n",error,pid);	
+			}
+
+			new_fault.return_value = file_system_op.return_value;
+		}
+		
+
+		//TODO GO OVER FAULT DETAILS
+		new_fault.pid = nodes[faults[i].target].pid;
+		new_fault.occurrences = faults[i].occurrences;
+		printf("Occurrences:%d\n",new_fault.occurrences);
+		new_fault.relevant_conditions = faults[i].relevant_conditions;
+		new_fault.fault_nr = i;
+		new_fault.repeat = faults[i].repeat;
+
+		int error = bpf_map_update_elem(constants.bpf_map_fault_fd,&i,&new_fault,BPF_ANY);
+		if (error)
+			printf("Error of update in adding fault to bpf is %d \n",error);
+	}
+	
+}
+
+//Create TC programs, one for each interface 
+int setup_tc_progs(struct tc_bpf **tc_ebpf_progs){
+	print_block("Starting tc progs");
+	int handle = 1;
+	//Insert IPS to block in a network device, key->if_index value->list of ips
+	int tc_ebpf_progs_counter = 0;
+	for (int i =0;i<FAULT_COUNT;i++){
+
+		if(faults[i].faulttype == BLOCK_IPS){
+
+			int target = faults[i].target;
+			int index = get_interface_index(nodes[target].veth);
+
+			__be32 ips_to_block[MAX_IPS_BLOCKED] = {0};
+			for (int k = 0; k < MAX_IPS_BLOCKED; k++){
+				__be32 ip = faults[i].ips_blocked[k];
+
+				if(ip){	
+
+					//printf("IP to block is %u \n",ip);
+					char str[INET_ADDRSTRLEN];
+
+					inet_ntop(AF_INET,&ip, str, INET_ADDRSTRLEN);
+
+					ips_to_block[k]=ip;
+					printf("Going to block ip %s \n",str);
+				}
+			}
+
+			__u32 index_in_unsigned = (__u32)index;
+			int error = bpf_map_update_elem(constants.blocked_ips,&index_in_unsigned,&ips_to_block,BPF_ANY);
+			if (error){
+				printf("Error of update in blocked_ips is %d, key->%d \n",error,index);	
+			}
+
+			struct tc_bpf* tc_prog;
+			if (constants.verbose)
+				printf("Inserted in %s for faults \n",nodes[target].veth);
+
+			printf("Created tc %d \n",tc_ebpf_progs_counter);
+
+			tc_prog = traffic_control(index_in_unsigned,tc_ebpf_progs_counter,tc_ebpf_progs_counter+handle,FAULT_COUNT,BPF_TC_INGRESS);
+
+			if (!tc_prog){
+				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
+				return -1;		
+			}
+			tc_ebpf_progs[tc_ebpf_progs_counter] = tc_prog;
+			tc_ebpf_progs_counter++;
+
+			printf("Created tc %d \n",tc_ebpf_progs_counter);
+			tc_prog = traffic_control(index_in_unsigned,tc_ebpf_progs_counter,tc_ebpf_progs_counter+handle,FAULT_COUNT,BPF_TC_EGRESS);
+
+			if (!tc_prog){
+				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
+				return -1;		
+			}
+			tc_ebpf_progs[tc_ebpf_progs_counter] = tc_prog;
+			tc_ebpf_progs_counter++;
+		}
+		if (faults[i].faulttype == NETWORK_ISOLATION){
+			int target = faults[i].target;
+			int index = get_interface_index(nodes[target].veth);
+
+
+			struct tc_bpf* tc_prog;
+			__u32 index_in_unsigned = (__u32)index;
+			printf("Created tc %d \n",tc_ebpf_progs_counter);
+			tc_prog = traffic_control(index_in_unsigned,tc_ebpf_progs_counter,tc_ebpf_progs_counter+handle,FAULT_COUNT,BPF_TC_INGRESS);
+
+			if (!tc_prog){
+				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
+				return -1;		
+			}
+			tc_ebpf_progs[tc_ebpf_progs_counter] = tc_prog;
+			tc_ebpf_progs_counter++;
+
+			printf("Created tc %d \n",tc_ebpf_progs_counter);
+			tc_prog = traffic_control(index_in_unsigned,tc_ebpf_progs_counter,tc_ebpf_progs_counter+handle,FAULT_COUNT,BPF_TC_EGRESS);
+
+			if (!tc_prog){
+				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
+				return -1;		
+			}
+			tc_ebpf_progs[tc_ebpf_progs_counter] = tc_prog;
+			tc_ebpf_progs_counter++;
+		}
+
+		if(faults[i].faulttype == DROP_PACKETS){
+
+			int target = faults[i].target;
+			int index = get_interface_index(nodes[target].veth);
+
+
+			struct tc_bpf* tc_prog;
+			__u32 index_in_unsigned = (__u32)index;
+
+			//only egress
+			printf("Created tc %d \n",tc_ebpf_progs_counter);
+			tc_prog = traffic_control(index_in_unsigned,tc_ebpf_progs_counter,tc_ebpf_progs_counter+handle,FAULT_COUNT,BPF_TC_EGRESS);
+
+			if (!tc_prog){
+				printf("Error in creating tc_prog with interface %s with index %u \n",faults[i].veth,index_in_unsigned);
+				return -1;		
+			}
+			tc_ebpf_progs[tc_ebpf_progs_counter] = tc_prog;
+			tc_ebpf_progs_counter++;
+		}
+	
+	
+
+	}
 	return 0;
 }

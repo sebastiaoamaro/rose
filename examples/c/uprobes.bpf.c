@@ -12,11 +12,10 @@
 const volatile pid_t targ_tgid = 0;
 const volatile int units = 0;
 const volatile bool filter_cg = false;
-const volatile char funcname[FUNCNAME_MAX];
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 8192);
+	__uint(max_entries, MAP_SIZE);
 	__type(key, struct info_key);
 	__type(value, struct info_state);
 	 __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -24,7 +23,7 @@ struct {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 8192);
+	__uint(max_entries, MAP_SIZE);
 	__type(key, struct fault_key);
 	__type(value, struct fault_description);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -53,13 +52,6 @@ struct {
 	__uint(max_entries, 1);
 } cgroup_map SEC(".maps");
 
-struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 8192);
-	__type(key, char[FUNCNAME_MAX]);
-	__type(value,u64);
-	__uint(pinning, LIBBPF_PIN_BY_NAME);
-} funcnames SEC(".maps");
 
 /* key: pid.  value: start time */
 struct {
@@ -72,6 +64,7 @@ struct {
 __u32 hist[MAX_SLOTS] = {};
 const volatile int fault_count = 0;
 const volatile int time_only = 0;
+const volatile int cond_pos = 0;
 
 // static inline int process_current_state(int state_key, int pid){
 
@@ -137,8 +130,8 @@ static void entry(struct pt_regs *ctx)
 	u64 id = bpf_get_current_pid_tgid();
 	u32 tgid = id >> 32;
 	u32 pid = id;
-
-	int result = process_current_state(CALLCOUNT,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults);
+	bpf_printk("Detected key is %d\n",cond_pos);
+	int result = process_current_state(cond_pos,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb);
 
 }
 

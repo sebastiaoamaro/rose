@@ -5,13 +5,13 @@
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
 #include "process.h"
-#include "aux.h"
+#include "state_processor.bpf.h"
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 8192);
+	__uint(max_entries, MAP_SIZE);
 	__type(key, struct info_key);
 	__type(value, struct info_state);
 	 __uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -20,21 +20,21 @@ struct {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 8192);
+	__uint(max_entries, MAP_SIZE);
 	__type(key, pid_t);
 	__type(value, u64);
 } exec_start SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 8192);
+	__uint(max_entries, MAP_SIZE);
 	__type(key, pid_t);
 	__type(value, u64);
 } exec_map SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 8192);
+	__uint(max_entries, MAP_SIZE);
 	__type(key, pid_t);
 	__type(value, u64);
 } exit_map SEC(".maps");
@@ -45,65 +45,83 @@ struct {
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } rb SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(max_entries, MAX_FAULTS);
+	__type(key, int);
+	__type(value, struct simplified_fault);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} faults SEC(".maps");
+
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAP_SIZE);
+	__type(key, struct fault_key);
+	__type(value, struct fault_description);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} faults_specification SEC(".maps");
+
 const volatile unsigned long long min_duration_ns = 0;
 const volatile int fault_count = 0;
+const volatile int time_only = 0;
 
 
-static inline int process_current_state(int state_key, int pid){
+// static inline int process_current_state(int state_key, int pid){
 
-	struct info_key information = {
-		pid,
-		state_key
-	};
+// 	struct info_key information = {
+// 		pid,
+// 		state_key
+// 	};
 
-	struct info_state *current_state;
+// 	struct info_state *current_state;
 
-	current_state = bpf_map_lookup_elem(&relevant_state_info,&information);
-	if (current_state){
-		current_state->current_value++;
-		u64 value = current_state->current_value;
-		if(current_state->relevant_states){
-			for (int i=0;i<fault_count;i++){
-				if (current_state->relevant_states[i]){
-					u64 relevant_value = current_state->relevant_states[i];
-					if (relevant_value == value && relevant_value != 0){
+// 	current_state = bpf_map_lookup_elem(&relevant_state_info,&information);
+// 	if (current_state){
+// 		current_state->current_value++;
+// 		u64 value = current_state->current_value;
+// 		if(current_state->relevant_states){
+// 			for (int i=0;i<fault_count;i++){
+// 				if (current_state->relevant_states[i]){
+// 					u64 relevant_value = current_state->relevant_states[i];
+// 					if (relevant_value == value && relevant_value != 0){
 
-						struct event *e;
+// 						struct event *e;
 
-						/* reserve sample from BPF ringbuf */
-						e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-						if (!e)
-							return 0;
+// 						/* reserve sample from BPF ringbuf */
+// 						e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+// 						if (!e)
+// 							return 0;
 
-						e->type = state_key;
-						e->pid = pid;
-						e->state_condition = value;
-						bpf_ringbuf_submit(e, 0);
-						return 0;
-					}
-					if(current_state->repeat && (value % relevant_value == 0)){
-						struct event *e;
+// 						e->type = state_key;
+// 						e->pid = pid;
+// 						e->state_condition = value;
+// 						bpf_ringbuf_submit(e, 0);
+// 						return 0;
+// 					}
+// 					if(current_state->repeat && (value % relevant_value == 0)){
+// 						struct event *e;
 
-						/* reserve sample from BPF ringbuf */
-						e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-						if (!e)
-							return 0;
+// 						/* reserve sample from BPF ringbuf */
+// 						e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
+// 						if (!e)
+// 							return 0;
 
-						e->type = state_key;
-						e->pid = pid;
-						e->state_condition = relevant_value;
-						bpf_ringbuf_submit(e, 0);
-						return 0;
-					}
-					//bpf_printk("Skipped \n");
-					}
-					return 0;
-				}
+// 						e->type = state_key;
+// 						e->pid = pid;
+// 						e->state_condition = relevant_value;
+// 						bpf_ringbuf_submit(e, 0);
+// 						return 0;
+// 					}
+// 					//bpf_printk("Skipped \n");
+// 					}
+// 					return 0;
+// 				}
 				
-		}
-	}
-	return 0;
-}
+// 		}
+// 	}
+// 	return 0;
+// }
 
 SEC("tp/sched/sched_process_exec")
 int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
@@ -118,8 +136,8 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int result = process_current_state(PROCESSES_OPENED,pid);
-	
+	//int result = process_current_state(PROCESSES_OPENED,pid);
+	//int result = process_current_state(PROCESSES_OPENED,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb);
 	return 0;
 }
 
@@ -134,8 +152,8 @@ int handle_exit(struct trace_event_raw_sched_process_template* ctx)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int result = process_current_state(PROCESSES_CLOSED,pid);
-
+	//int result = process_current_state(PROCESSES_CLOSED,pid);
+	//int result = process_current_state(PROCESSES_CLOSED,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb);
 
 	return 0;
 }
