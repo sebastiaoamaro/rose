@@ -5,7 +5,7 @@ faults:
   simple_test:
     type: file_system_operation
     details:
-      name: write_file
+      name: write
       file_name: teste.txt
       return_value: 10
       success: False

@@ -1,0 +1,14 @@
+nodes:
+  test_node:
+    script: "/home/sebastiaoamaro/phd/torefidevel/tests/random/write"
+    env: "LD_PRELOAD=/home/sebastiaoamaro/phd/torefidevel/tests/random/myfdatasync.so"
+faults:
+  simple_test:
+    type: syscall
+    details:
+      name: fdatasync
+      return_value: -51139
+    occurrences: 1
+    target: test_node
+    begin_conditions:
+      time: 5

@@ -1,0 +1,17 @@
+nodes:
+  etcd1:
+    pid: 690023
+faults:
+  stop_fdatasyncs:
+    type: syscall
+    details:
+      name: fdatasync
+      return_value: -11
+    occurrences: 100000
+    target: etcd1
+    begin_conditions:
+      file_syscall:
+        syscall_name: write
+        file_name: /home/sebastiaoamaro/phd/etcd/infra1.etcd/member/wal
+        call_count: 1
+      trigger_statement: 1

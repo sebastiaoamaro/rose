@@ -1,11 +1,19 @@
+execution_plan:
+  setup:
+    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/startredpanda.sh
+    duration: 5
+    
 nodes:
   redpanda1:
-    pid: 2007175
+    container: true
+    
 faults:
   process_pause:
     type: process_pause
     target: redpanda1
     duration: 5
     begin_conditions:
-      time: 5
-      trigger_statement: 1
+      user_function:
+        binary_location: "/home/sebastiaoamaro/phd/tendermint/build/tendermint"
+        symbol: github.com/tendermint/tendermint/libs/os.EnsureDir
+        call_count: 1

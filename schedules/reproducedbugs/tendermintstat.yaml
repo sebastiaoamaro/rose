@@ -1,0 +1,36 @@
+nodes:
+  tendermint:
+    script: /home/sebastiaoamaro/phd/tendermint/build/tendermint node --proxy_app=kvstore
+faults:
+  change_fstat_result:
+    type: file_system_operation
+    details:
+      name: newfstatat
+      file_name: /.tendermint/data
+      return_value: -1
+      success: False
+
+    target: tendermint
+    begin_conditions:
+      user_function:
+        binary_location: "/home/sebastiaoamaro/phd/tendermint/build/tendermint"
+        symbol: github.com/tendermint/tendermint/libs/os.EnsureDir
+        call_count: 1
+      syscall:
+        syscall_name: newfstatat
+        call_count: 1
+        
+  change_open_result:
+    type: file_system_operation
+    details:
+      name: openat
+      file_name: /.tendermint/data/priv.json
+      return_value: -1
+      success: False
+    target: tendermint
+    
+    begin_conditions:
+      user_function:
+        binary_location: "/home/sebastiaoamaro/phd/tendermint/build/tendermint"
+        symbol: github.com/tendermint/tendermint/libs/os.EnsureDir
+        call_count: 3
