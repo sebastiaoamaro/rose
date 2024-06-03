@@ -66,70 +66,14 @@ const volatile int fault_count = 0;
 const volatile int time_only = 0;
 const volatile int cond_pos = 0;
 
-// static inline int process_current_state(int state_key, int pid){
-
-// 	struct info_key information = {
-// 		pid,
-// 		state_key
-// 	};
-
-// 	struct info_state *current_state;
-
-// 	current_state = bpf_map_lookup_elem(&relevant_state_info,&information);
-	
-// 	if (current_state){
-
-// 		current_state->current_value++;
-// 		u64 value = current_state->current_value;
-// 		if(current_state->relevant_states){
-// 			for (int i=0;i<fault_count;i++){
-// 				if (current_state->relevant_states[i]){
-// 					u64 relevant_value = current_state->relevant_states[i];
-// 					if (relevant_value == value && relevant_value != 0){
-
-// 						struct event *e;
-
-// 						/* reserve sample from BPF ringbuf */
-// 						e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-// 						if (!e)
-// 							return 0;
-
-// 						e->type = state_key;
-// 						e->pid = pid;
-// 						e->state_condition = value;
-// 						bpf_ringbuf_submit(e, 0);
-// 						return 0;
-// 					}
-// 					if(current_state->repeat && (value % relevant_value == 0)){
-// 						struct event *e;
-
-// 						/* reserve sample from BPF ringbuf */
-// 						e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
-// 						if (!e)
-// 							return 0;
-
-// 						e->type = state_key;
-// 						e->pid = pid;
-// 						e->state_condition = relevant_value;
-// 						bpf_ringbuf_submit(e, 0);
-// 						return 0;
-// 					}
-// 					//bpf_printk("Skipped \n");
-// 					}
-// 					return 0;
-// 				}
-				
-// 		}
-// 	}
-// }
-
 
 
 static void entry(struct pt_regs *ctx)
 {
-	u64 id = bpf_get_current_pid_tgid();
-	u32 tgid = id >> 32;
-	u32 pid = id;
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+	//bpf_printk("in uprobe for pid %d and tgid %d\n",pid,tid);
 	int result = process_current_state(cond_pos,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb);
 
 }

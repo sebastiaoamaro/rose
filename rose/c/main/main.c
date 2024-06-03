@@ -51,6 +51,7 @@ static int handle_event(void *ctx, void *data, size_t data_sz);
 void run_setup();
 void collect_node_pids();
 void print_output(void* args);
+void start_workload();
 
 const char *argp_program_version = "Tool for FI 0.01";
 const char *argp_program_bug_address = "sebastiao.amaro@ŧecnico.ulisboa.pt";
@@ -187,7 +188,7 @@ static const struct argp argp = {
 
 int main(int argc, char **argv)
 {
-
+	print_block("ROSE STARTED");
 	/* Set up libbpf errors and debug info callback */
 	libbpf_set_print(libbpf_print_fn);
 
@@ -225,6 +226,7 @@ int main(int argc, char **argv)
 
 	print_fault_schedule(plan,nodes,faults);
 	
+
 	run_setup();
 
 	collect_node_pids();
@@ -302,6 +304,8 @@ int main(int argc, char **argv)
 	pthread_t thread_id;
 	pthread_create(&thread_id, NULL, count_time, NULL);
 	start_node_scripts();
+
+	start_workload();
 
 	while (!exiting) {
 		err = ring_buffer__poll(rb, -1 /* timeout, ms */);
@@ -386,6 +390,10 @@ void get_fd_of_maps (struct aux_bpf *bpf){
 };
 
 void run_setup(){
+
+	if(!plan)
+		return;
+
 	print_block("Running setup script");
 
 	char *args_script[STRING_SIZE];
@@ -431,6 +439,10 @@ void run_setup(){
 
 void start_workload(){
 	//Start workload
+	if (!plan)
+		return;
+
+	printf("Started workload from execution plan with pid %d \n",plan->workload.pid);
 	kill(plan->workload.pid,SIGUSR1);
 }
 
@@ -505,7 +517,7 @@ void print_output(void* args){
        	// 	printf("%s\n", inLine);
 		// }
 
-		//printf("%s\n", inLine);
+		printf("%s\n", inLine);
     }
 }
 
@@ -657,9 +669,9 @@ void setup_begin_conditions(){
 					//Combine paths
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
+					//printf("Combined path is %s \n",combined_path);
 
-
-					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode);
+					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode);
 				}else{
 					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode);		
 				}
@@ -732,7 +744,7 @@ void add_faults_to_bpf(){
 		new_fault.faulttype = faults[i].faulttype;
 		new_fault.done = faults[i].done;
 		
-		for(int k = 0; k < STATE_PROPERTIES_COUNT; k++){
+		for(int k = 0; k < STATE_PROPERTIES_COUNT+MAX_FUNCTIONS; k++){
 			new_fault.initial.conditions_match[k] = 0;
 		}
 

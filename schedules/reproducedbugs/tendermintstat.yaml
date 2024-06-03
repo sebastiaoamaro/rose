@@ -1,6 +1,6 @@
 nodes:
   tendermint:
-    script: /home/sebastiaoamaro/phd/tendermint/build/tendermint node --proxy_app=kvstore
+    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/tendermint.sh
 faults:
   change_fstat_result:
     type: file_system_operation

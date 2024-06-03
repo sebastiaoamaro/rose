@@ -6,5 +6,5 @@ for container in $(docker ps -q); do
     veth=`grep -l $iflink /sys/class/net/veth*/ifindex`
     veth=`echo $veth|sed -e 's;^.*net/\(.*\)/ifindex$;\1;'`
     pid=$(docker inspect -f '{{.State.Pid}}' $container)
-    echo $pid";"$veth >> $1  
+    echo $pid >> $1  
 done

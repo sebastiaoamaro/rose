@@ -168,6 +168,7 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 			sys_info.file_specific_code
 		};
 		struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&info_key);
+		bpf_printk("File is %s \n",&(fi.filename[fi.offset]));
 		if(file_open){
 			//bpf_printk("Comparing %s and %s \n",&(fi.filename[fi.offset]),file_open->filename);
 			if(string_contains(file_open,&(fi.filename[fi.offset]),fi.offset)){

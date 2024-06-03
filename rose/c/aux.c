@@ -368,7 +368,8 @@ int send_signal(int pid, int signal){
 void print_fault_schedule(execution_plan* plan, node* nodes, fault * faults){
 
 
-	printf("Setup is %s it takes %d seconds to start, and workload is %s \n",plan->setup.script,plan->setup.duration,plan->workload.script);
+	if(plan)
+		printf("Setup is %s it takes %d seconds to start, and workload is %s \n",plan->setup.script,plan->setup.duration,plan->workload.script);
 	
 	for(int i = 0;i<get_node_count();i++){
 		printf("Node name:%s | pid:%d | veth:%s | script:%s \n", nodes[i].name,nodes[i].pid,nodes[i].veth,nodes[i].script);

@@ -150,14 +150,13 @@ static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location)
 	// *function = '\0';
 	// function++;
 
-	printf("Binary location in uprobe is %s \n",binary_location);
+	printf("Binary location in uprobe is %s and pid %d \n",binary_location,env.pid);
 
 	if (binary_location)
 		strcpy(bin_path,binary_location);
 	else if(resolve_binary_path(binary, env.pid, bin_path, sizeof(bin_path)))
 		goto out_binary;
 
-	printf("Binary is %s and bin_path is %s \n",binary,bin_path);
 	func_off = get_elf_func_offset(bin_path, function);
 	if (func_off < 0) {
 		warn("Could not find %s in %s\n", function, bin_path);

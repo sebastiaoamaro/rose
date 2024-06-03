@@ -34,14 +34,19 @@ static __u64 process(struct bpf_map *map, int *pos,struct simplified_fault *faul
 
 static int process_current_state(int state_key, int pid,int fault_count,int time_mode,struct bpf_map *relevant_state_info,struct bpf_map *faults_specification,struct bpf_map *faults,struct bpf_map *rb){
 
-	struct info_key information = {
+	struct info_key information_pid = {
 		pid,
 		state_key
 	};
+
+
 	struct info_state *current_state;
 
-	current_state = bpf_map_lookup_elem(relevant_state_info,&information);
+	current_state = bpf_map_lookup_elem(relevant_state_info,&information_pid);
+
+
 	if (current_state){
+		//bpf_printk("Checking stuff in pid: %d\n",pid);
 		current_state->current_value++;
 		int value = current_state->current_value;
 		if(current_state->relevant_states){

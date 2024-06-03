@@ -17,10 +17,11 @@ def parse_execution_plan(plan):
         setup.duration = int(plan['setup']['duration'])
 
         exe_plan.setup = setup
+
     if "workload" in plan:
         workload = Workload()
 
-        setup.script = plan['workload']['script']
+        workload.script = plan['workload']['script']
 
         exe_plan.workload = workload
 
