@@ -225,7 +225,6 @@ int main(int argc, char **argv)
 
 
 	print_fault_schedule(plan,nodes,faults);
-	
 
 	run_setup();
 
@@ -301,8 +300,12 @@ int main(int argc, char **argv)
 	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
 	
 	constants.time=0;
+
+	printf("Press Any Key to Continue\n");  
+	getchar();    
 	pthread_t thread_id;
 	pthread_create(&thread_id, NULL, count_time, NULL);
+
 	start_node_scripts();
 
 	start_workload();
@@ -1081,20 +1084,27 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 	struct fault *fault = &faults[fault_nr];
 
 	int pid = nodes[fault->target].pid;
+
+	pthread_t thread_id;
+	struct process_fault_args *args = (struct process_fault_args*)malloc(sizeof(struct process_fault_args));
 	switch(e->type){
 		case PROCESS_STOP:
-			
-			pthread_t thread_id;
-
-			struct process_pause_args *args = (struct process_pause_args*)malloc(sizeof(struct process_pause_args));
-			
+						
 			args->duration= &fault->duration;
 			args->pid = &pid;
 
 			pthread_create(&thread_id, NULL, pause_process, (void*)args);
 
 			fault->done = 1;
-			break;
+		break;
+		case PROCESS_KILL:
+						
+			args->pid = &pid;
+
+			pthread_create(&thread_id, NULL, kill_process, (void*)args);
+
+			fault->done = 1;
+		break;
 	}
 	return 0;
 }

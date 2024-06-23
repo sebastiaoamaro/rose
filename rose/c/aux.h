@@ -157,7 +157,7 @@ struct event {
 };
 
 
-struct process_pause_args{
+struct process_fault_args{
 	int *pid;
 	int *duration;
 };
@@ -175,5 +175,6 @@ void pause_process(void* args);
 void print_block(char*);
 pid_t get_container_pid(const char *container_name);
 char* get_overlay2_location(const char* container_name);
+void kill_process(void* args);
 
 #endif /* __AUX_H */

@@ -17,7 +17,7 @@
 #include "aux.h"
 
 #define NODE_COUNT 1
-#define FAULT_COUNT 2
+#define FAULT_COUNT 1
 
 void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script){
     memset(exe_plan->setup.script,'\0',sizeof(setup_script));
@@ -143,52 +143,24 @@ execution_plan* build_execution_plan(){
 }
 node* build_nodes(){
     node* nodes = ( node*)malloc(NODE_COUNT * sizeof(node));
-    create_node(&nodes[0],"tendermint",0,"","","/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/tendermint.sh","",0);
+    create_node(&nodes[0],"dqlite0",209729,"","","","",0);
 
     return nodes;
 }
 fault* build_faults_extra(){
     fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));
     fault_details fault_details0;
-    file_system_operation file_syscall0;
-    file_syscall0.syscall = 24;
-    file_syscall0.syscall_condition = 19;
-    strcpy(file_syscall0.directory_name,"");
-    strcpy(file_syscall0.file_name,"/.tendermint/data");
-    file_syscall0.success = 0;
-    file_syscall0.return_value = -1;
-    fault_details0.file_system_op = file_syscall0;
-    create_fault(&faults[0],"change_fstat_result",0,24,3,fault_details0,0,0,0,2);
+    process_fault process_kill0;
+    process_kill0.type = 11;
+    fault_details0.process_fault = process_kill0;
+    create_fault(&faults[0],"process_pause",0,11,1,fault_details0,0,0,0,1);
 
     fault_condition fault_condition_0_0;
-    user_function user_func_0_0;
-    fault_condition_0_0.type = USER_FUNCTION;
-    build_user_function(&user_func_0_0,"/home/sebastiaoamaro/phd/tendermint/build/tendermint","github.com/tendermint/tendermint/libs/os.EnsureDir",1);
-    fault_condition_0_0.condition.user_function = user_func_0_0;
+    systemcall syscall_0_0;
+    fault_condition_0_0.type = SYSCALL;
+    build_syscall(&syscall_0_0,6,1);
+    fault_condition_0_0.condition.syscall = syscall_0_0;
     add_begin_condition(&faults[0],fault_condition_0_0,0);
-    fault_condition fault_condition_0_1;
-    systemcall syscall_0_1;
-    fault_condition_0_1.type = SYSCALL;
-    build_syscall(&syscall_0_1,15,1);
-    fault_condition_0_1.condition.syscall = syscall_0_1;
-    add_begin_condition(&faults[0],fault_condition_0_1,1);
-    fault_details fault_details1;
-    file_system_operation file_syscall1;
-    file_syscall1.syscall = 25;
-    file_syscall1.syscall_condition = 20;
-    strcpy(file_syscall1.directory_name,"");
-    strcpy(file_syscall1.file_name,"/.tendermint/data/priv.json");
-    file_syscall1.success = 0;
-    file_syscall1.return_value = -1;
-    fault_details1.file_system_op = file_syscall1;
-    create_fault(&faults[1],"change_open_result",0,25,3,fault_details1,0,0,0,1);
-
-    fault_condition fault_condition_1_0;
-    user_function user_func_1_0;
-    fault_condition_1_0.type = USER_FUNCTION;
-    build_user_function(&user_func_1_0,"/home/sebastiaoamaro/phd/tendermint/build/tendermint","github.com/tendermint/tendermint/libs/os.EnsureDir",3);
-    fault_condition_1_0.condition.user_function = user_func_1_0;
-    add_begin_condition(&faults[1],fault_condition_1_0,0);
 
     return faults;
 }

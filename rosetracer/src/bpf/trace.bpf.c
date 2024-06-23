@@ -52,8 +52,21 @@ struct {
 	__uint(max_entries, 8192);
 } syscalls_time SEC(".maps");
 
+struct accept_args_t
+{
+    struct sockaddr_in *addr;
+};
 
-enum tag { WRITE = 0, READ = 1 };
+struct
+{
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 4096);
+    __type(key, u64);
+    __type(value, struct accept_args_t);
+} active_accept_args_map SEC(".maps");
+
+
+enum tag { WRITE = 1, READ = 2 };
 
 struct event {
 	u8 tag;
@@ -70,6 +83,7 @@ struct syscall_op {
 struct io_op {
 	int tag;
 	int pid;
+	int size;
 	char buffer[64];
 };
 
@@ -103,6 +117,18 @@ static inline int check_pid_prog() {
     }
 }
 
+static inline int check_iops_counters(){
+	if (io_ops_counter == 32767)
+		io_ops_counter = 0;
+	return 0;
+}
+
+static inline int check_syscall_counters(){
+	if (syscall_counter == 32767)
+		syscall_counter = 0;
+	return 0;
+}
+
 SEC("tp/syscalls/sys_enter_write")
 int trace_write(struct trace_event_raw_sys_enter *ctx)
 {	
@@ -119,13 +145,9 @@ int trace_write(struct trace_event_raw_sys_enter *ctx)
     char local_buff[local_buff_size] = { 0x00 };
 
 	bpf_probe_read_user(&local_buff, 64, (void*)buff_addr);
-
-	int zero = 0;
-	int *pid_trace = bpf_map_lookup_elem(&pids,&zero);
-
-	if(!pid_trace)
-		return 0;
+	
 	//bpf_printk("tracepoint write %s \n",local_buff);
+
 
 	struct io_op io_op = {
 	};	
@@ -140,12 +162,14 @@ int trace_write(struct trace_event_raw_sys_enter *ctx)
 
 	io_ops_counter++;
 
+	check_iops_counters();
+
 
 	return 0;
 
 }
 
-SEC("tp/raw_syscalls/sys_enter_read")
+SEC("tp/syscalls/sys_enter_read")
 int trace_read_enter(struct trace_event_raw_sys_enter *ctx)
 {	
 
@@ -159,12 +183,11 @@ int trace_read_enter(struct trace_event_raw_sys_enter *ctx)
 
 
 	 // Get FD
-    unsigned int fd = (unsigned int)ctx->args[0];
+    //unsigned int fd = (unsigned int)ctx->args[0];
 
 	// Store buffer address from arguments in map
     long unsigned int buff_addr = ctx->args[1];
 
-	//Might be usefull later, but since exit does not have fd it is not relevant
 	struct operation_info op_info = {
 		pid,
 		buff_addr
@@ -176,7 +199,7 @@ int trace_read_enter(struct trace_event_raw_sys_enter *ctx)
 
 }
 
-SEC("tp/raw_syscalls/sys_exit_read")
+SEC("tp/syscalls/sys_exit_read")
 int trace_read_exit(struct trace_event_raw_sys_exit *ctx)
 {
 
@@ -188,7 +211,13 @@ int trace_read_exit(struct trace_event_raw_sys_exit *ctx)
 	size_t pid_tgid = bpf_get_current_pid_tgid();
     int pid = pid_tgid >> 32;
 
-	long unsigned int pbuff_addr = bpf_map_lookup_elem(&map_buff_addrs, &pid);
+	struct operation_info *op_info = bpf_map_lookup_elem(&map_buff_addrs, &pid);
+
+	if (!op_info)
+		return 0;
+
+	long unsigned int pbuff_addr = op_info->buff_addr;
+
     if (pbuff_addr == 0) {
         return 0;
     }
@@ -205,13 +234,13 @@ int trace_read_exit(struct trace_event_raw_sys_exit *ctx)
 
 	bpf_probe_read(&local_buff, read_size, (void*)buff_addr);
 
-	//bpf_printk("tracepoint read %s\n",local_buff);
-
 	struct io_op io_op = {};	
 
 	io_op.tag = READ;
 
 	io_op.pid = pid;
+
+	io_op.size = buff_size;
 
 	bpf_probe_read(&(io_op.buffer),64,local_buff);
 
@@ -220,10 +249,11 @@ int trace_read_exit(struct trace_event_raw_sys_exit *ctx)
 	struct io_op *io_op_test = bpf_map_lookup_elem(&io_ops, &io_ops_counter);
 
 	if(io_op_test){
-		//bpf_printk("This is %d a Have: %s counter is %d",io_op_test->tag,io_op_test->buffer,io_ops_counter);
+		//bpf_printk("This is %d Have: %s counter is %d",io_op_test->tag,io_op_test->buffer,io_ops_counter);
 	}
 
 	io_ops_counter++;
+	check_iops_counters();
 
 	
 
@@ -232,7 +262,7 @@ int trace_read_exit(struct trace_event_raw_sys_exit *ctx)
 }
 
 SEC("tp/syscalls/sys_enter")
-int trace_sys_enter(raw_syscalls, sys_enter) {
+int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 
 	int pid_relevant = check_pid_prog();
 
@@ -281,6 +311,57 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 	bpf_map_update_elem(&syscalls, &syscall_counter, &syscall_op, BPF_ANY);
 
 	syscall_counter++;
-
+	check_syscall_counters();
     return 0;
+}
+
+
+SEC("tracepoint/syscalls/sys_enter_accept")
+int trace_accept_enter(struct trace_event_raw_sys_enter *ctx)
+{
+    u64 id = bpf_get_current_pid_tgid();
+
+    struct accept_args_t accept_args = {};
+    accept_args.addr = (struct sockaddr_in *)BPF_CORE_READ(ctx, args[1]);
+    bpf_map_update_elem(&active_accept_args_map, &id, &accept_args, BPF_ANY);
+    bpf_printk("enter_accept accept_args.addr: %llx\n", accept_args.addr);
+    return 0;
+}
+
+SEC("tracepoint/syscalls/sys_exit_accept")
+int trace_accept_exit(struct trace_event_raw_sys_exit *ctx)
+{
+
+    u64 id = bpf_get_current_pid_tgid();
+
+    struct accept_args_t *args =
+        bpf_map_lookup_elem(&active_accept_args_map, &id);
+    if (args == NULL)
+    {
+        return 0;
+    }
+    bpf_printk("exit_accept accept_args.addr: %llx\n", args->addr);
+    int ret_fd = (int)BPF_CORE_READ(ctx, ret);
+    if (ret_fd <= 0)
+    {
+        return 0;
+    }
+
+    bpf_map_delete_elem(&active_accept_args_map, &id);
+}
+
+SEC("tracepoint/syscalls/sys_enter_connect")
+int trace_connect_enter(struct trace_event_raw_sys_enter *ctx)
+{
+	u64 id = bpf_get_current_pid_tgid();
+
+    struct accept_args_t accept_args = {};
+    accept_args.addr = (struct sockaddr_in *)BPF_CORE_READ(ctx, args[1]);
+}
+
+SEC("tracepoint/syscalls/sys_exit_connect")
+int trace_connect_exit(struct trace_event_raw_sys_exit *ctx)
+{
+	u64 id = bpf_get_current_pid_tgid();
+
 }

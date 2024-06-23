@@ -1,0 +1,66 @@
+Using feature vendored-libbpf=true
+Using feature vendored-libelf=false
+Using feature vendored-zlib=false
+Using feature static-libbpf=true
+Using feature static-libelf=false
+Using feature static-zlib=false
+OPT_LEVEL = Some("3")
+TARGET = Some("x86_64-unknown-linux-gnu")
+HOST = Some("x86_64-unknown-linux-gnu")
+cargo:rerun-if-env-changed=CC_x86_64-unknown-linux-gnu
+CC_x86_64-unknown-linux-gnu = None
+cargo:rerun-if-env-changed=CC_x86_64_unknown_linux_gnu
+CC_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=HOST_CC
+HOST_CC = None
+cargo:rerun-if-env-changed=CC
+CC = None
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+DEBUG = Some("false")
+CARGO_CFG_TARGET_FEATURE = Some("fxsr,sse,sse2")
+cargo:rerun-if-env-changed=CFLAGS_x86_64-unknown-linux-gnu
+CFLAGS_x86_64-unknown-linux-gnu = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64_unknown_linux_gnu
+CFLAGS_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+  MKDIR    /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs
+  INSTALL  bpf.h libbpf.h btf.h libbpf_common.h libbpf_legacy.h bpf_helpers.h bpf_helper_defs.h bpf_tracing.h bpf_endian.h bpf_core_read.h skel_internal.h libbpf_version.h usdt.bpf.h
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/bpf.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/btf.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/libbpf.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/libbpf_errno.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/netlink.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/nlattr.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/str_error.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/libbpf_probes.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/bpf_prog_linfo.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/btf_dump.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/hashmap.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/ringbuf.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/strset.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/linker.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/gen_loader.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/relo_core.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/usdt.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/zip.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/elf.o
+  CC       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/staticobjs/features.o
+  INSTALL  /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/libbpf.pc
+  AR       /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/libbpf.a
+  INSTALL  /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/obj/libbpf.a 
+  CLEAN    
+cargo:rustc-link-search=native=/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out
+cargo:rustc-link-lib=elf
+cargo:rustc-link-lib=z
+cargo:rustc-link-lib=static=bpf
+cargo:include=/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/build/libbpf-sys-2412a63e21dca452/out/include
+cargo:rerun-if-env-changed=LD_LIBRARY_PATH
+cargo:rustc-link-search=native=/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/deps
+cargo:rustc-link-search=native=/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release
+cargo:rustc-link-search=native=/home/sebastiaoamaro/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib
+cargo:rustc-link-search=native=/home/sebastiaoamaro/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib

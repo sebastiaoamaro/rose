@@ -352,13 +352,21 @@ int translate_pid(int pid){
 
 void pause_process(void* args){
 
-	int pid = *((struct process_pause_args*)args)->pid;
-	int duration = *((struct process_pause_args*)args)->duration;
+	int pid = *((struct process_fault_args*)args)->pid;
+	int duration = *((struct process_fault_args*)args)->duration;
 	send_signal(pid,SIGSTOP);
 	printf("Sleeping for %d \n",duration);
 	sleep(duration);
 	send_signal(pid,SIGCONT);
 }
+
+void kill_process(void* args){
+
+	int pid = *((struct process_fault_args*)args)->pid;
+	send_signal(pid,SIGKILL);
+}
+
+
 int send_signal(int pid, int signal){
 	printf("Sending %d to %d \n",signal,pid);
 	kill(pid,signal);
