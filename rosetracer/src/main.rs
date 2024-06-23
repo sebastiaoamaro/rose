@@ -224,7 +224,7 @@ fn collect_trace(syscall_map: &libbpf_rs::Map,io_ops_map:&libbpf_rs::Map,node_co
     }
 
     let average = total/count;
-    match write_to_file(format!("/tmp/read_average{}",node_count), format!("Total:{} Average:{}",total.to_string(),average.to_string())) {
+    match write_to_file(format!("/tmp/read_average{}",node_count), format!("Average:{}",average.to_string())) {
         Ok(_) => println!("File successfully written."),
         Err(e) => eprintln!("Error writing file: {}", e),
     }
