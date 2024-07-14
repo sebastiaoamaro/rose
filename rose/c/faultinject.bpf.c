@@ -77,18 +77,33 @@ struct {
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } time SEC(".maps");
 
+
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(max_entries, 1);
+	__type(key, int);
+	__type(value,int);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} leader SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAP_SIZE);
+	__type(key, int);
+	__type(value,int);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} nodes SEC(".maps");
+
+
 const volatile int fault_count = 0;
 
 const volatile int time_only = 0;
 
 //static int process_fd_syscall(struct pt_regs *ctx,struct sys_info sys_info,struct bpf_map *relevant_state_info,struct bpf_map *faults_specification,struct bpf_map *faults,struct bpf_map *rb);
 
-
-
-
-static void call_state_processor_fd_syscall(struct pt_regs *ctx,struct sys_info *sys_info){
-	process_fd_syscall(ctx,sys_info,&relevant_state_info,&faults_specification,&faults,&rb,&files,&relevant_fd);
-}
+// static void call_state_processor(struct sys_info sys_info,int pid){
+// 	process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
+// }
 
 SEC("kprobe/__x64_sys_write")
 int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
@@ -127,7 +142,7 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 			if(relevant_fd == fd){
 				bpf_printk("Found relevant fd \n");
 				process_fd = 0;
-				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 				inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 				break;
 			}
@@ -184,14 +199,14 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 				}else{
 					bpf_printk("This should not happen, main should init the structures \n");
 				}
-				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 				inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 
 			}
 		}
 	}
 
-	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 	inject_override(pid,sys_info.general_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 
 	return 0;
@@ -243,7 +258,7 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 			__u64 relevant_fd = fdrelevant->fds[i];
 			if(relevant_fd == fd){
 				process_fd = 0;
-				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 				inject_override(pid,sys_info.file_specific_code,(struct pt_regs *) ctx,0,&faults_specification);
 				break;
 			}
@@ -298,14 +313,14 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 				}else{
 					bpf_printk("This should not happen, main should init the structures \n");
 				}
-				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 				inject_override(pid,sys_info.file_specific_code,(struct pt_regs *) ctx,0,&faults_specification);
 
 			}
 		}
 	}
 
-	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 	inject_override(pid,sys_info.general_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 
 	//process_fd_syscall(ctx,&sys_info,&relevant_state_info,&faults_specification,&faults,&rb,&files,&relevant_fd);
@@ -363,7 +378,7 @@ int BPF_KPROBE(__x64_sys_open)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int result = process_current_state(OPENS,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+	int result = process_current_state(OPENS,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 
 	inject_override(pid,OPEN,(struct pt_regs *) ctx,0,&faults_specification);
 	
@@ -401,13 +416,13 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 		if(string_contains(file_open->filename,path,file_open->size)){
 			//bpf_printk("path is %s \n",path);
 			//bpf_printk("file_open is %s \n",file_open->filename);
-			process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+			process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 			inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 
 		}
 	}
 
-	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 	inject_override(pid,sys_info.general_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 
 	return 0;
@@ -529,7 +544,7 @@ int BPF_KPROBE(__x64_sys_mkdir)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int result = process_current_state(DIRCREATED,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+	int result = process_current_state(DIRCREATED,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 
 	inject_override(pid,MKDIR,(struct pt_regs *) ctx,0,&faults_specification);
 
@@ -611,13 +626,13 @@ int BPF_KPROBE(__x64_sys_newfstatat,struct pt_regs *regs)
 	struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&info_key);
 	if(file_open){
 		if(string_contains(file_open->filename,path,file_open->size)){
-			process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+			process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 			inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 
 		}
 	}
 
-	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 	inject_override(pid,sys_info.general_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 
 	return 0;
@@ -654,7 +669,7 @@ int BPF_KSYSCALL(clone,int flags)
 		return 0;
 	}
 
-	int result = process_current_state(THREADS_CREATED,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+	int result = process_current_state(THREADS_CREATED,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 	inject_override(pid,CLONE,(struct pt_regs *) ctx,0,&faults_specification);
 
 
@@ -682,7 +697,7 @@ int BPF_KSYSCALL(clone3,struct clone_args *cl_args)
 	}
 
 
-	int result = process_current_state(THREADS_CREATED,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+	int result = process_current_state(THREADS_CREATED,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 
 	inject_override(pid,CLONE,(struct pt_regs *) ctx,0,&faults_specification);
 
@@ -734,7 +749,7 @@ int BPF_KPROBE(__x64_sys_fdatasync,struct pt_regs *regs)
 			__u64 relevant_fd = fdrelevant->fds[i];
 			if(relevant_fd == fd){
 				process_fd = 0;
-				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 				inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 				break;
 			}
@@ -789,13 +804,13 @@ int BPF_KPROBE(__x64_sys_fdatasync,struct pt_regs *regs)
 				}else{
 					bpf_printk("This should not happen, main should init the structures \n");
 				}
-				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 				inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 
 			}
 		}
 	}
 
-	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb);
+	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
 	inject_override(pid,sys_info.general_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 }

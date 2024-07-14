@@ -7,6 +7,8 @@ class Fault:
     fault_specifics = None
     target = ""
     target_nr = 0
+    traced = ""
+    traced_nr = 0
     repeatable = 0
     duration = 0
     occurrences = 0
@@ -133,11 +135,22 @@ def createFault(name,faultconfig,nodes_dict):
     if fault.type == "process_kill" or fault.type == "process_pause" or fault.type == "process_restart":
         fault.fault_category = 1
 
+    if 'traced' in faultconfig:
+        fault.traced = faultconfig['traced']
+        for name,node in nodes_dict.items():
+            if name == fault.traced:
+                fault.traced_nr = node.node_nr
+
     if 'target' in faultconfig:
         fault.target = faultconfig['target']
         for name,node in nodes_dict.items():
             if name == fault.target:
                 fault.target_nr = node.node_nr
+
+        if fault.target == "primary":
+            fault.target_nr = -1
+        if fault.target == "majority":
+            fault.target_nr = -2
 
     if 'repeatable' in faultconfig:
 
@@ -218,11 +231,12 @@ def build_faults_cfile(file,nodes,faults):
             fault_details = build_fault_details(fault.type,fault_type_nr,fault_count,fault.fault_specifics,nodes,"")
 
             file.write(fault_details)
-            build_fault = """    create_fault(&faults[#faultnr],"#name",#target,#faulttype,#fault_category,fault_details#fault_nr,#repeat,#occurrences,#duration,#condition_count);\n\n"""
+            build_fault = """    create_fault(&faults[#faultnr],"#name",#target,#traced,#faulttype,#fault_category,fault_details#fault_nr,#repeat,#occurrences,#duration,#condition_count);\n\n"""
 
             build_fault = build_fault.replace("#faultnr",str(fault_count))
             build_fault = build_fault.replace("#name",fault.name)
             build_fault = build_fault.replace("#target",str(fault.target_nr))
+            build_fault = build_fault.replace("#traced",str(fault.traced_nr))
 
             build_fault = build_fault.replace("#faulttype",str(fault_type_nr))
 
@@ -253,11 +267,13 @@ def build_faults_cfile(file,nodes,faults):
 
                 file.write(fault_details)
                 target_nr = nodes[node].node_nr
-                build_fault = """    create_fault(&faults[#faultnr],"#name",#target,#faulttype,#fault_category,fault_details#fault_nr,#repeat,#occurrences,#duration,#condition_count);\n\n"""
+
+                build_fault = """    create_fault(&faults[#faultnr],"#name",#target,#traced,#faulttype,#fault_category,fault_details#fault_nr,#repeat,#occurrences,#duration,#condition_count);\n\n"""
 
                 build_fault = build_fault.replace("#faultnr",str(fault_count))
                 build_fault = build_fault.replace("#name","block_ips")
                 build_fault = build_fault.replace("#target",str(target_nr))
+                build_fault = build_fault.replace("#traced",str(fault.traced_nr))
 
                 build_fault = build_fault.replace("#faulttype",str(fault_type_nr))
                 build_fault = build_fault.replace("#fault_category",str(fault.fault_category))

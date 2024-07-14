@@ -38,9 +38,13 @@ typedef struct Node {
     char ip[STRING_SIZE];
     char script[STRING_SIZE];
     char env[STRING_SIZE];
+    char binary[STRING_SIZE];
+    char leader_symbol[STRING_SIZE];
     int pid_tc_in;
     int pid_tc_out;
     int container;
+    struct uprobes_bpf *leader_probe;
+    int leader;
 }node;
 
 
@@ -137,6 +141,7 @@ struct faultstate{
 typedef struct fault {
     char name[STRING_SIZE];
     int target;
+    int traced;
     int category;
     int faulttype;
     fault_details fault_details;
@@ -172,7 +177,7 @@ typedef struct fault {
 
 
 
-void create_node(node* node, char* name,int pid, char* veth, char* ip, char* script,char* env,int container);
+void create_node(node* node, char* name,int pid, char* veth, char* ip, char* script,char* env,int container,char* binary,char *leader_symbol,int leader);
 void add_ip_to_block(struct fault*,char *,int);
 
 node* build_nodes();

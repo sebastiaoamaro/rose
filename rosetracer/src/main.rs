@@ -77,24 +77,24 @@ fn main() -> Result<()> {
 
     let mut skel = open_skel.load()?;
 
-    let _tracepoint_write_enter = skel.progs_mut().trace_write().attach_tracepoint("syscalls", "sys_enter_write")?;
+    //let _tracepoint_write_enter = skel.progs_mut().trace_write().attach_tracepoint("syscalls", "sys_enter_write")?;
 
-    let _tracepoint_enter_read = skel.progs_mut().trace_read_enter().attach_tracepoint("syscalls", "sys_enter_read")?;
+    //let _tracepoint_enter_read = skel.progs_mut().trace_read_enter().attach_tracepoint("syscalls", "sys_enter_read")?;
 
-    let _tracepoint_exit_read = skel.progs_mut().trace_read_exit().attach_tracepoint("syscalls", "sys_exit_read")?;
+    //let _tracepoint_exit_read = skel.progs_mut().trace_read_exit().attach_tracepoint("syscalls", "sys_exit_read")?;
 
     let _tracepoint_sys_enter = skel.progs_mut().trace_sys_enter().attach_tracepoint("raw_syscalls", "sys_enter")?;
 
     let _tracepoint_sys_exit = skel.progs_mut().trace_sys_exit().attach_tracepoint("raw_syscalls", "sys_exit")?;
 
 
-    let _tracepoint_enter_accept = skel.progs_mut().trace_accept_enter().attach_tracepoint("syscalls", "sys_enter_accept")?;
+    //let _tracepoint_enter_accept = skel.progs_mut().trace_accept_enter().attach_tracepoint("syscalls", "sys_enter_accept")?;
 
-    let _tracepoint_exit_accept = skel.progs_mut().trace_accept_exit().attach_tracepoint("syscalls", "sys_exit_accept")?;
+    //let _tracepoint_exit_accept = skel.progs_mut().trace_accept_exit().attach_tracepoint("syscalls", "sys_exit_accept")?;
 
-    let _tracepoint_enter_connect = skel.progs_mut().trace_connect_enter().attach_tracepoint("syscalls", "sys_enter_connect")?;
+    //let _tracepoint_enter_connect = skel.progs_mut().trace_connect_enter().attach_tracepoint("syscalls", "sys_enter_connect")?;
 
-    let _tracepoint_exit_connect = skel.progs_mut().trace_connect_exit().attach_tracepoint("syscalls", "sys_exit_connect")?;
+    //let _tracepoint_exit_connect = skel.progs_mut().trace_connect_exit().attach_tracepoint("syscalls", "sys_exit_connect")?;
 
     for (index,pid) in pids.iter().enumerate(){
         let pid_vec = u32_to_u8_array_little_endian(*pid);
@@ -112,7 +112,7 @@ fn main() -> Result<()> {
         sleep(Duration::from_secs(1));
     }
 
-    collect_trace(skel.maps().syscalls(),skel.maps().io_ops(),node_count.parse::<i32>().unwrap());
+    //collect_trace(skel.maps().syscalls(),skel.maps().io_ops(),node_count.parse::<i32>().unwrap());
 
     Ok(())
 }
@@ -224,7 +224,7 @@ fn collect_trace(syscall_map: &libbpf_rs::Map,io_ops_map:&libbpf_rs::Map,node_co
     }
 
     let average = total/count;
-    match write_to_file(format!("/tmp/read_average{}",node_count), format!("Average:{}",average.to_string())) {
+    match write_to_file(format!("/tmp/read_average{}",node_count), format!("Average:{} \n",average.to_string())) {
         Ok(_) => println!("File successfully written."),
         Err(e) => eprintln!("Error writing file: {}", e),
     }

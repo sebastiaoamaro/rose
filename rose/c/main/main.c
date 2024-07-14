@@ -92,6 +92,8 @@ static struct constants {
 	int time;
 	int time_map_fd;
 	int timemode;
+	int leader_map_fd;
+	int nodes_map_fd;
 
 } constants;
 
@@ -106,6 +108,11 @@ static execution_plan* plan;
 static int FAULT_COUNT = 0;
 static int DEVICE_COUNT = 0;
 static int NODE_COUNT = 0;
+static int QUORUM = 0;
+static int LEADER_PID = 0;
+int *majority;
+
+static pthread_mutex_t myMutex = PTHREAD_MUTEX_INITIALIZER;
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
@@ -188,6 +195,13 @@ static const struct argp argp = {
 
 int main(int argc, char **argv)
 {
+
+	// Initialize the event controller mutex
+    if (pthread_mutex_init(&myMutex, NULL) != 0) {
+        perror("Failed to initialize mutex");
+        return 1;
+    }
+
 	print_block("ROSE STARTED");
 	/* Set up libbpf errors and debug info callback */
 	libbpf_set_print(libbpf_print_fn);
@@ -206,7 +220,7 @@ int main(int argc, char **argv)
 	signal(SIGTERM, sig_handler);
 
 	struct aux_bpf *aux_bpf = start_aux_maps();
-
+	// return 0;
 	if(!aux_bpf){
 		printf("Error in creating aux_bpf_maps\n");
 		return 0;
@@ -221,8 +235,8 @@ int main(int argc, char **argv)
 	nodes = build_nodes();
 	faults = build_faults_extra();
 	NODE_COUNT = get_node_count();
+	QUORUM = (NODE_COUNT/2)+1;
 	FAULT_COUNT = get_fault_count();
-
 
 	print_fault_schedule(plan,nodes,faults);
 
@@ -249,8 +263,10 @@ int main(int argc, char **argv)
 	
 	// for (int i = 0;i<DEVICE_COUNT;i++)
 	// 	tc_ebpf_progs_tracking[i] = NULL;
-		
-		
+
+	majority = (int *)malloc(QUORUM*sizeof(int));
+
+	choose_leader();
 	setup_tc_progs();
 	// 	goto cleanup;
 
@@ -302,7 +318,9 @@ int main(int argc, char **argv)
 	constants.time=0;
 
 	printf("Press Any Key to Continue\n");  
-	getchar();    
+	getchar();
+
+
 	pthread_t thread_id;
 	pthread_create(&thread_id, NULL, count_time, NULL);
 
@@ -353,12 +371,6 @@ int main(int argc, char **argv)
 	if(!rb)
 		ring_buffer__free(rb);
 
-	printf("Deleting tc_hooks \n");
-
-	// tc_ebpf_progs_counter = 0;
-	// for(int i = 0; i <FAULT_COUNT;i++){
-	// 	tc_ebpf_progs_counter = delete_tc_hook(tc_ebpf_progs,faults[i].faulttype,tc_ebpf_progs_counter);
-	// }
 
 	printf("Deleting uprobes \n");
 	for (int i = 0;i<FAULT_COUNT;i++){
@@ -368,6 +380,11 @@ int main(int argc, char **argv)
 				uprobes_bpf__destroy(faults[i].list_of_functions[j]);
 			}
 		}
+	}
+
+	for (int i = 0; i< NODE_COUNT;i++){
+		if(nodes[i].leader_probe != NULL)
+			uprobes_bpf__destroy(nodes[i].leader_probe);
 	}
 
 	printf("Freeing structures \n");
@@ -389,6 +406,8 @@ void get_fd_of_maps (struct aux_bpf *bpf){
 	constants.relevant_fd = bpf_map__fd(bpf->maps.relevant_fd);
 	constants.bpf_map_fault_fd = bpf_map__fd(bpf->maps.faults);
 	constants.time_map_fd = bpf_map__fd(bpf->maps.time);
+	constants.leader_map_fd = bpf_map__fd(bpf->maps.leader);
+	constants.nodes_map_fd = bpf_map__fd(bpf->maps.nodes);
 
 };
 
@@ -422,13 +441,21 @@ void run_setup(){
 		struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
 
 		args->fp= fp;
-		args->pid = 0;
+		args->pid = plan->setup.pid;
 		pthread_create(&thread_id, NULL, print_output, (void*)args);
 	}
 
 	if(strlen(plan->workload.script)){
 		printf("Starting workload \n");
 		FILE *fp = custom_popen(plan->workload.script,args_script,env_script,'r',&(plan->workload.pid));
+
+		pthread_t thread_id;
+
+		struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
+
+		args->fp= fp;
+		args->pid = plan->workload.pid;
+		pthread_create(&thread_id, NULL, print_output, (void*)args);
 	}
 
 	//Start setup
@@ -444,7 +471,8 @@ void start_workload(){
 	//Start workload
 	if (!plan)
 		return;
-
+	if(plan->workload.pid == 0)
+		return;
 	printf("Started workload from execution plan with pid %d \n",plan->workload.pid);
 	kill(plan->workload.pid,SIGUSR1);
 }
@@ -512,13 +540,6 @@ void print_output(void* args){
 
     while (fgets(inLine, sizeof(inLine), fp) != NULL)
     {
-		// if(counter==0){
-		// 	((struct process_args*)args)->pid= atoi(inLine);
-		// 	printf("PID is %d \n",atoi(inLine));
-		// 	counter++;
-		// }else{
-       	// 	printf("%s\n", inLine);
-		// }
 
 		printf("%s\n", inLine);
     }
@@ -611,8 +632,8 @@ void setup_begin_conditions(){
 		int has_time_condition = 0;
 		for(int j = 0; j <faults[i].relevant_conditions;j++){
 			int type = faults[i].fault_conditions_begin[j].type;
-			int target = faults[i].target;
-			int pid = nodes[target].pid;
+			int traced = faults[i].traced;
+			int pid = nodes[traced].pid;
 			int error;
 			if(type == SYSCALL){
 
@@ -664,19 +685,19 @@ void setup_begin_conditions(){
 				user_function user_function = faults[i].fault_conditions_begin[j].condition.user_function;
 				faults[i].fault_conditions_begin[j].condition.user_function.cond_nr = user_func_cond_nr+STATE_PROPERTIES_COUNT;
 				
-				if(nodes[target].container){
+				if(nodes[traced].container){
 
 					//Find the directory in hostnamespace
-					char* dir = get_overlay2_location(nodes[target].name);
+					char* dir = get_overlay2_location(nodes[traced].name);
 
 					//Combine paths
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
 					//printf("Combined path is %s \n",combined_path);
 
-					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode);
+					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0);
 				}else{
-					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode);		
+					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0);		
 				}
 				insert_relevant_condition_in_ebpf(i,pid,faults[i].fault_conditions_begin[j].condition.user_function.cond_nr,user_function.call_count);
 				user_func_cond_nr++;
@@ -693,6 +714,44 @@ void setup_begin_conditions(){
 			printf("Need to process all syscalls to check time \n");
 			constants.timemode = 1;
 		}
+		
+		if (faults[i].target == -1){
+			for(int i = 0; i < NODE_COUNT; i++){
+				if (nodes[i].leader_probe)
+					continue;
+				if(nodes[i].container){
+					//Find the directory in hostnamespace
+					char* dir = get_overlay2_location(nodes[i].name);
+
+					//Combine paths
+					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
+					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1);
+				}else{
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].leader_symbol,FAULT_COUNT,0,constants.timemode, 1);
+				}
+			}
+		}
+		if (faults[i].target == -2){
+			for(int i = 0; i < NODE_COUNT; i++){
+				if (nodes[i].leader_probe)
+					continue;
+				if(nodes[i].container){
+					//Find the directory in hostnamespace
+					char* dir = get_overlay2_location(nodes[i].name);
+
+					//Combine paths
+					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
+					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1);
+
+				}else{
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].binary,FAULT_COUNT,0,constants.timemode, 1);
+				}
+
+			}
+		}
+
 		
 
 	}
@@ -783,7 +842,7 @@ void add_faults_to_bpf(){
 		if(faults[i].category == FILE_SYS_OP){
 
 			int error;
-			int pid = nodes[faults[i].target].pid;
+			int pid = nodes[faults[i].traced].pid;
 
 			file_system_operation file_system_op;
 			
@@ -828,10 +887,10 @@ void add_faults_to_bpf(){
 
 			new_fault.return_value = file_system_op.return_value;
 		}
-		
-
+	
 		//TODO GO OVER FAULT DETAILS
-		new_fault.pid = nodes[faults[i].target].pid;
+		new_fault.pid = nodes[faults[i].traced].pid;
+		new_fault.fault_target = faults[i].target;
 		new_fault.occurrences = faults[i].occurrences;
 		printf("Occurrences:%d\n",new_fault.occurrences);
 		new_fault.relevant_conditions = faults[i].relevant_conditions;
@@ -1039,18 +1098,13 @@ int setup_tc_progs(){
 void count_time(){
 
 	while(1){
-		sleep(1);
-		constants.time += 1000;
-		//int error = bpf_map_update_elem(constants.time_map_fd,&pos,&constants.time,BPF_ANY);
-		// if (error){
-		// 	printf("Error of update in count_time is %d\n",error);	
-		// }
-		//printf("New time is %d \n",(constants.time/1000));
+		sleep_for_ms(10);
+		constants.time += 10;
 
 		for (int i = 0; i< FAULT_COUNT;i++){
 			int fault_time = faults[i].initial.fault_type_conditions[TIME_FAULT];
 			//=printf("Fault %d has fault_time %d \n",i,fault_time);
-			int time_sec = (constants.time/1000);
+			int time_sec = constants.time;
 			if (fault_time == time_sec){
 
 				struct simplified_fault fault;
@@ -1079,32 +1133,121 @@ void count_time(){
 //TODO refactor this part of the code no longer usefull, except to process the crashing of processes
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
+	// if (pthread_mutex_lock(&myMutex) != 0) {
+    //     printf("Failed to lock mutex");
+    //     return NULL;
+    // }
+
 	const struct event *e = data;
-	int fault_nr = e->fault_nr;
-	struct fault *fault = &faults[fault_nr];
 
-	int pid = nodes[fault->target].pid;
+	// if (fault->done)
+	// 	return 0;
 
-	pthread_t thread_id;
-	struct process_fault_args *args = (struct process_fault_args*)malloc(sizeof(struct process_fault_args));
+	//int pid = nodes[fault->target].pid;
+
 	switch(e->type){
-		case PROCESS_STOP:
-						
-			args->duration= &fault->duration;
-			args->pid = &pid;
+		case PROCESS_STOP: {
+			int fault_nr = e->fault_nr;
+			struct fault *fault = &faults[fault_nr];
+			pthread_t thread_id;
+			struct process_fault_args *args = (struct process_fault_args*)malloc(sizeof(struct process_fault_args));
+			fault->done = 1;
+			if (fault->target == -1){
+				printf("Stopping LEADER %d \n ",LEADER_PID);
+				args->pid = &LEADER_PID;
+			}
+			else{
 
+			}
+				args->pid = &(e->pid);
+
+			args->duration= &fault->duration;
+			
 			pthread_create(&thread_id, NULL, pause_process, (void*)args);
 
-			fault->done = 1;
 		break;
-		case PROCESS_KILL:
+		}
+		case PROCESS_KILL:{
+			pthread_t thread_id;
+			struct process_fault_args *args = (struct process_fault_args*)malloc(sizeof(struct process_fault_args));
+			int fault_nr = e->fault_nr;
+			struct fault *fault = &faults[fault_nr];
 						
-			args->pid = &pid;
+			if (fault->target == -1)
+				args->pid = &LEADER_PID;
+			else
+				args->pid = &(nodes[fault->target].pid);
 
 			pthread_create(&thread_id, NULL, kill_process, (void*)args);
 
 			fault->done = 1;
+		}
+		break;
+		case LEADER_CHANGE:{
+			LEADER_PID = e->pid;
+			printf("Changed leader to %d \n",e->pid);
+			int zero = 0;
+			int error = bpf_map_update_elem(constants.leader_map_fd,&zero,&LEADER_PID,BPF_ANY);
+
+			//recalculate_majority();
+		}
 		break;
 	}
+	// Unlock the mutex
+    // if (pthread_mutex_unlock(&myMutex) != 0) {
+    //     printf("Failed to unlock mutex");
+    //     return NULL;
+    // }
+
 	return 0;
 }
+
+void choose_leader(){
+	for(int i=0;i < NODE_COUNT; i++){
+		if (nodes[i].leader == 1){
+			LEADER_PID = nodes[i].pid;
+			printf("Leader is %s \n",nodes[i].name);
+			int one = 1;
+			int zero = 0;
+			int error = bpf_map_update_elem(constants.leader_map_fd,&zero,&(nodes[i].pid),BPF_ANY);
+
+
+			error = bpf_map_update_elem(constants.nodes_map_fd,&(nodes[i].pid),&one,BPF_ANY);
+		}else{
+			int zero = 0;
+			int error = bpf_map_update_elem(constants.nodes_map_fd,&(nodes[i].pid),1,BPF_ANY);
+		}
+
+
+	}
+
+}
+
+// void calculate_majority(){
+// 	int count = 0;
+// 	for(int i=0; i < NODE_COUNT;i++){
+// 		if (nodes[i].leader != 1){
+// 			majority[count] = nodes[i].pid;
+// 			count++;
+// 		}
+// 		if(count==QUORUM)
+// 			break;
+// 	}
+
+// 	//Pass majority to ebpf pick the first non 0
+// }
+
+// void recalculate_majority(){
+
+// 	for(int i=0; i < QUORUM; i++){
+// 		if (majority[i] == LEADER_PID){
+// 			majority[i] = 0;
+// 		}
+// 		for (int j=0; j < NODE_COUNT; j++){
+// 			if ((majority[i] == 0) && !(is_element_in_array(majority,QUORUM,nodes[j].pid)) && (nodes[j].pid != LEADER_PID)){
+// 				majority[i] = nodes[j].pid;
+// 			}
+// 		}
+// 	}
+// 	//Pass majority to ebpf pick the first non 0
+// }

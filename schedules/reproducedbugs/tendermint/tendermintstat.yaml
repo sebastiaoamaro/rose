@@ -34,3 +34,4 @@ faults:
         binary_location: "/home/sebastiaoamaro/phd/tendermint/build/tendermint"
         symbol: github.com/tendermint/tendermint/libs/os.EnsureDir
         call_count: 3
+

@@ -1,0 +1,37 @@
+execution_plan:
+  setup:
+    script: startcluster.sh
+    duration: 30
+  workload:
+    script: runworkload.sh
+
+nodes:
+  exampleA:
+    veth: vethxyz
+    binary: binary.o
+    leader_symbol: symbol___EEEE
+    leader: true
+  exampleB:
+    veth: vethxyz
+    binary: binary.o
+    leader_symbol: symbol___EEEE
+  exampleC:
+    veth: vethxyz
+    binary: binary.o
+    leader_symbol: symbol___EEEE
+
+
+faults:
+  isolate_kms:
+    type: process_pause
+    target: primary
+    traced: exampleA 
+    begin_conditions:
+      time: 5
+      
+  isolate_kms2:
+    type: process_pause
+    target: majority 
+    traced: exampleB
+    begin_conditions:
+      time: 5

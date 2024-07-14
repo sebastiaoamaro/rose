@@ -37,6 +37,7 @@ struct simplified_fault{
     struct faultstate_simple initial;
     struct faultstate_simple end;
     int pid;
+    int fault_target;
     int repeat;
     int occurrences;
     int return_value;
@@ -136,7 +137,8 @@ enum stateinfo{
 
 
 enum generic{
-    ANY_PID = 411
+    ANY_PID = 411,
+    LEADER_CHANGE = 13
 };
 
 struct event {
@@ -176,5 +178,7 @@ void print_block(char*);
 pid_t get_container_pid(const char *container_name);
 char* get_overlay2_location(const char* container_name);
 void kill_process(void* args);
+void sleep_for_ms(long milliseconds);
+bool is_element_in_array(int arr[], int size, int element);
 
 #endif /* __AUX_H */

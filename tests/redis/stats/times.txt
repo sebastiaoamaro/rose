@@ -1,0 +1,18 @@
+Workload vanilla Replicas:6 took 14.58
+Workload with eBPF Replicas:6 took 15.83
+Workload vanilla Replicas:12 took 19.21
+Workload with eBPF Replicas:12 took 18.80
+Workload vanilla Replicas:6 took 13.93
+Workload with eBPF Replicas:6 took 15.37
+Command exited with non-zero status 1
+Workload vanilla Replicas:12 took 0.11
+Workload vanilla Replicas:6 took 18.83
+Workload with eBPF Replicas:6 took 14.43
+Workload vanilla Replicas:6 took 19.98
+Workload with eBPF Replicas:6 took 25.59
+Workload vanilla Replicas:6 took 21.15
+Workload with eBPF Replicas:6 took 23.58
+Command exited with non-zero status 1
+Workload vanilla Replicas:12 took 0.11
+Workload vanilla Replicas:12 took 21.52
+Workload with eBPF Replicas:12 took 26.48

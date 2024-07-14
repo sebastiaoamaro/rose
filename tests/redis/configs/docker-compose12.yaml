@@ -103,8 +103,8 @@ services:
             - /redis/node-9/data:/data
             - /redis/node-9/conf/redis.conf:/etc/redis/redis.conf
         ports:
-            - "6379:6379"
-            - 16379:16379
+            - "6383:6379"
+            - 16383:16379
         networks:
             redis_network:
                 ipv4_address: 172.38.0.19
@@ -150,5 +150,5 @@ networks:
         driver: bridge
         ipam:
             config:
-                - subnet: 172.38.0.0/24
+                - subnet: 172.38.0.0/16
                   gateway: 172.38.0.1

@@ -189,7 +189,7 @@ out_binary:
 	return ret;
 }
 
-struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faultcount,int cond_pos,int timemode)
+struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faultcount,int cond_pos,int timemode, int primary_function)
 {
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
 
@@ -223,6 +223,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 	obj->rodata->targ_tgid = pid;
 	obj->rodata->filter_cg = 0;
 	obj->rodata->cond_pos = cond_pos;
+	obj->rodata->primary_function = primary_function;
 
 	env.pid = pid;
 	env.funcname = funcname;

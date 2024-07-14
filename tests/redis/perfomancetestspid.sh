@@ -1,6 +1,6 @@
 #!/bin/bash
-workload_size=10000
-runs=2
+workload_size=10000000
+runs=5
 # maindirectory=/home/sebastiaoamaro/phd/torefidevel/rosetracer/
 # main=/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
 maindirectory=/vagrant/rosetracer/
@@ -12,22 +12,28 @@ cd $maindirectory
 #bpftool btf dump file /sys/kernel/btf/vmlinux format c > src/bpf/vmlinux.h
 cargo build --release
 cd $SCRIPT_DIR
-chmod +x configs/setup.sh
 
+chmod +x configs/setup.sh
+chmod +x ycsb.sh
+
+sudo rm -r /redis/*
 sudo rm /tmp/read_average*
-for topology in 6 12
+
+#rm results/*
+for topology in 3 6 12
 do
-    for (( run=10; run<=$runs; run++ ))
-        do
+    for (( run=1; run<=$runs; run++ ))
+    do
         sudo /vagrant/tests/redis/configs/setup.sh $topology
         #Normal run
         docker compose -f configs/docker-compose$topology.yaml up -d
         sleep 30
-        redis-cli --cluster create $(cat configs/ips$topology.txt) --cluster-replicas 1 --cluster-yes
+        redis-cli --cluster create $(cat configs/ips$topology.txt) --cluster-yes
         sleep 30
 
         echo Starting Workload
-        /usr/bin/time -ao stats/times$date.txt -f "$run:v:$topology:%e" python3 workload.py $workload_size
+        #/usr/bin/time -ao stats/times$date.txt -f "$run:v:$topology:%e" ./ycsb.sh $workload_size topology$topology:$run
+        ./ycsb.sh $workload_size topology$topology:$run
         docker compose -f configs/docker-compose$topology.yaml down
         sudo rm -r /redis/*
     done
@@ -45,7 +51,7 @@ do
         sudo /vagrant/tests/redis/configs/setup.sh $topology
         docker compose -f configs/docker-compose$topology.yaml up -d
         sleep 30
-        redis-cli --cluster create $(cat configs/ips$topology.txt) --cluster-replicas 1 --cluster-yes
+        redis-cli --cluster create $(cat configs/ips$topology.txt) --cluster-yes
         sleep 30
 
         ./populatefaults.sh $faultsfile
@@ -57,7 +63,8 @@ do
 
         echo Starting Workload
 
-        /usr/bin/time -ao stats/times$date.txt -f "$run:e:$topology:%e" python3 workload.py $workload_size
+        #/usr/bin/time -ao stats/times$date.txt -f "$run:e:$topology:%e" python3 workload.py $workload_size
+        ./ycsb.sh $workload_size tracerontopology$topology:$run
 
         kill -2 $ebpf_PID
         docker compose -f configs/docker-compose$topology.yaml down

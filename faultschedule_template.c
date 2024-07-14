@@ -29,7 +29,7 @@ void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup
     strcpy(exe_plan->workload.script,workload_script);
     exe_plan->workload.pid = 0;
 }
-void create_node(node* node, char* name,int pid, char* veth, char* ip, char* script,char* env,int container){
+void create_node(node* node, char* name,int pid, char* veth, char* ip, char* script,char* env,int container,char *binary,char *leader_symbol,int leader){
 
     memset(node->name,'\0',sizeof(name));
     strcpy(node->name,name);
@@ -47,7 +47,17 @@ void create_node(node* node, char* name,int pid, char* veth, char* ip, char* scr
     memset(node->env,'\0',sizeof(env));
     strcpy(node->env,env);
 
+    memset(node->binary,'\0',sizeof(binary));
+    strcpy(node->binary,binary);
+
+    memset(node->leader_symbol,'\0',sizeof(leader_symbol));
+    strcpy(node->leader_symbol,leader_symbol);
+
     node->container = container;
+
+    node->leader_probe = NULL;
+
+    node->leader = leader;
 }
 
 int get_node_count(){
@@ -59,12 +69,12 @@ int get_fault_count(){
 }
 
 
-void create_fault(struct fault* fault,char* name,int target, int faulttype,int fault_category,fault_details fault_details,int repeat,int occurrences,int duration,int condition_count){
+void create_fault(struct fault* fault,char* name,int target,int traced, int faulttype,int fault_category,fault_details fault_details,int repeat,int occurrences,int duration,int condition_count){
     
     memset(fault->name,'\0',sizeof(name));
     strcpy(fault->name,name);
     fault->target = target;
-
+    fault->traced = traced;
     fault->fault_details = fault_details;
     fault->faulttype = faulttype;
     fault->category = fault_category;

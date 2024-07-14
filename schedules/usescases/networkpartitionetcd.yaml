@@ -1,10 +1,17 @@
 #Inject network partition {A} {B,C] after 5 seconds
+execution_plan:
+  setup:
+    script: startcluster.sh
+    duration: 30
+  workload:
+    script: runworkload.sh
+
 nodes:
-  etcdA:
+  exampleA:
     veth: vethxyz
-  etcdB:
+  exampleB:
     veth: vethxyz
-  etcdC:
+  exampleC:
     veth: vethxyz
 
 faults:
@@ -12,9 +19,9 @@ faults:
     type: network_partition
     network_partitions:
       partition1:
-        etcdA
+        exampleA
       partition2:
-        etcdB      
-        etcdC
+        exampleB      
+        exampleC
     begin_conditions:
       time: 5

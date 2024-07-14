@@ -1,0 +1,98 @@
+execution_plan:
+  setup:
+    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/startrediscluster.sh
+    duration: 30
+  # workload:
+  #   script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/runworkload.sh
+    
+nodes:
+  redis1:
+    container: true
+  redis2:
+    container: true
+  redis3:
+    container: true
+  redis4:
+    container: true
+  redis5:
+    container: true
+
+faults:
+
+  process_pause0:
+    type: process_pause
+    target: redis1
+    duration: 20000
+    begin_conditions:
+      time: 3000
+
+  process_pause1:
+    type: process_pause
+    target: redis2
+    duration: 5000
+    begin_conditions:
+      time: 23000
+  process_pause2:
+    type: process_pause
+    target: redis3
+    duration: 5000
+    begin_conditions:
+      time: 23000
+  process_pause3:
+    type: process_pause
+    target: redis4
+    duration: 5000
+    begin_conditions:
+      time: 23000
+
+    
+  process_pause4:
+    type: process_pause
+    target: redis5
+    duration: 20000
+    begin_conditions:
+      time: 28000
+  process_pause5:
+    type: process_pause
+    target: redis3
+    duration: 20000
+    begin_conditions:
+      time: 28000
+  process_pause6:
+    type: process_pause
+    target: redis4
+    duration: 20000
+    begin_conditions:
+      time: 28000
+
+  # process_pause7:
+  #   type: process_pause
+  #   target: redis1
+  #   duration: 10000
+  #   begin_conditions:
+  #     time: 42000
+  # process_pause8:
+  #   type: process_pause
+  #   target: redis2
+  #   duration: 10000
+  #   begin_conditions:
+  #     time: 42000
+  # process_pause9:
+  #   type: process_pause
+  #   target: redis3
+  #   duration: 10000
+  #   begin_conditions:
+  #     time: 42000
+  # process_pause10:
+  #   type: process_pause
+  #   target: redis4
+  #   duration: 10000
+  #   begin_conditions:
+  #     time: 42000
+  # process_pause11:
+  #   type: process_pause
+  #   target: redis5
+  #   duration: 10000
+  #   begin_conditions:
+  #     time: 42000
+    

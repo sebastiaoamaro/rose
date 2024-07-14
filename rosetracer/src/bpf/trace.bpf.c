@@ -52,6 +52,22 @@ struct {
 	__uint(max_entries, 8192);
 } syscalls_time SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, int);
+	__type(value, int);
+	__uint(max_entries, 8192);
+} syscalls_counter SEC(".maps");
+
+
+
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__type(key, int);
+	__type(value, int);
+	__uint(max_entries, 8192);
+} syscalls_counter_array SEC(".maps");
+
 struct accept_args_t
 {
     struct sockaddr_in *addr;
@@ -109,7 +125,7 @@ static inline int check_pid_prog() {
     if (value) {
         // PID is in the map
         //bpf_printk("PID %d is in the map\n", key);
-        return 1;
+        return key;
     } else {
         // PID is not in the map
         //bpf_printk("PID %d is not in the map\n", key);
@@ -226,11 +242,11 @@ int trace_read_exit(struct trace_event_raw_sys_exit *ctx)
 
 
 	long unsigned int buff_addr = pbuff_addr;
-	const unsigned int local_buff_size = 64;
+	const unsigned int local_buff_size = 16;
     char local_buff[local_buff_size] = { 0x00 };
 
 	//read only 64 bytes
-	long int read_size = 64;
+	long int read_size = 16;
 
 	bpf_probe_read(&local_buff, read_size, (void*)buff_addr);
 
@@ -269,49 +285,75 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 	if (!pid_relevant)
 		return 0;
 
-    u64 pid_tgid = bpf_get_current_pid_tgid();
+	int id = ctx->id;
 
 	//Need to save
-    u64 time = bpf_ktime_get_ns();
+    //u64 time = bpf_ktime_get_ns();
 
-	bpf_map_update_elem(&syscalls_time, &pid_tgid, &time, BPF_ANY);
+	//bpf_map_update_elem(&syscalls_time, &pid_tgid, &time, BPF_ANY);
+
+	// int *counter = bpf_map_lookup_elem(&syscalls_counter,&id);
+
+	// if (counter){
+	// 	int new_counter = *counter + 1;
+	// 	bpf_map_update_elem(&syscalls_counter,&id,&new_counter,BPF_ANY);
+	// 	//bpf_printk("Inserted %d for %d",id,new_counter);
+	// }else{
+	// 	int zero = 0;
+	// 	bpf_map_update_elem(&syscalls_counter,&id,&zero,BPF_ANY);
+	// }
+
+
+	int *counter = bpf_map_lookup_elem(&syscalls_counter_array,&id);
+
+	if (counter){
+		int new_counter = *counter + 1;
+		bpf_map_update_elem(&syscalls_counter_array,&id,&new_counter,BPF_ANY);
+		//bpf_printk("Inserted %d for %d",id,new_counter);
+	}else{
+		int zero = 0;
+		bpf_map_update_elem(&syscalls_counter_array,&id,&zero,BPF_ANY);
+	}
+
     return 0;
 }
 
 SEC("tp/syscalls/sys_exit")
 int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
-
 	int pid_relevant = check_pid_prog();
 
 	if (!pid_relevant)
 		return 0;
 
-    u64 pid_tgid = bpf_get_current_pid_tgid();
-
-	u64 *time_start = bpf_map_lookup_elem(&syscalls_time, &pid_tgid);
-
-	if(!time_start)
-		return 0;
-
-	u64 time_end = bpf_ktime_get_ns();
-
-	u64 time = time_end - *time_start;
-
 	int ret = ctx->ret;
 
-	int id = ctx->id;
+	if (ret<0){
 
-	struct syscall_op syscall_op = {
-		id,
-		pid_tgid,
-		ret,
-		time
-	};
+		u64 pid_tgid = bpf_get_current_pid_tgid();
 
-	bpf_map_update_elem(&syscalls, &syscall_counter, &syscall_op, BPF_ANY);
+		//u64 *time_start = bpf_map_lookup_elem(&syscalls_time, &pid_tgid);
 
-	syscall_counter++;
-	check_syscall_counters();
+		//if(!time_start)
+			//return 0;
+
+		u64 time_end = bpf_ktime_get_ns();
+
+		//u64 time = time_end - *time_start;
+
+		int id = ctx->id;
+		struct syscall_op syscall_op = {
+			id,
+			pid_tgid,
+			ret,
+			time_end
+		};
+
+		bpf_map_update_elem(&syscalls, &syscall_counter, &syscall_op, BPF_ANY);
+
+		syscall_counter++;
+		check_syscall_counters();
+	}
+
     return 0;
 }
 
@@ -324,7 +366,7 @@ int trace_accept_enter(struct trace_event_raw_sys_enter *ctx)
     struct accept_args_t accept_args = {};
     accept_args.addr = (struct sockaddr_in *)BPF_CORE_READ(ctx, args[1]);
     bpf_map_update_elem(&active_accept_args_map, &id, &accept_args, BPF_ANY);
-    bpf_printk("enter_accept accept_args.addr: %llx\n", accept_args.addr);
+    //bpf_printk("enter_accept accept_args.addr: %llx\n", accept_args.addr);
     return 0;
 }
 
@@ -340,7 +382,7 @@ int trace_accept_exit(struct trace_event_raw_sys_exit *ctx)
     {
         return 0;
     }
-    bpf_printk("exit_accept accept_args.addr: %llx\n", args->addr);
+    //bpf_printk("exit_accept accept_args.addr: %llx\n", args->addr);
     int ret_fd = (int)BPF_CORE_READ(ctx, ret);
     if (ret_fd <= 0)
     {

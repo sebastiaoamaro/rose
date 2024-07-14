@@ -7,6 +7,9 @@ class Node:
     node_nr = 0
     env = ""
     container = 0
+    binary = ""
+    leader_symbol = ""
+    leader = 0
 
 def parse_nodes(nodes):
     
@@ -47,6 +50,17 @@ def createNode(name,nodeconfig,node_nr):
     if 'env' in keys:
         node.env = nodeconfig['env']
 
+    if 'binary' in keys:
+        node.binary = nodeconfig['binary']
+
+    if 'leader_symbol' in keys:
+        node.leader_symbol = nodeconfig['leader_symbol']
+
+    if 'leader' in keys:
+        print(nodeconfig['leader'])
+        if nodeconfig['leader']:
+            node.leader = 1
+
     return node
 
 def build_nodes_cfile(file,nodes):
@@ -60,7 +74,7 @@ def build_nodes_cfile(file,nodes):
     
     node_nr = 0
     for name,node in nodes.items():
-        build_node = """    create_node(&nodes[#nodenr],"#name",#pid,"#veth","#ip","#script","#env",#container);\n"""
+        build_node = """    create_node(&nodes[#nodenr],"#name",#pid,"#veth","#ip","#script","#env",#container,"#binary","#leader_symbol",#leader);\n"""
         build_node = build_node.replace("#nodenr",str(node_nr))
         build_node = build_node.replace("#name",node.name)
         build_node = build_node.replace("#veth",node.veth)
@@ -69,6 +83,9 @@ def build_nodes_cfile(file,nodes):
         build_node = build_node.replace("#pid",str(node.pid))
         build_node = build_node.replace("#env",str(node.env))
         build_node = build_node.replace("#container",str(node.container))
+        build_node = build_node.replace("#binary",str(node.binary))
+        build_node = build_node.replace("#leader_symbol",str(node.leader_symbol))
+        build_node = build_node.replace("#leader",str(node.leader))
 
         file.write(build_node)
         node_nr+=1

@@ -181,7 +181,29 @@ struct aux_bpf* start_aux_maps(){
 		printf("[ERROR] libbpf pin API: %d\n", err);
 		return NULL;
 	}
+	err = bpf_map__unpin(skel->maps.leader, "/sys/fs/bpf/leader");
+	if(err) {
+		printf("[ERROR] libbpf unpin API: %d\n", err);
+		//return NULL;
+	}
 
+	err = bpf_map__pin(skel->maps.leader, "/sys/fs/bpf/leader");
+	if(err) {
+		printf("[ERROR] libbpf pin API: %d\n", err);
+		return NULL;
+	}
+
+	err = bpf_map__unpin(skel->maps.nodes, "/sys/fs/bpf/nodes");
+	if(err) {
+		printf("[ERROR] libbpf unpin API: %d\n", err);
+		//return NULL;
+	}
+
+	err = bpf_map__pin(skel->maps.nodes, "/sys/fs/bpf/nodes");
+	if(err) {
+		printf("[ERROR] libbpf pin API: %d\n", err);
+		return NULL;
+	}
 
     return skel;
 
@@ -351,12 +373,12 @@ int translate_pid(int pid){
 }
 
 void pause_process(void* args){
-
 	int pid = *((struct process_fault_args*)args)->pid;
 	int duration = *((struct process_fault_args*)args)->duration;
+
 	send_signal(pid,SIGSTOP);
 	printf("Sleeping for %d \n",duration);
-	sleep(duration);
+	sleep_for_ms(duration);
 	send_signal(pid,SIGCONT);
 }
 
@@ -380,7 +402,7 @@ void print_fault_schedule(execution_plan* plan, node* nodes, fault * faults){
 		printf("Setup is %s it takes %d seconds to start, and workload is %s \n",plan->setup.script,plan->setup.duration,plan->workload.script);
 	
 	for(int i = 0;i<get_node_count();i++){
-		printf("Node name:%s | pid:%d | veth:%s | script:%s \n", nodes[i].name,nodes[i].pid,nodes[i].veth,nodes[i].script);
+		printf("Node name:%s | pid:%d | veth:%s | script:%s | leader:%d \n", nodes[i].name,nodes[i].pid,nodes[i].veth,nodes[i].script,nodes[i].leader);
 	}
 
 	for(int i=0;i<get_fault_count();i++){
@@ -516,4 +538,21 @@ void print_block(char* sentence){
 	printf("%s\n",sentence);
 	printf("###########################################################\n");
 	printf("###########################################################\n");
+}
+
+void sleep_for_ms(long milliseconds) {
+    struct timespec ts;
+    ts.tv_sec = milliseconds / 1000;  // Convert milliseconds to seconds
+    ts.tv_nsec = (milliseconds % 1000) * 1000000;  // Convert remaining milliseconds to nanoseconds
+
+    nanosleep(&ts, NULL);
+}
+
+bool is_element_in_array(int arr[], int size, int element) {
+    for(int i = 0; i < size; i++) {
+        if(arr[i] == element) {
+            return true;
+        }
+    }
+    return false;
 }
