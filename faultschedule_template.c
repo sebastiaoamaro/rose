@@ -19,7 +19,11 @@
 #define NODE_COUNT #node_count
 #define FAULT_COUNT #fault_count
 
+
+char* get_veth_interface_name(const char* container_name);
+
 void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script){
+    
     memset(exe_plan->setup.script,'\0',sizeof(setup_script));
     strcpy(exe_plan->setup.script,setup_script);
     exe_plan->setup.duration = setup_duration;
@@ -58,6 +62,14 @@ void create_node(node* node, char* name,int pid, char* veth, char* ip, char* scr
     node->leader_probe = NULL;
 
     node->leader = leader;
+
+
+    if (container){
+        char* interface_name = get_veth_interface_name(node->name);
+        printf("Interface name is %s \n",interface_name);
+            memset(node->veth,'\0',sizeof(interface_name));
+            strcpy(node->veth,interface_name);
+    }
 }
 
 int get_node_count(){
@@ -101,9 +113,9 @@ void add_begin_condition(struct fault* fault,fault_condition fault_condition,int
 void build_user_function(user_function* user_func,char* binary_location,char* symbol,int call_count){
 
     memset(user_func->binary_location,'\0',sizeof(user_func->binary_location));
-    strncpy(user_func->binary_location,binary_location,strlen(binary_location));
+    strcpy(user_func->binary_location,binary_location);
     memset(user_func->symbol,'\0',sizeof(user_func->symbol));
-    strncpy(user_func->symbol,symbol,strlen(symbol));
+    strcpy(user_func->symbol,symbol);
     user_func->call_count = call_count;
 }
 
@@ -146,4 +158,63 @@ void add_ip_to_block(struct fault* fault,char *string_ip,int pos){
 		inet_pton(AF_INET,string_ip,&(sa.sin_addr));
 
 		fault->ips_blocked[pos] = sa.sin_addr.s_addr;
+}
+
+
+char* get_veth_interface_name(const char* container_name) {
+    static char veth_name[512];  // Use static to return the name
+    char command[512];
+    char buffer[512];
+    int iflink = -1;
+
+    // Get the iflink of the container's eth0 interface
+    snprintf(command, sizeof(command), "docker exec -it %s bash -c 'cat /sys/class/net/eth0/iflink'", container_name);
+    FILE* pipe = popen(command, "r");
+    if (!pipe) {
+        perror("popen");
+        return NULL;
+    }
+
+    if (fgets(buffer, sizeof(buffer), pipe) != NULL) {
+        iflink = atoi(buffer);
+    } else {
+        fprintf(stderr, "Failed to get iflink\n");
+        pclose(pipe);
+        return NULL;
+    }
+    pclose(pipe);
+
+    if (iflink <= 0) {
+        fprintf(stderr, "Invalid iflink value\n");
+        return NULL;
+    }
+
+    // Grep for the iflink value in veth* ifindex files
+    snprintf(command, sizeof(command), "grep -l %d /sys/class/net/veth*/ifindex", iflink);
+    pipe = popen(command, "r");
+    if (!pipe) {
+        perror("popen");
+        return NULL;
+    }
+
+    if (fgets(buffer, sizeof(buffer), pipe) != NULL) {
+        // Extract the veth interface name from the path
+        char* start = strstr(buffer, "veth");
+        if (start) {
+            // Copy until the next '/'
+            char* end = strchr(start, '/');
+            if (end) {
+                *end = '\0'; // Null-terminate the string
+            }
+            memset(veth_name,'\0',sizeof(start));
+            strcpy(veth_name, start);
+            veth_name[sizeof(veth_name) - 1] = '\0'; // Ensure null-termination
+            pclose(pipe);
+            return veth_name;
+        }
+    } else {
+        fprintf(stderr, "Failed to find veth interface\n");
+    }
+    pclose(pipe);
+    return NULL;
 }

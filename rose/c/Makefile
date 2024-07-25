@@ -21,7 +21,7 @@ VMLINUX := ../../vmlinux/$(ARCH)/vmlinux.h
 # libbpf to avoid dependency on system-wide headers, which could be missing or
 # outdated
 INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
-CFLAGS := -g -Wall
+CFLAGS := -g -w
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
 APPS = process tc aux fs block uprobes popen faultschedule faultinject
@@ -35,7 +35,7 @@ else
 BZS_APPS :=
 APPS += $(BZS_APPS)
 # Required by libblazesym
-ALL_LDFLAGS += -lrt -ldl -lpthread -lm
+ALL_LDFLAGS += -lrt -ldl -lpthread -lm -Wall -w
 endif
 
 COMMON_OBJ = \
@@ -149,7 +149,7 @@ $(BZS_APPS): $(LIBBLAZESYM_OBJ)
 $(APPS): %: $(OUTPUT)/%.o $(COMMON_OBJ) $(LIBBPF_OBJ) | $(OUTPUT)
 	$(call msg,APP,$@)
 	$(call msg,APP,$^)
-	$(Q)$(CC) -c $^ $(ALL_LDFLAGS) -lelf -lz -o $@ 
+	$(Q)$(CC) -c $^ $(ALL_LDFLAGS) -lelf -lz -o $@
 
 OFILES=$(patsubst %,$(OUTPUT)/%.o,$(APPS))
 

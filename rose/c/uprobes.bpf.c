@@ -75,7 +75,15 @@ struct {
 	__type(key, int);
 	__type(value,int);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
-} nodes SEC(".maps");
+} nodes_status SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAP_SIZE);
+	__type(key, int);
+	__type(value,int);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} nodes_translator SEC(".maps");
 
 
 
@@ -93,37 +101,39 @@ static void entry(struct pt_regs *ctx)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 	//bpf_printk("in uprobe for pid %d and tgid %d\n",pid,tid);
-	int result = process_current_state(cond_pos,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes);
+	int result = process_current_state(cond_pos,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes_status,&nodes_translator);
 
 }
 
 static void switch_leader(struct pt_regs *ctx)
-{	
+{
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int pos = 0;
+	int zero = 0;
 
-	int *leader_pointer = bpf_map_lookup_elem(&nodes,&pos);
-	
-	int *leader_pid = 0;
+	int one = 1;
+
+	int *leader_pointer = bpf_map_lookup_elem(&nodes_status,&zero);
+
+	int leader_pid = 0;
 
 	if(leader_pointer)
 		leader_pid = *leader_pointer;
 
-	
-	bpf_map_update_elem(&leader,&pos,&pid,BPF_ANY);
+
+	bpf_map_update_elem(&leader,&zero,&pid,BPF_ANY);
 
 	bpf_printk("Leader switched to %d \n",pid);
 
-	//Update nodes in node map
+	//Update nodes_status in node map
 
-	bpf_map_update_elem(&nodes,&leader_pid,&pos,BPF_ANY);
+	bpf_map_update_elem(&nodes_status,&leader_pid,&zero,BPF_ANY);
 
-	bpf_map_update_elem(&nodes,&pid,&pos,BPF_ANY);
+	bpf_map_update_elem(&nodes_status,&pid,&one,BPF_ANY);
 
-	bpf_printk("Updated nodes %d \n",pid);
+	bpf_printk("Updated nodes_status %d \n",pid);
 
 	struct event *e;
 	e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
@@ -139,7 +149,9 @@ static void switch_leader(struct pt_regs *ctx)
 
 SEC("kprobe/dummy_kprobe")
 int BPF_KPROBE(dummy_kprobe)
-{	
+{
+
+	bpf_printk("In probe \n");
 	if (primary_function){
 		switch_leader(ctx);
 	}else{

@@ -12,26 +12,28 @@
 struct callback_ctx {
 	int state_condition;
 	int state_condition_value;
-	int pid;
+	int traced_pid;
+	int target_pid;
     int fault_count;
+    struct maps_ebpf *maps;
 	struct bpf_map *faults_specification;
 	struct bpf_map *ring_buffer;
 	struct bpf_map *leader;
-	struct bpf_map *nodes;
+	struct bpf_map *nodes_status;
 };
 
 struct maps_ebpf{
 	struct bpf_map *faults_specification;
 	struct bpf_map *rb;
 	struct bpf_map *leader;
-	struct bpf_map *nodes;
+	struct bpf_map *nodes_status;
 };
 
 struct clear_conditions_ctx{
 	int *conditions;
 };
 
-static void process_counter(int stateinfo,int state_condition_value,int pid,int fault_count,struct bpf_map *faults_specification,struct bpf_map *faults,struct bpf_map *rb,struct bpf_map *leader,struct bpf_map *nodes);
+static void process_counter(int stateinfo,int state_condition_value,int target_pid,int traced_pid,int fault_count,struct bpf_map *faults_specification,struct bpf_map *faults,struct bpf_map *rb,struct bpf_map *leader,struct bpf_map *nodes);
 static void inject_fault(int faulttype,int pid,int syscall_nr, struct simplified_fault *fault,int pos,struct maps_ebpf *maps);
 static __u64 process(struct bpf_map *map, int *pos,struct simplified_fault *fault , struct callback_ctx *data);
 
@@ -41,10 +43,26 @@ static __u64 process(struct bpf_map *map, int *pos,struct simplified_fault *faul
 //////////////////////////////////STATE_PROCESSING/////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
-static int process_current_state(int state_key, int pid,int fault_count,int time_mode,struct bpf_map *relevant_state_info,struct bpf_map *faults_specification,struct bpf_map *faults,struct bpf_map *rb,struct bpf_map *leader,struct bpf_map *nodes){
+static int process_current_state(int state_key,int target_pid,int fault_count,int time_mode,
+	struct bpf_map *relevant_state_info,struct bpf_map *faults_specification,struct bpf_map *faults,struct bpf_map *rb,
+	struct bpf_map *leader,struct bpf_map *nodes_status,struct bpf_map *nodes_translator){
+
+	//TODO: Something wrong here
+	//Get traced_pid from map
+	int *check_pid = bpf_map_lookup_elem(nodes_translator,&target_pid);
+
+	int traced_pid = 0;
+	if(check_pid){
+		traced_pid = *check_pid;
+		//bpf_printk("Check pid is %d, target is %d \n",traced_pid,target_pid);
+	}
+
+	if (!traced_pid){
+		traced_pid = target_pid;
+	}
 
 	struct info_key information_pid = {
-		pid,
+		traced_pid,
 		state_key
 	};
 
@@ -52,7 +70,6 @@ static int process_current_state(int state_key, int pid,int fault_count,int time
 	struct info_state *current_state;
 
 	current_state = bpf_map_lookup_elem(relevant_state_info,&information_pid);
-
 
 	if (current_state){
 		//bpf_printk("Checking stuff in pid: %d\n",pid);
@@ -65,69 +82,86 @@ static int process_current_state(int state_key, int pid,int fault_count,int time
 					if (relevant_value == value && relevant_value != 0){
 
 						bpf_printk("Found relevant value for property %d \n",state_key);
-						process_counter(state_key,value,pid,fault_count,faults_specification,faults,rb,leader,nodes);
+						process_counter(state_key,value,traced_pid,target_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
 					}
 					if(current_state->repeat && (value % relevant_value == 0)){
 						bpf_printk("Found relevant value and repeating\n");
-						process_counter(state_key,relevant_value,pid,fault_count,faults_specification,faults,rb,leader,nodes);
+						process_counter(state_key,relevant_value,traced_pid,target_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
 					}
 					//bpf_printk("Skipped \n");
 					}
 				}
-				
+
 		}
 	}
 	if(time_mode){
 		//bpf_printk("Time mode on \n");
 		struct info_key information = {
-			pid,
+			traced_pid,
 			TIME_FAULT
 		};
 		struct info_state *current_state;
 
 		//TEMP FIX FOR TESTING
 		//process_counter(TIME_FAULT,0,pid,fault_count,faults_specification,faults,rb);
-		
+
 		current_state = bpf_map_lookup_elem(relevant_state_info,&information);
 		if (current_state){
-			process_counter(TIME_FAULT,0,pid,fault_count,faults_specification,faults,rb,leader,nodes);
+			process_counter(TIME_FAULT,0,traced_pid,target_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
 		}
 	}
 	return 0;
 }
 
-static void process_counter(int stateinfo,int state_condition_value, int pid,int fault_count,struct bpf_map *faults_specification,struct bpf_map *faults,struct bpf_map *rb,struct bpf_map *leader,struct bpf_map *nodes){
+static void process_counter(int stateinfo,int state_condition_value, int traced_pid,int target_pid,int fault_count,
+	struct bpf_map *faults_specification,struct bpf_map *faults,struct bpf_map *rb,struct bpf_map *leader,struct bpf_map *nodes_status){
 	struct callback_ctx data;
+
+	struct maps_ebpf maps;
+
+	maps.faults_specification =faults_specification;
+	maps.rb	 = rb;
+	maps.leader	 =leader;
+	maps.nodes_status =nodes_status;
+
+
 	data.state_condition = stateinfo;
 	data.state_condition_value = state_condition_value;
-	data.pid = pid;
+	data.traced_pid = traced_pid;
+	data.target_pid = target_pid;
     data.fault_count = fault_count;
-	data.faults_specification = faults_specification;
+    data.maps = &maps;
+    /*data.faults_specification = faults_specification;
 	data.ring_buffer = rb;
 	data.leader = leader;
-	data.nodes = nodes;
+	data.nodes_status = nodes_status;*/
 	bpf_for_each_map_elem(faults,process,&data,BPF_ANY);
 }
 
 static  __u64 process(struct bpf_map *map, int *pos,struct simplified_fault *fault , struct callback_ctx *data){
-    
+
     int fault_count = data->fault_count;
 	if(*pos>=fault_count)
 		return 1;
-	struct bpf_map *faults_specification = data->faults_specification;
+	/*struct bpf_map *faults_specification = data->faults_specification;
 	struct bpf_map *rb = data->ring_buffer;
 	struct bpf_map *leader = data->leader;
-	struct bpf_map *nodes = data->nodes;
+	struct bpf_map *nodes = data->nodes_status;*/
 	int state_condition = data->state_condition;
-	int pid = data->pid;
+	int traced_pid = data->traced_pid;
+	int target_pid = data->target_pid;
 	int state_condition_value = data->state_condition_value;
 	int conditions[STATE_PROPERTIES_COUNT];
-        
+
 	int relevant_conditions = fault->relevant_conditions;
 
 	//Get current state of run
 	int run = fault->run;
 	if (fault){
+
+		if (fault->done)
+			return 0;
+
 		if (fault->initial.fault_type_conditions){
 			int *conditions = fault->initial.fault_type_conditions;
             if ((state_condition > STATE_PROPERTIES_COUNT) || (state_condition < 0))
@@ -135,7 +169,7 @@ static  __u64 process(struct bpf_map *map, int *pos,struct simplified_fault *fau
 			if (conditions[state_condition]){
 				int condition_value = conditions[state_condition];
 				if(state_condition_value > 0){
-					if (state_condition_value == condition_value && pid == fault->pid){
+					if (state_condition_value == condition_value && traced_pid == fault->pid){
                        // if ((state_condition > STATE_PROPERTIES_COUNT) || (state_condition < 0))
                        //     return 1;
 					 	__sync_fetch_and_add(&(fault->initial.conditions_match[state_condition]),1);
@@ -152,45 +186,95 @@ static  __u64 process(struct bpf_map *map, int *pos,struct simplified_fault *fau
 			if (fault->initial.conditions_match[state_condition]){
 				run+=1;
 				fault->run = run;
-				bpf_printk("Incremented value in run %d \n",fault->initial.conditions_match[state_condition]);
+				//bpf_printk("Incremented value in run %d \n",fault->initial.conditions_match[state_condition]);
 			}
-			
+
 		}
-		//	}	
+		//	}
 
 		//bpf_printk("Run is %d and rc %d \n",run,relevant_conditions);
-		struct maps_ebpf maps;
 
-		maps.faults_specification = data->faults_specification;
-		maps.rb	 = data->ring_buffer;
-		maps.leader	 = data->leader;
-		maps.nodes = data->nodes;
-
+		int zero = 0;
 		if (run >= relevant_conditions){
+			//bpf_printk("Fault nr %d done is %d and target is %d\n",fault->fault_nr,fault->done,fault->fault_target);
 			if (!fault->done){
+				fault->done = 1;
 				int pid = 0;
+				//TODO: implement this only works for process faults
 				if (fault->fault_target == -1){
-					int zero = 0;
-					int leader_pid = bpf_map_lookup_elem(leader,&zero);
+					bpf_printk("Calling fault on leader \n");
+					//int leader_pid = bpf_map_lookup_elem(leader,&zero);
+					//if(leader_pid){
+					//
+					//}
 				}
+				//TODO: implement this only works for process faults
+				else if (fault->fault_target == -2){
+					bpf_printk("Calling fault on majority \n");
+					int *check_leader_pid = bpf_map_lookup_elem(data->maps->leader,&zero);
+					int leader_pid = 0;
+					if(check_leader_pid)
+						leader_pid = *check_leader_pid;
 
-				if (fault->fault_target == -2){
+					if(target_pid == leader_pid){
+						fault->done = 0;
+						bpf_printk("I am the leader therefore I can not call this fault leader_pid %d | target_pid %d\n",leader_pid,target_pid);
+						return 0;
+					}
+					else{
+						inject_fault(fault->faulttype,target_pid,0,fault,*pos,data->maps);
+						return 1;
+					}
 
 				}
-				if (fault->faulttype == NETWORK_ISOLATION ||fault->faulttype == DROP_PACKETS ||fault->faulttype == BLOCK_IPS){
-					inject_fault(fault->faulttype,0,0,fault,*pos,&maps);
+				else if (fault->faulttype == NETWORK_ISOLATION ||fault->faulttype == DROP_PACKETS ||fault->faulttype == BLOCK_IPS){
+					bpf_printk("Calling network fault \n");
+					inject_fault(fault->faulttype,0,0,fault,*pos,data->maps);
+					return 1;
 				}
 				else{
-					pid = fault->pid;
-					inject_fault(fault->faulttype,fault->pid,0,fault,*pos,&maps);
+					bpf_printk("Calling generic fault \n");
+					inject_fault(fault->faulttype,target_pid,0,fault,*pos,data->maps);
+					return 1;
 				}
 			}
 		}
 
+		if(fault->start_time){
+			//bpf_printk("Start time is %d for fault %d \n",fault->start_time,fault->fault_nr);
+
+			__u64 time_ns = bpf_ktime_get_ns();
+			__u64 time_now = time_ns / 1000000;
+
+			__u64 max_fault_time = fault->start_time+fault->duration;
+			//Check if we are done with this fault
+			if(max_fault_time < time_now){
+
+				struct fault_key fault_to_inject = {
+					fault->pid,
+					fault->faulttype
+				};
+
+				struct fault_description description_of_fault = {
+				0,
+				fault->occurrences,
+				0,
+				fault->return_value,
+				0
+				};
+
+				int error = bpf_map_update_elem(data->maps->faults_specification,&fault_to_inject,&description_of_fault,BPF_ANY);
+				if (error)
+					bpf_printk("Error of update is %d, faulttype->%d / value-> %d \n",error,fault->faulttype,1);
+
+				bpf_printk("Fault %d is finished time_elapsed is %d and time_now is %d\n",fault->fault_nr,max_fault_time,time_now);
+				fault->start_time = 0;
+			}
+		}
 
 	}
 	return 0;
-}	
+}
 
 
 static long clear_conditions(__u32 index, struct clear_conditions_ctx *ctx){
@@ -200,9 +284,8 @@ static long clear_conditions(__u32 index, struct clear_conditions_ctx *ctx){
 static void inject_fault(int fault_type,int pid,int syscall_nr,struct simplified_fault *fault,int pos,struct maps_ebpf *maps){
 
 	int pid_to_target = pid;
-	
+
 	if (fault){
-		
 		if (fault->fault_target == -1){
 			bpf_printk("Looking to inject fault in a leader \n");
 			int zero = 0;
@@ -219,18 +302,20 @@ static void inject_fault(int fault_type,int pid,int syscall_nr,struct simplified
 		if (fault->fault_target == -2){
 			bpf_printk("Looking to inject fault in a majority \n");
 			int zero = 0;
-			int *node_status = bpf_map_lookup_elem(maps->nodes,&pid_to_target);
+			int *node_status = bpf_map_lookup_elem(maps->nodes_status,&pid_to_target);
 
 			if (node_status){
-				if (node_status == 1){
+				if (*node_status){
+					fault->done = 0;
 					for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
 						fault->initial.conditions_match[i] = 0;
 					}
 					return;
 				}
 			}
-			
+
 		}
+
 		struct fault_description description_of_fault = {
 			1,
 			fault->occurrences,
@@ -244,7 +329,7 @@ static void inject_fault(int fault_type,int pid,int syscall_nr,struct simplified
 			fault_type
 		};
 
-		bpf_printk("Fault with fault_type %d at pid %d will occurr %d with return value %d \n",fault_type,pid,fault->occurrences,fault->return_value);
+		bpf_printk("Fault nr:%d with fault_type %d at pid %d will occurr %d with return value %d \n",fault->fault_nr,pid,fault->occurrences,fault->return_value);
 
 		if(fault_type == PROCESS_KILL || fault_type == PROCESS_STOP){
 			struct event *e;
@@ -257,9 +342,8 @@ static void inject_fault(int fault_type,int pid,int syscall_nr,struct simplified
 			e->fault_nr = fault->fault_nr;
 			bpf_printk("Sent %d to userpace to pid %d",fault_type,pid_to_target);
 			bpf_ringbuf_submit(e, 0);
-			fault->done = 1;
 			fault->run = 0;
-			
+
 		}else{
 			//bpf_printk("Fault is ready to run \n");
 			int error = bpf_map_update_elem(maps->faults_specification,&fault_to_inject,&description_of_fault,BPF_ANY);
@@ -268,8 +352,13 @@ static void inject_fault(int fault_type,int pid,int syscall_nr,struct simplified
 			fault->done = 1;
 			fault->run = 0;
 			//bpf_printk("Resseting done and run \n");
+
+			//Assign start time, to later check if duration is done
+			__u64 time_ns = bpf_ktime_get_ns();
+			__u64 time_ms = time_ns / 1000000;
+			fault->start_time = time_ms;
 		}
-		
+
 		fault->faults_injected_counter++;
 		if (fault->repeat){
 			bpf_printk("Repeat on \n");
@@ -285,7 +374,7 @@ static void inject_fault(int fault_type,int pid,int syscall_nr,struct simplified
 		// };
 
 		// bpf_loop(STATE_PROPERTIES_COUNT,clear_conditions,&ctx,0);
-		
+
 
 	}
 
@@ -301,7 +390,7 @@ static void inject_override(int pid,int fault,struct pt_regs* ctx,int syscall_nr
 
 	description_of_fault = bpf_map_lookup_elem(faults_specification,&fault_to_inject);
 
-	
+
 	if (description_of_fault){
 		//bpf_printk("Fault is ON \n");
 			if (description_of_fault->on){
@@ -359,7 +448,7 @@ static void inject_override(int pid,int fault,struct pt_regs* ctx,int syscall_nr
 // 	}else{
 // 		process_fd = 0;
 // 	}
-	
+
 // 	if (fd > 0 && process_fd){
 // 		struct file *file = get_file_from_fd(fd);
 
@@ -417,4 +506,3 @@ static void inject_override(int pid,int fault,struct pt_regs* ctx,int syscall_nr
 // 	inject_override(pid,sys_info->fault_code,(struct pt_regs *) ctx,0,faults_specification);
 
 // }
-

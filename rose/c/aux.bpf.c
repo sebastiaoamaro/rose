@@ -96,4 +96,12 @@ struct {
 	__uint(max_entries, MAP_SIZE);
 	__type(key, int);
 	__type(value,int);
-} nodes SEC(".maps");
+} nodes_status SEC(".maps");
+
+//Holds a reference from the status the most recent pid of a node to the start_pid (all of the structs are indexed through this)
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAP_SIZE);
+	__type(key, int);
+	__type(value,int);
+} nodes_pid_translator SEC(".maps");

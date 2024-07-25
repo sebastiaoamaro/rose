@@ -1,0 +1,15 @@
+nodes:
+  configs-redis-1-1:
+    container: true
+    leader: true
+
+faults:
+  process_pause:
+    type: process_pause
+    target: configs-redis-1-1
+    duration: 5
+    begin_conditions:
+      user_function:
+        binary_location: /usr/local/bin/redis-server
+        symbol: dbReplaceValue
+        call_count: 1

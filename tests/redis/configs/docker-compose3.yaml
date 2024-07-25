@@ -3,6 +3,7 @@ services:
     redis-1:
         image: redis
         command: ["redis-server","/etc/redis/redis.conf"]
+        privileged: true
         volumes:
             - /redis/node-1/data:/data
             - /redis/node-1/conf/redis.conf:/etc/redis/redis.conf
@@ -15,6 +16,7 @@ services:
     redis-2:
         image: redis
         command: ["redis-server", "/etc/redis/redis.conf"]
+        privileged: true
         volumes:
             - /redis/node-2/data:/data
             - /redis/node-2/conf/redis.conf:/etc/redis/redis.conf
@@ -27,6 +29,7 @@ services:
     redis-3:
         image: redis
         command: ["redis-server", "/etc/redis/redis.conf"]
+        privileged: true
         volumes:
             - /redis/node-3/data:/data
             - /redis/node-3/conf/redis.conf:/etc/redis/redis.conf

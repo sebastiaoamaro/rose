@@ -21,7 +21,7 @@ void sig_handler(int signum){
 
 FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid)
 {   
-    printf("Command is %s\n",command);
+
     pid_t child_pid;
     int fd[2];
     pipe(fd);
@@ -50,13 +50,13 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
 
         while(true){
             if(ready){
-                printf("Received signal \n");
+                //printf("Received signal \n");
                 break;
             }
             sleep(0.000001);
 
         }
-        //desligar signal
+        //turn off signal
         int err = execvpe(command,args,env);
         printf("Err in execv is %d and errno is %d \n",err,errno);
         exit(0);
@@ -74,7 +74,7 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
 
     }
     *pid = child_pid;
-    printf("PID IS %d \n",child_pid);
+    //printf("PID IS %d \n",child_pid);   
     if (type == 'r')
     {
         return fdopen(fd[0], "r");

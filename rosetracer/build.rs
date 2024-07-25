@@ -4,18 +4,24 @@ use std::path::PathBuf;
 
 use libbpf_cargo::SkeletonBuilder;
 
-const SRC: &str = "src/bpf/trace.bpf.c";
-
 fn main() {
+    build_bpf_file("intercept_only", "src/bpf/intercept_only.bpf.c");
+    build_bpf_file("intercept_and_count", "src/bpf/intercept_and_count.bpf.c");
+    build_bpf_file("count_syscalls", "src/bpf/count_syscalls.bpf.c");
+    build_bpf_file("save_info", "src/bpf/save_info.bpf.c");
+    build_bpf_file("save_io", "src/bpf/save_io.bpf.c");
+}
+
+fn build_bpf_file(bpf_file: &str, file_name: &str) {
     let mut out =
         PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR must be set in build script"));
-    out.push("trace.skel.rs");
+    out.push(format!("{}.skel.rs", bpf_file));
 
     let arch = env::var("CARGO_CFG_TARGET_ARCH")
         .expect("CARGO_CFG_TARGET_ARCH must be set in build script");
 
     SkeletonBuilder::new()
-        .source(SRC)
+        .source(file_name)
         .clang_args(format!(
             "-I{}",
             Path::new("../../../vmlinux")
@@ -31,5 +37,5 @@ fn main() {
         ))
         .build_and_generate(&out)
         .expect("bpf compilation failed");
-    println!("cargo:rerun-if-changed={}", SRC);
-    }
+    println!("cargo:rerun-if-changed={}", file_name);
+}

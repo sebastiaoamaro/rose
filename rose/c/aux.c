@@ -26,7 +26,7 @@
 #include <sys/un.h>
 #include <string.h>
 #include <errno.h>
-
+#include <bpf/bpf.h>
 
 static struct env {
 	bool verbose;
@@ -49,7 +49,7 @@ struct aux_bpf* start_aux_maps(){
 	if (err) {
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
 		return NULL;
-		
+
 	}
 
 	/* Attach tracepoints */
@@ -65,7 +65,7 @@ struct aux_bpf* start_aux_maps(){
 		printf("[ERROR] libbpf unpin API: %d\n", err);
 		//return NULL;
 	}
-	
+
 	err = bpf_map__pin(skel->maps.rb, "/sys/fs/bpf/rb");
 	if(err) {
 		printf("[ERROR] libbpf pin API: %d\n", err);
@@ -76,7 +76,7 @@ struct aux_bpf* start_aux_maps(){
 		printf("[ERROR] libbpf unpin API: %d\n", err);
 		//return NULL;
 	}
-	
+
 	err = bpf_map__pin(skel->maps.faults_specification, "/sys/fs/bpf/faults_specification");
 	if(err) {
 		printf("[ERROR] libbpf pin API: %d\n", err);
@@ -89,7 +89,7 @@ struct aux_bpf* start_aux_maps(){
 		//return NULL;
 
 	}
-	
+
 	err = bpf_map__pin(skel->maps.relevant_state_info, "/sys/fs/bpf/relevant_state_info");
 	if(err) {
 		printf("[ERROR] libbpf pin API: %d\n", err);
@@ -102,7 +102,7 @@ struct aux_bpf* start_aux_maps(){
 		printf("[ERROR] libbpf unpin API: %d\n", err);
 		//return NULL;
 	}
-	
+
 	err = bpf_map__pin(skel->maps.blocked_ips, "/sys/fs/bpf/blocked_ips");
 	if(err) {
 		printf("[ERROR] libbpf pin API: %d\n", err);
@@ -114,7 +114,7 @@ struct aux_bpf* start_aux_maps(){
 		printf("[ERROR] libbpf unpin API: %d\n", err);
 		//return NULL;
 	}
-	
+
 	err = bpf_map__pin(skel->maps.files, "/sys/fs/bpf/files");
 	if(err) {
 		printf("[ERROR] libbpf pin API: %d\n", err);
@@ -133,7 +133,7 @@ struct aux_bpf* start_aux_maps(){
 		return NULL;
 	}
 
-	
+
 	err = bpf_map__unpin(skel->maps.relevant_fd, "/sys/fs/bpf/relevant_fd");
 	if(err) {
 		printf("[ERROR] libbpf unpin API: %d\n", err);
@@ -193,13 +193,25 @@ struct aux_bpf* start_aux_maps(){
 		return NULL;
 	}
 
-	err = bpf_map__unpin(skel->maps.nodes, "/sys/fs/bpf/nodes");
+	err = bpf_map__unpin(skel->maps.nodes_status, "/sys/fs/bpf/nodes_status");
 	if(err) {
 		printf("[ERROR] libbpf unpin API: %d\n", err);
 		//return NULL;
 	}
 
-	err = bpf_map__pin(skel->maps.nodes, "/sys/fs/bpf/nodes");
+	err = bpf_map__pin(skel->maps.nodes_status, "/sys/fs/bpf/nodes_status");
+	if(err) {
+		printf("[ERROR] libbpf pin API: %d\n", err);
+		return NULL;
+	}
+
+	err = bpf_map__unpin(skel->maps.nodes_pid_translator, "/sys/fs/bpf/nodes_pid_translator");
+	if(err) {
+		printf("[ERROR] libbpf unpin API: %d\n", err);
+		//return NULL;
+	}
+
+	err = bpf_map__pin(skel->maps.nodes_pid_translator, "/sys/fs/bpf/nodes_pid_translator");
 	if(err) {
 		printf("[ERROR] libbpf pin API: %d\n", err);
 		return NULL;
@@ -246,7 +258,7 @@ int get_interface_names(char** device_names,int device_count){
 	/* Walk through linked list, maintaining head pointer so we can free list later. */
 
     for (struct ifaddrs *ifa = ifaddr; ifa != NULL && count_devices < device_count; ifa = ifa->ifa_next) {
-		
+
 		device_names[count_devices] = malloc(32*sizeof(char));
         sprintf(device_names[count_devices++], "%s", ifa->ifa_name);
     }
@@ -291,7 +303,7 @@ void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,i
 		//fault->faulttype_count[faulttype] = occurrences;
 		fault->occurrences = occurrences;
 	}
-	
+
 	char string[64] = "empty";
 	//I do not remember what this was for
 	for(int i=0;i<MAX_FUNCTIONS;i++){
@@ -313,7 +325,7 @@ void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,i
 
 void set_if_name(struct fault* fault, char*if_name){
 		fault->veth = (char*)malloc(sizeof(char)*sizeof(if_name));
-		strcpy(fault->veth,if_name);	
+		strcpy(fault->veth,if_name);
 }
 
 
@@ -382,12 +394,6 @@ void pause_process(void* args){
 	send_signal(pid,SIGCONT);
 }
 
-void kill_process(void* args){
-
-	int pid = *((struct process_fault_args*)args)->pid;
-	send_signal(pid,SIGKILL);
-}
-
 
 int send_signal(int pid, int signal){
 	printf("Sending %d to %d \n",signal,pid);
@@ -400,7 +406,7 @@ void print_fault_schedule(execution_plan* plan, node* nodes, fault * faults){
 
 	if(plan)
 		printf("Setup is %s it takes %d seconds to start, and workload is %s \n",plan->setup.script,plan->setup.duration,plan->workload.script);
-	
+
 	for(int i = 0;i<get_node_count();i++){
 		printf("Node name:%s | pid:%d | veth:%s | script:%s | leader:%d \n", nodes[i].name,nodes[i].pid,nodes[i].veth,nodes[i].script,nodes[i].leader);
 	}

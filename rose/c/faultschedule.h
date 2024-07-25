@@ -33,7 +33,10 @@ typedef struct Execution_Plan{
 
 typedef struct Node {
     char name[STRING_SIZE];
+    //pid is the first pid we initiliazed faults with
     int pid;
+    //current_pid will hold the nodes current pid usefull for process_kills
+    int current_pid;
     char veth[STRING_SIZE];
     char ip[STRING_SIZE];
     char script[STRING_SIZE];
@@ -54,7 +57,7 @@ typedef struct file_system_operation{
     char file_name[STRING_SIZE];
     char directory_name[STRING_SIZE];
     int success;
-    int return_value;   
+    int return_value;
 }file_system_operation;
 
 typedef struct syscall_operation{

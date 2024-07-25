@@ -33,7 +33,9 @@ struct faultstate_simple{
 
 struct simplified_fault{
     int faulttype;
+    int duration;
     int done;
+    __u64 start_time;
     struct faultstate_simple initial;
     struct faultstate_simple end;
     int pid;
@@ -162,6 +164,7 @@ struct event {
 struct process_fault_args{
 	int *pid;
 	int *duration;
+    int *node_to_restart;
 };
 
 
@@ -180,5 +183,6 @@ char* get_overlay2_location(const char* container_name);
 void kill_process(void* args);
 void sleep_for_ms(long milliseconds);
 bool is_element_in_array(int arr[], int size, int element);
-
+void print_fault_schedule();
+int send_signal(int pid, int signal);
 #endif /* __AUX_H */

@@ -352,17 +352,27 @@ def build_fault_details(fault_type,fault_type_nr,fault_nr,fault_specifics,nodes,
             block_ips_definition = block_ips_definition.replace("#nr",str(fault_nr))
             ip_count = 0
             for name in ips_to_block:
-                add_ip_block_line = """    add_ip_to_block_extra(&block_ips#nr,"#ipname",#ipnr);\n"""
+                add_ip_block_line = """    add_ip_to_block_extra(&block_ips#nr,"#ipname",#ipnr,#direction);\n"""
 
                 ip = nodes[name].ip
                 add_ip_block_line = add_ip_block_line.replace("#nr",str(fault_nr))
                 add_ip_block_line = add_ip_block_line.replace("#ipname",str(ip))
                 add_ip_block_line = add_ip_block_line.replace("#ipnr",str(ip_count))
+                add_ip_block_line = add_ip_block_line.replace("#direction",str(1))
                 block_ips_definition = block_ips_definition + add_ip_block_line
+
+                add_ip_block_line = """    add_ip_to_block_extra(&block_ips#nr,"#ipname",#ipnr,#direction);\n"""
+                add_ip_block_line = add_ip_block_line.replace("#nr",str(fault_nr))
+                add_ip_block_line = add_ip_block_line.replace("#ipname",str(ip))
+                add_ip_block_line = add_ip_block_line.replace("#ipnr",str(ip_count))
+                add_ip_block_line = add_ip_block_line.replace("#direction",str(2))
+                block_ips_definition = block_ips_definition + add_ip_block_line
+
                 ip_count+=1
 
             assign_line = """    fault_details#nr.block_ips = block_ips#nr;\n"""
-            assign_line += """    fault_details#nr.block_ips.count = #ip_count;\n"""
+            assign_line += """    fault_details#nr.block_ips.count_in = #ip_count;\n"""
+            assign_line += """    fault_details#nr.block_ips.count_out = #ip_count;\n"""
             assign_line = assign_line.replace("#ip_count",str(ip_count))
             assign_line = assign_line.replace("#nr",str(fault_nr))
             block_ips_definition+= assign_line
