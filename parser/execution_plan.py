@@ -1,11 +1,16 @@
 class ExecutionPlan:
     setup = None
     workload = None
+    cleanup = None
 class Setup:
     script = ""
     duration = 0
 class Workload:
     script = ""
+    wait_time = 0
+class Cleanup:
+    script = ""
+    duration = 0
 
 def parse_execution_plan(plan):
     exe_plan = ExecutionPlan()
@@ -23,7 +28,20 @@ def parse_execution_plan(plan):
 
         workload.script = plan['workload']['script']
 
+        wait_time = 0;
+        if "wait_time" in plan['workload']:
+            wait_time = int(plan['workload']['wait_time'])
+
         exe_plan.workload = workload
+        exe_plan.wait_time = wait_time
+
+    if "cleanup" in plan:
+        cleanup = Cleanup()
+
+        cleanup.script = plan['cleanup']['script']
+        cleanup.duration = int(plan['cleanup']['duration']) 
+
+        exe_plan.cleanup = cleanup
 
     return exe_plan
 
@@ -34,7 +52,7 @@ def build_plan_cfile(file,plan):
     exe_plan_malloc = """    execution_plan* exe_plan = ( execution_plan*)malloc(1 * sizeof(execution_plan));\n"""
     file.write(exe_plan_malloc)
 
-    exe_plan_setup = """    create_execution_plan(exe_plan,"#setup_script",#setup_duration,"#workload_script");"""
+    exe_plan_setup = """    create_execution_plan(exe_plan,"#setup_script",#setup_duration,"#workload_script","#cleanup_script",#cleanup_sleep_time);"""
 
 
     if not plan.setup is None:
@@ -48,6 +66,13 @@ def build_plan_cfile(file,plan):
         exe_plan_setup = exe_plan_setup.replace("#workload_script",plan.workload.script)
     else:
         exe_plan_setup = exe_plan_setup.replace("#workload_script","")
+
+    if not plan.cleanup is None:
+        exe_plan_setup =  exe_plan_setup.replace("#cleanup_sleep_time",str(plan.cleanup.duration))
+        exe_plan_setup = exe_plan_setup.replace("#cleanup_script",plan.cleanup.script)
+    else:
+        exe_plan_setup =  exe_plan_setup.replace("#cleanup_sleep_time",str(0))
+        exe_plan_setup = exe_plan_setup.replace("#cleanup_script","")
 
     file.write(exe_plan_setup)
     exe_plan_end= """

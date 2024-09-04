@@ -60,13 +60,22 @@ struct {
 } syscalls_counter SEC(".maps");
 
 
-
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__type(key, int);
 	__type(value, int);
 	__uint(max_entries, 8192);
 } syscalls_counter_array SEC(".maps");
+
+
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__type(key, int);
+	__type(value, int);
+	__uint(max_entries, 8192);
+} uprobe_counters SEC(".maps");
+
+
 
 struct accept_args_t
 {
@@ -416,21 +425,22 @@ int trace_connect_exit(struct trace_event_raw_sys_exit *ctx)
 
 }
 
+SEC("uprobe/my_uprobe")
+int handle_uprobe(struct pt_regs *ctx) {
+	
+	u64 cookie = bpf_get_attach_cookie(ctx);
 
-SEC("kprobe/dummy_kprobe")
-int BPF_KPROBE(dummy_kprobe)
-{	
-	u64 addr = PT_REGS_IP(ctx);
-	bpf_printk("Addr is %d",addr);
-    u32 *uprobes_id;
+	int *counter = bpf_map_lookup_elem(&uprobe_counters,&cookie);
 
-    // Lookup the uprobe ID from the map using the instruction pointer (IP) as the key
-    uprobes_id = bpf_map_lookup_elem(&uprobe_map, &addr);
-    if (uprobes_id) {
-        bpf_printk("uprobe ID: %d\n", *uprobes_id);
-    } else {
-        bpf_printk("uprobe: unknown\n");
-    }
+	if (counter){
+		int new_counter = *counter + 1;
+		bpf_map_update_elem(&uprobe_counters,&cookie,&new_counter,BPF_ANY);
+		//bpf_printk("Inserted %d for %d",new_counter,cookie);
+	}else{
+		int zero = 0;
+		bpf_map_update_elem(&uprobe_counters,&cookie,&zero,BPF_ANY);
+	}
 
+	//bpf_printk("IN UPROBE with cookie %d \n",cookie);
     return 0;
 }

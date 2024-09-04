@@ -1,6 +1,6 @@
 nodes:
   test_node:
-    script: "/home/sebastiaoamaro/phd/torefidevel/tests/random/uprobe"
+    script: "/home/sebastiaoamaro/phd/torefidevel/tests/traceroverhead/write"
 faults:
   simple_test:
     type: process_pause
@@ -8,7 +8,7 @@ faults:
     duration: 5
     begin_conditions:
       user_function:
-        binary_location: "/home/sebastiaoamaro/phd/torefidevel/tests/random/uprobe"
-        symbol: "uprobing"
+        binary_location: "/home/sebastiaoamaro/phd/torefidevel/tests/traceroverhead/write"
+        symbol: "my_test_function"
         call_count: 1
       trigger_statement: 1

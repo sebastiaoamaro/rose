@@ -1,24 +1,11 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::Result;
 use core::time::Duration;
-use libbpf_rs::libbpf_sys::BPF_ANY;
 use libbpf_rs::MapFlags;
-use libbpf_rs::PerfBufferBuilder;
-use libloading::{Library, Symbol};
-use object::Object;
-use object::ObjectSymbol;
-use plain::Plain;
-use rand::Rng;
-use std::env;
-use std::ffi::CString;
-use std::fs::File;
-use std::fs::OpenOptions;
-use std::io::{self, BufRead, BufReader, Write};
-use std::path::Path;
-use std::process::{Command, Stdio};
-use std::str;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
+use libbpf_rs::skel::OpenSkel as _;
+use libbpf_rs::skel::SkelBuilder as _;
 
 use crate::auxiliary;
 
@@ -41,7 +28,8 @@ pub fn run_tracing(
     auxiliary::bump_memlock_rlimit()?;
     let mut open_skel = skel_builder.open()?;
 
-    open_skel.rodata().pid_counter = pid_count as i32;
+    open_skel.rodata_mut().pid_counter = pid_count as i32;
+    //open_skel.rodata().pid_counter = pid_count as i32;
 
     let mut skel = open_skel.load()?;
 

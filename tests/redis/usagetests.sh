@@ -1,5 +1,10 @@
 #!/bin/bash
 
+
+##############
+#NEEDS UPDATE#
+##############
+
 workload_size=10000000
 #maindirectory=/home/sebastiaoamaro/phd/torefidevel/rosetracer
 maindirectory=/vagrant/rosetracer/
@@ -14,28 +19,28 @@ cargo build --release
 cd $SCRIPT_DIR
 
 chmod +x configs/setup.sh
-chmod +x ycsb.sh
+chmod +x runycsb.sh
 sudo rm -r /redis/*
 
 for topology in 3 6 12
 do
-    sudo /vagrant/tests/redis/configs/setup.sh $topology
+    #sudo /vagrant/tests/redis/configs/setup.sh $topology
     #sudo /home/sebastiaoamaro/phd/torefidevel/tests/redis/configs/setup.sh $topology
 
-    docker compose -f configs/docker-compose$topology.yaml up -d
-    sleep 30
+    # docker compose -f configs/docker-compose$topology.yaml up -d
+    # sleep 30
 
-    redis-cli --cluster create $(cat configs/ips$topology.txt) --cluster-yes
+    # redis-cli --cluster create $(cat configs/ips$topology.txt) --cluster-yes
 
-    sleep 30
+    # sleep 30
 
-    echo Starting Workload
-    dstat --output stats/statsvanilla$topology.txt &
-    dstatpid=$!
-    ./ycsb.sh $workload_size topology$topology:$run
-    kill $dstatpid
-    docker compose -f configs/docker-compose$topology.yaml down
-    sudo rm -r /redis/*
+    # echo Starting Workload
+    # dstat --output stats/statsvanilla$topology.txt &
+    # dstatpid=$!
+    # ./ycsb.sh $workload_size topology$topology:$run
+    # kill $dstatpid
+    # docker compose -f configs/docker-compose$topology.yaml down
+    # sudo rm -r /redis/*
 
 ############################################################################################################
 ############################################################################################################

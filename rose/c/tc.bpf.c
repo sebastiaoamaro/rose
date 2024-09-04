@@ -80,7 +80,6 @@ static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff)
 SEC("tc")
 int monitor(struct __sk_buff *ctx)
 {
-
 	struct fault_key fault_to_inject_networkiso = {
 		0,
 		NETWORK_ISOLATION,

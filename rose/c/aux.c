@@ -181,13 +181,13 @@ struct aux_bpf* start_aux_maps(){
 		printf("[ERROR] libbpf pin API: %d\n", err);
 		return NULL;
 	}
-	err = bpf_map__unpin(skel->maps.leader, "/sys/fs/bpf/leader");
+	err = bpf_map__unpin(skel->maps.auxiliary_info, "/sys/fs/bpf/auxiliary_info");
 	if(err) {
 		printf("[ERROR] libbpf unpin API: %d\n", err);
 		//return NULL;
 	}
 
-	err = bpf_map__pin(skel->maps.leader, "/sys/fs/bpf/leader");
+	err = bpf_map__pin(skel->maps.auxiliary_info, "/sys/fs/bpf/auxiliary_info");
 	if(err) {
 		printf("[ERROR] libbpf pin API: %d\n", err);
 		return NULL;
@@ -385,18 +385,19 @@ int translate_pid(int pid){
 }
 
 void pause_process(void* args){
-	int pid = *((struct process_fault_args*)args)->pid;
-	int duration = *((struct process_fault_args*)args)->duration;
+	int pid = ((struct process_fault_args*)args)->pid;
+	int duration = ((struct process_fault_args*)args)->duration;
+	char *name = ((struct process_fault_args*)args)->name;
 
-	send_signal(pid,SIGSTOP);
+	send_signal(pid,SIGSTOP,name);
 	printf("Sleeping for %d \n",duration);
 	sleep_for_ms(duration);
-	send_signal(pid,SIGCONT);
+	send_signal(pid,SIGCONT,name);
 }
 
 
-int send_signal(int pid, int signal){
-	printf("Sending %d to %d \n",signal,pid);
+int send_signal(int pid, int signal,char* node_name){
+	printf("Sending %d to %s \n",signal,node_name);
 	kill(pid,signal);
 }
 
@@ -404,8 +405,13 @@ int send_signal(int pid, int signal){
 void print_fault_schedule(execution_plan* plan, node* nodes, fault * faults){
 
 
-	if(plan)
+	if(plan){
 		printf("Setup is %s it takes %d seconds to start, and workload is %s \n",plan->setup.script,plan->setup.duration,plan->workload.script);
+		if (plan->cleanup.script){
+			printf("Cleanup script is %s \n",plan->cleanup.script);
+		}
+	}
+
 
 	for(int i = 0;i<get_node_count();i++){
 		printf("Node name:%s | pid:%d | veth:%s | script:%s | leader:%d \n", nodes[i].name,nodes[i].pid,nodes[i].veth,nodes[i].script,nodes[i].leader);
@@ -561,4 +567,36 @@ bool is_element_in_array(int arr[], int size, int element) {
         }
     }
     return false;
+}
+
+
+long get_children_pids(pid_t pid) {
+    char path[256];
+    snprintf(path, sizeof(path), "/proc/%d/task/%d/children", pid, pid);
+    FILE *file = fopen(path, "r");
+    if (file == NULL) {
+        perror("fopen");
+        return 0;
+    }
+
+	pid_t child_pid = 0;
+    char line[256];
+	// Read the line containing child PIDs
+    if (fgets(line, sizeof(line), file) != NULL) {
+        char *token = strtok(line, " \n");
+        if (token != NULL) {
+            // Convert the first token to a PID
+            char *endptr;
+            errno = 0;
+            long pid = strtol(token, &endptr, 10);
+            if (errno != 0 || *endptr != '\0') {
+                perror("strtol");
+            } else if (pid >= 0) {
+                child_pid = (pid_t)pid;
+            }
+        }
+    }
+
+    fclose(file);
+	return child_pid;
 }

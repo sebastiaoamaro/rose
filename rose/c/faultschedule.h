@@ -26,9 +26,16 @@ typedef struct Workload{
     int pid;
 }workload;
 
+typedef struct Cleanup{
+    char script[STRING_SIZE];
+    int pid;
+    int duration; //This is not how long it takes to cleanup, but the amount of time we should wait for the last fault to take effect
+}cleanup;
+
 typedef struct Execution_Plan{
     setup setup;
     workload workload;
+    cleanup cleanup;
 }execution_plan;
 
 typedef struct Node {
@@ -46,8 +53,11 @@ typedef struct Node {
     int pid_tc_in;
     int pid_tc_out;
     int container;
+    int container_pid;
     struct uprobes_bpf *leader_probe;
     int leader;
+    int running;
+    char **args;
 }node;
 
 
@@ -160,8 +170,6 @@ typedef struct fault {
     char func_names[MAX_FUNCTIONS][FUNCNAME_MAX];
     struct uprobes_bpf *list_of_functions[MAX_FUNCTIONS];
 
-    int list_of_functions_in_container[MAX_FUNCTIONS];
-
     int done;
     struct faultstate initial;
     struct faultstate end;
@@ -176,6 +184,7 @@ typedef struct fault {
     int faults_injected_counter;
     int relevant_conditions;
     int duration;
+    int exit;
 }fault;
 
 

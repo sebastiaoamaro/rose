@@ -5,6 +5,8 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
+use libbpf_rs::skel::OpenSkel as _;
+use libbpf_rs::skel::SkelBuilder as _;
 
 use crate::auxiliary;
 
@@ -27,7 +29,8 @@ pub fn run_tracing(
     auxiliary::bump_memlock_rlimit()?;
     let mut open_skel = skel_builder.open()?;
 
-    open_skel.rodata().pid_counter = pid_count as i32;
+    open_skel.rodata_mut().pid_counter = pid_count as i32;
+    //open_skel.rodata().pid_counter = pid_count as i32;
 
     let mut skel = open_skel.load()?;
 

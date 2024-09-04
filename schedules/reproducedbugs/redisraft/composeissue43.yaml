@@ -1,9 +1,7 @@
-version: "3.7"
 services:
   redis1:
-    image: redisraftold
+    image: redisraftoldb9ee410
     container_name: redis1
-    command: ./startredis.sh 172.19.1.10
     privileged: true
     environment:
     - REDIS_NR=1
@@ -15,9 +13,8 @@ services:
         ipv4_address: 172.19.1.10
     tty: true
   redis2:
-    image: redisraftold
+    image: redisraftoldb9ee410
     container_name: redis2
-    command: ./startredis.sh 172.19.1.11
     privileged: true
     environment:
     - REDIS_NR=2
@@ -32,9 +29,8 @@ services:
     tty: true
 
   redis3:
-    image: redisraftold
+    image: redisraftoldb9ee410
     container_name: redis3 
-    command: ./startredis.sh 172.19.1.12
     privileged: true
     environment:
     - REDIS_NR=3
@@ -49,9 +45,8 @@ services:
     tty: true
 
   redis4:
-    image: redisraftold
+    image: redisraftoldb9ee410
     container_name: redis4
-    command: ./startredis.sh 172.19.1.13
     privileged: true
     environment:
     - REDIS_NR=4
@@ -66,9 +61,8 @@ services:
     tty: true
 
   redis5:
-    image: redisraftold
+    image: redisraftoldb9ee410
     container_name: redis5
-    command: ./startredis.sh 172.19.1.14
     privileged: true
     environment:
     - REDIS_NR=5

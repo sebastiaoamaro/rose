@@ -82,15 +82,16 @@ struct {
 	__type(value,int);
 } active_write_fd SEC(".maps");
 
+//Auxiliary info, leader is pos [0], node_count is pos [1], nodes current_pids from that point on
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__uint(max_entries, 1);
+	__uint(max_entries, MAP_SIZE);
 	__type(key, int);
 	__type(value,int);
-} leader SEC(".maps");
+} auxiliary_info SEC(".maps");
 
 
-//Holds the status of pids, leader, normal etc.
+//Holds the status of pids, leader 1 , normal 0, fault to inject 2 etc.
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAP_SIZE);

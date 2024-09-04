@@ -62,11 +62,11 @@ struct {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__uint(max_entries, 1);
+	__uint(max_entries, MAP_SIZE);
 	__type(key, int);
 	__type(value,int);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
-} leader SEC(".maps");
+} auxiliary_info SEC(".maps");
 
 
 struct {
@@ -83,7 +83,7 @@ struct {
 	__type(key, int);
 	__type(value,int);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
-} nodes_translator SEC(".maps");
+} nodes_pid_translator SEC(".maps");
 
 
 
@@ -100,8 +100,8 @@ static void entry(struct pt_regs *ctx)
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
-	//bpf_printk("in uprobe for pid %d and tgid %d\n",pid,tid);
-	int result = process_current_state(cond_pos,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb,&leader,&nodes_status,&nodes_translator);
+	bpf_printk("in uprobe for pid:%d cond_pos:%d \n",pid,cond_pos);
+	int result = process_current_state(cond_pos,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 
 }
 
@@ -123,7 +123,7 @@ static void switch_leader(struct pt_regs *ctx)
 		leader_pid = *leader_pointer;
 
 
-	bpf_map_update_elem(&leader,&zero,&pid,BPF_ANY);
+	bpf_map_update_elem(&auxiliary_info,&zero,&pid,BPF_ANY);
 
 	bpf_printk("Leader switched to %d \n",pid);
 
@@ -151,7 +151,6 @@ SEC("kprobe/dummy_kprobe")
 int BPF_KPROBE(dummy_kprobe)
 {
 
-	bpf_printk("In probe \n");
 	if (primary_function){
 		switch_leader(ctx);
 	}else{
@@ -160,14 +159,15 @@ int BPF_KPROBE(dummy_kprobe)
 	return 0;
 }
 
-static void exit(void)
-{
-}
 
 SEC("kretprobe/dummy_kretprobe")
 int BPF_KRETPROBE(dummy_kretprobe)
 {
-	exit();
+	// if (primary_function){
+	// 	switch_leader(ctx);
+	// }else{
+	// 	entry(ctx);
+	// }
 	return 0;
 }
 

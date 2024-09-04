@@ -22,7 +22,7 @@
 
 char* get_veth_interface_name(const char* container_name);
 
-void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script){
+void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script,char* cleanup_script, int cleanup_time){
     
     memset(exe_plan->setup.script,'\0',sizeof(setup_script));
     strcpy(exe_plan->setup.script,setup_script);
@@ -32,6 +32,11 @@ void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup
     memset(exe_plan->workload.script,'\0',sizeof(workload_script));
     strcpy(exe_plan->workload.script,workload_script);
     exe_plan->workload.pid = 0;
+
+    memset(exe_plan->cleanup.script,'\0',sizeof(cleanup_script));
+    strcpy(exe_plan->cleanup.script,cleanup_script);
+    exe_plan->cleanup.pid = 0;
+    exe_plan->cleanup.duration = cleanup_time;
 }
 void create_node(node* node, char* name,int pid, char* veth, char* ip, char* script,char* env,int container,char *binary,char *leader_symbol,int leader){
 
@@ -81,7 +86,7 @@ int get_fault_count(){
 }
 
 
-void create_fault(struct fault* fault,char* name,int target,int traced, int faulttype,int fault_category,fault_details fault_details,int repeat,int occurrences,int duration,int condition_count){
+void create_fault(struct fault* fault,char* name,int target,int traced, int faulttype,int fault_category,fault_details fault_details,int repeat,int occurrences,int duration,int condition_count,int exit){
     
     memset(fault->name,'\0',sizeof(name));
     strcpy(fault->name,name);
@@ -96,13 +101,14 @@ void create_fault(struct fault* fault,char* name,int target,int traced, int faul
 	fault->duration = duration;
     fault->relevant_conditions = condition_count;
     fault->occurrences = occurrences;
+    fault->exit = exit;
 
     fault->fault_conditions_begin = (struct fault_condition*)malloc(condition_count*sizeof(struct fault_condition));
     //fault->list_of_functions = (struct uprobes_bpf*)malloc(MAX_FUNCTIONS*sizeof(struct uprobes_bpf));
 
-    for (int i = 0; i < MAX_FUNCTIONS; i++){
-        fault->list_of_functions_in_container[i] = 0;
-    }
+    // for (int i = 0; i < MAX_FUNCTIONS; i++){
+    //     fault->list_of_functions_in_container[i] = 0;
+    // }
 
 }
 

@@ -124,7 +124,7 @@ $(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) *.h $(wildcard %.h) $(wildcard.%.%.h)$(
 	$(call msg,BPF,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH)		      \
 		     $(INCLUDES) $(CLANG_BPF_SYS_INCLUDES)		      \
-		     -c $(filter %.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
+		     -c -w $(filter %.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 
 # Generate BPF skeletons
@@ -149,7 +149,7 @@ $(BZS_APPS): $(LIBBLAZESYM_OBJ)
 $(APPS): %: $(OUTPUT)/%.o $(COMMON_OBJ) $(LIBBPF_OBJ) | $(OUTPUT)
 	$(call msg,APP,$@)
 	$(call msg,APP,$^)
-	$(Q)$(CC) -c $^ $(ALL_LDFLAGS) -lelf -lz -o $@
+	$(Q)$(CC) -c $^ $(ALL_LDFLAGS) -w -lelf -lz -o $@
 
 OFILES=$(patsubst %,$(OUTPUT)/%.o,$(APPS))
 

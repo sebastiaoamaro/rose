@@ -127,15 +127,12 @@ static int attach_kprobes(struct uprobes_bpf *obj)
 	return 0;
 }
 
-static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location)
+static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *function)
 {
-	char *binary, *function;
 	char bin_path[PATH_MAX];
 	off_t func_off;
 	int ret = -1;
 	long err;
-
-	function = strdup(env.funcname);
 
 
 	// if (!binary) {
@@ -150,11 +147,11 @@ static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location)
 	// *function = '\0';
 	// function++;
 
-	printf("Binary location in uprobe is %s and pid %d \n",binary_location,env.pid);
+	//printf("Binary location in uprobe is %s and pid %d \n",binary_location,env.pid);
 
 	if (binary_location)
 		strcpy(bin_path,binary_location);
-	else if(resolve_binary_path(binary, env.pid, bin_path, sizeof(bin_path)))
+	else if(resolve_binary_path(binary_location, env.pid, bin_path, sizeof(bin_path)))
 		goto out_binary;
 
 	func_off = get_elf_func_offset(bin_path, function);
@@ -184,7 +181,7 @@ static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location)
 	ret = 0;
 
 out_binary:
-	free(binary);
+	return 0;
 
 	return ret;
 }
@@ -226,8 +223,6 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 	obj->rodata->primary_function = primary_function;
 
 	env.pid = pid;
-	env.funcname = funcname;
-
 
 	used_fentry = try_fentry(obj);
 
@@ -256,24 +251,22 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 		warn("Memory-mapping BPF maps is supported starting from Linux 5.7, please upgrade.\n");
 		return NULL;
 	}
-
 	if (!used_fentry) {
 		if (env.is_kernel_func)
 			err = attach_kprobes(obj);
 		else
-			err = attach_uprobes(obj,binary_location);
-		if (err)
+			err = attach_uprobes(obj,binary_location,funcname);
+		if (err){
+			printf("Error is %d \n",err);
 			return NULL;
+		}
 
-	}
-
+	}	
 	err = uprobes_bpf__attach(obj);
 	if (err) {
 		fprintf(stderr, "failed to attach BPF programs: %s\n",
 			strerror(-err));
 			return NULL;
 	}
-	printf("Attached \n");
-
 	return obj;
 }

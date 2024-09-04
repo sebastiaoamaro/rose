@@ -17,12 +17,12 @@
 #include "aux.h"
 
 #define NODE_COUNT 5
-#define FAULT_COUNT 8
+#define FAULT_COUNT 10
 
 
 char* get_veth_interface_name(const char* container_name);
 
-void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script){
+void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script,char* cleanup_script, int cleanup_time){
     
     memset(exe_plan->setup.script,'\0',sizeof(setup_script));
     strcpy(exe_plan->setup.script,setup_script);
@@ -32,6 +32,11 @@ void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup
     memset(exe_plan->workload.script,'\0',sizeof(workload_script));
     strcpy(exe_plan->workload.script,workload_script);
     exe_plan->workload.pid = 0;
+
+    memset(exe_plan->cleanup.script,'\0',sizeof(cleanup_script));
+    strcpy(exe_plan->cleanup.script,cleanup_script);
+    exe_plan->cleanup.pid = 0;
+    exe_plan->cleanup.duration = cleanup_time;
 }
 void create_node(node* node, char* name,int pid, char* veth, char* ip, char* script,char* env,int container,char *binary,char *leader_symbol,int leader){
 
@@ -81,7 +86,7 @@ int get_fault_count(){
 }
 
 
-void create_fault(struct fault* fault,char* name,int target,int traced, int faulttype,int fault_category,fault_details fault_details,int repeat,int occurrences,int duration,int condition_count){
+void create_fault(struct fault* fault,char* name,int target,int traced, int faulttype,int fault_category,fault_details fault_details,int repeat,int occurrences,int duration,int condition_count,int exit){
     
     memset(fault->name,'\0',sizeof(name));
     strcpy(fault->name,name);
@@ -96,13 +101,14 @@ void create_fault(struct fault* fault,char* name,int target,int traced, int faul
 	fault->duration = duration;
     fault->relevant_conditions = condition_count;
     fault->occurrences = occurrences;
+    fault->exit = exit;
 
     fault->fault_conditions_begin = (struct fault_condition*)malloc(condition_count*sizeof(struct fault_condition));
     //fault->list_of_functions = (struct uprobes_bpf*)malloc(MAX_FUNCTIONS*sizeof(struct uprobes_bpf));
 
-    for (int i = 0; i < MAX_FUNCTIONS; i++){
-        fault->list_of_functions_in_container[i] = 0;
-    }
+    // for (int i = 0; i < MAX_FUNCTIONS; i++){
+    //     fault->list_of_functions_in_container[i] = 0;
+    // }
 
 }
 
@@ -220,67 +226,60 @@ char* get_veth_interface_name(const char* container_name) {
 }
 execution_plan* build_execution_plan(){
     execution_plan* exe_plan = ( execution_plan*)malloc(1 * sizeof(execution_plan));
-    create_execution_plan(exe_plan,"/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/startrediscluster.sh",30,"");
+    create_execution_plan(exe_plan,"/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/startrediscluster.sh",5,"/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/runworkload.sh","/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/cleanup.sh",15);
     return exe_plan;
 }
 node* build_nodes(){
     node* nodes = ( node*)malloc(NODE_COUNT * sizeof(node));
-    create_node(&nodes[0],"redis1",0,"","172.19.1.10","/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/startserver1.sh","",1,"/redisraft.so","raft_become_leader",1);
-    create_node(&nodes[1],"redis2",0,"","172.19.1.11","/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/startserver2.sh","",1,"/redisraft.so","raft_become_leader",0);
-    create_node(&nodes[2],"redis3",0,"","172.19.1.12","/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/startserver3.sh","",1,"/redisraft.so","raft_become_leader",0);
-    create_node(&nodes[3],"redis4",0,"","172.19.1.13","/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/startserver4.sh","",1,"/redisraft.so","raft_become_leader",0);
-    create_node(&nodes[4],"redis5",0,"","172.19.1.14","/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/startserver5.sh","",1,"/redisraft.so","raft_become_leader",0);
+    create_node(&nodes[0],"redis1",0,"","172.19.1.10","./startredis.sh 1 172.19.1.10","",1,"/redisraft.so","raft_become_leader",1);
+    create_node(&nodes[1],"redis2",0,"","172.19.1.11","./startredis.sh 2 172.19.1.11","",1,"/redisraft.so","raft_become_leader",0);
+    create_node(&nodes[2],"redis3",0,"","172.19.1.12","./startredis.sh 3 172.19.1.12","",1,"/redisraft.so","raft_become_leader",0);
+    create_node(&nodes[3],"redis4",0,"","172.19.1.13","./startredis.sh 4 172.19.1.13","",1,"/redisraft.so","raft_become_leader",0);
+    create_node(&nodes[4],"redis5",0,"","172.19.1.14","./startredis.sh 5 172.19.1.14","",1,"/redisraft.so","raft_become_leader",0);
 
     return nodes;
 }
 fault* build_faults_extra(){
     fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));
-    //network partition begins
     fault_details fault_details0;
     block_ips block_ips0;
-    add_ip_to_block_extra(&block_ips0,"172.19.1.13",0,1);
-    add_ip_to_block_extra(&block_ips0,"172.19.1.13",0,2);
-    add_ip_to_block_extra(&block_ips0,"172.19.1.14",1,1);
-    add_ip_to_block_extra(&block_ips0,"172.19.1.14",1,2);
+    add_ip_to_block_extra(&block_ips0,"172.19.1.10",0,1);
+    add_ip_to_block_extra(&block_ips0,"172.19.1.10",0,2);
     fault_details0.block_ips = block_ips0;
-    fault_details0.block_ips.count_in = 2;
-    fault_details0.block_ips.count_out = 2;
-    create_fault(&faults[0],"block_ips",0,0,5,0,fault_details0,0,0,0,1);
+    fault_details0.block_ips.count_in = 1;
+    fault_details0.block_ips.count_out = 1;
+    create_fault(&faults[0],"block_ips_redis2",1,1,5,0,fault_details0,0,0,25000,1,0);
 
     fault_condition fault_condition_0_0;
-    int time_0_0 = 5000;
+    int time_0_0 = 10000;
     fault_condition_0_0.type = TIME;
     fault_condition_0_0.condition.time = time_0_0;
     add_begin_condition(&faults[0],fault_condition_0_0,0);
     fault_details fault_details1;
     block_ips block_ips1;
-    add_ip_to_block_extra(&block_ips1,"172.19.1.13",0,1);
-    add_ip_to_block_extra(&block_ips1,"172.19.1.13",0,2);
-    add_ip_to_block_extra(&block_ips1,"172.19.1.14",1,1);
-    add_ip_to_block_extra(&block_ips1,"172.19.1.14",1,2);
+    add_ip_to_block_extra(&block_ips1,"172.19.1.10",0,1);
+    add_ip_to_block_extra(&block_ips1,"172.19.1.10",0,2);
     fault_details1.block_ips = block_ips1;
-    fault_details1.block_ips.count_in = 2;
-    fault_details1.block_ips.count_out = 2;
-    create_fault(&faults[1],"block_ips",1,0,5,0,fault_details1,0,0,0,1);
+    fault_details1.block_ips.count_in = 1;
+    fault_details1.block_ips.count_out = 1;
+    create_fault(&faults[1],"block_ips_redis3",2,2,5,0,fault_details1,0,0,25000,1,0);
 
     fault_condition fault_condition_1_0;
-    int time_1_0 = 5000;
+    int time_1_0 = 10000;
     fault_condition_1_0.type = TIME;
     fault_condition_1_0.condition.time = time_1_0;
     add_begin_condition(&faults[1],fault_condition_1_0,0);
     fault_details fault_details2;
     block_ips block_ips2;
-    add_ip_to_block_extra(&block_ips2,"172.19.1.13",0,1);
-    add_ip_to_block_extra(&block_ips2,"172.19.1.13",0,2);
-    add_ip_to_block_extra(&block_ips2,"172.19.1.14",1,1);
-    add_ip_to_block_extra(&block_ips2,"172.19.1.14",1,2);
+    add_ip_to_block_extra(&block_ips2,"172.19.1.10",0,1);
+    add_ip_to_block_extra(&block_ips2,"172.19.1.10",0,2);
     fault_details2.block_ips = block_ips2;
-    fault_details2.block_ips.count_in = 2;
-    fault_details2.block_ips.count_out = 2;
-    create_fault(&faults[2],"block_ips",2,0,5,0,fault_details2,0,0,0,1);
+    fault_details2.block_ips.count_in = 1;
+    fault_details2.block_ips.count_out = 1;
+    create_fault(&faults[2],"block_ips_redis4",3,3,5,0,fault_details2,0,0,25000,1,0);
 
     fault_condition fault_condition_2_0;
-    int time_2_0 = 5000;
+    int time_2_0 = 10000;
     fault_condition_2_0.type = TIME;
     fault_condition_2_0.condition.time = time_2_0;
     add_begin_condition(&faults[2],fault_condition_2_0,0);
@@ -288,72 +287,112 @@ fault* build_faults_extra(){
     block_ips block_ips3;
     add_ip_to_block_extra(&block_ips3,"172.19.1.10",0,1);
     add_ip_to_block_extra(&block_ips3,"172.19.1.10",0,2);
-    add_ip_to_block_extra(&block_ips3,"172.19.1.11",1,1);
-    add_ip_to_block_extra(&block_ips3,"172.19.1.11",1,2);
-    add_ip_to_block_extra(&block_ips3,"172.19.1.12",2,1);
-    add_ip_to_block_extra(&block_ips3,"172.19.1.12",2,2);
     fault_details3.block_ips = block_ips3;
-    fault_details3.block_ips.count_in = 3;
-    fault_details3.block_ips.count_out = 3;
-    create_fault(&faults[3],"block_ips",3,0,5,0,fault_details3,0,0,0,1);
+    fault_details3.block_ips.count_in = 1;
+    fault_details3.block_ips.count_out = 1;
+    create_fault(&faults[3],"block_ips_redis5",4,4,5,0,fault_details3,0,0,25000,1,0);
 
     fault_condition fault_condition_3_0;
-    int time_3_0 = 5000;
+    int time_3_0 = 10000;
     fault_condition_3_0.type = TIME;
     fault_condition_3_0.condition.time = time_3_0;
     add_begin_condition(&faults[3],fault_condition_3_0,0);
     fault_details fault_details4;
-    block_ips block_ips4;
-    add_ip_to_block_extra(&block_ips4,"172.19.1.10",0,1);
-    add_ip_to_block_extra(&block_ips4,"172.19.1.10",0,2);
-    add_ip_to_block_extra(&block_ips4,"172.19.1.11",1,1);
-    add_ip_to_block_extra(&block_ips4,"172.19.1.11",1,2);
-    add_ip_to_block_extra(&block_ips4,"172.19.1.12",2,1);
-    add_ip_to_block_extra(&block_ips4,"172.19.1.12",2,2);
-    fault_details4.block_ips = block_ips4;
-    fault_details4.block_ips.count_in = 3;
-    fault_details4.block_ips.count_out = 3;
-    create_fault(&faults[4],"block_ips",4,0,5,0,fault_details4,0,0,0,1);
+    process_fault process_kill4;
+    process_kill4.type = 11;
+    fault_details4.process_fault = process_kill4;
+    create_fault(&faults[4],"process_kill_all1",0,0,11,1,fault_details4,0,0,0,1,0);
 
     fault_condition fault_condition_4_0;
-    int time_4_0 = 5000;
+    int time_4_0 = 20000;
     fault_condition_4_0.type = TIME;
     fault_condition_4_0.condition.time = time_4_0;
     add_begin_condition(&faults[4],fault_condition_4_0,0);
-    //network partition ends
     fault_details fault_details5;
     process_fault process_kill5;
     process_kill5.type = 11;
     fault_details5.process_fault = process_kill5;
-    create_fault(&faults[5],"process_kill0",-2,1,11,1,fault_details5,0,0,0,1);
+    create_fault(&faults[5],"process_kill1",0,0,11,1,fault_details5,0,0,0,2,1);
 
     fault_condition fault_condition_5_0;
-    int time_5_0 = 10000;
-    fault_condition_5_0.type = TIME;
-    fault_condition_5_0.condition.time = time_5_0;
+    user_function user_func_5_0;
+    fault_condition_5_0.type = USER_FUNCTION;
+    build_user_function(&user_func_5_0,"/redisraft.so","handleLoadSnapshot",1);
+    fault_condition_5_0.condition.user_function = user_func_5_0;
     add_begin_condition(&faults[5],fault_condition_5_0,0);
+    fault_condition fault_condition_5_1;
+    int time_5_1 = 20000;
+    fault_condition_5_1.type = TIME;
+    fault_condition_5_1.condition.time = time_5_1;
+    add_begin_condition(&faults[5],fault_condition_5_1,1);
     fault_details fault_details6;
     process_fault process_kill6;
     process_kill6.type = 11;
     fault_details6.process_fault = process_kill6;
-    create_fault(&faults[6],"process_kill1",-2,2,11,1,fault_details6,0,0,0,1);
+    create_fault(&faults[6],"process_kill2",1,1,11,1,fault_details6,0,0,0,2,1);
 
     fault_condition fault_condition_6_0;
-    int time_6_0 = 10000;
-    fault_condition_6_0.type = TIME;
-    fault_condition_6_0.condition.time = time_6_0;
+    user_function user_func_6_0;
+    fault_condition_6_0.type = USER_FUNCTION;
+    build_user_function(&user_func_6_0,"/redisraft.so","handleLoadSnapshot",1);
+    fault_condition_6_0.condition.user_function = user_func_6_0;
     add_begin_condition(&faults[6],fault_condition_6_0,0);
+    fault_condition fault_condition_6_1;
+    int time_6_1 = 20000;
+    fault_condition_6_1.type = TIME;
+    fault_condition_6_1.condition.time = time_6_1;
+    add_begin_condition(&faults[6],fault_condition_6_1,1);
     fault_details fault_details7;
     process_fault process_kill7;
     process_kill7.type = 11;
     fault_details7.process_fault = process_kill7;
-    create_fault(&faults[7],"process_kill2",-2,3,11,1,fault_details7,0,0,0,1);
+    create_fault(&faults[7],"process_kill3",2,2,11,1,fault_details7,0,0,0,2,1);
 
     fault_condition fault_condition_7_0;
-    int time_7_0 = 10000;
-    fault_condition_7_0.type = TIME;
-    fault_condition_7_0.condition.time = time_7_0;
+    user_function user_func_7_0;
+    fault_condition_7_0.type = USER_FUNCTION;
+    build_user_function(&user_func_7_0,"/redisraft.so","handleLoadSnapshot",1);
+    fault_condition_7_0.condition.user_function = user_func_7_0;
     add_begin_condition(&faults[7],fault_condition_7_0,0);
+    fault_condition fault_condition_7_1;
+    int time_7_1 = 20000;
+    fault_condition_7_1.type = TIME;
+    fault_condition_7_1.condition.time = time_7_1;
+    add_begin_condition(&faults[7],fault_condition_7_1,1);
+    fault_details fault_details8;
+    process_fault process_kill8;
+    process_kill8.type = 11;
+    fault_details8.process_fault = process_kill8;
+    create_fault(&faults[8],"process_kill4",3,3,11,1,fault_details8,0,0,0,2,1);
+
+    fault_condition fault_condition_8_0;
+    user_function user_func_8_0;
+    fault_condition_8_0.type = USER_FUNCTION;
+    build_user_function(&user_func_8_0,"/redisraft.so","handleLoadSnapshot",1);
+    fault_condition_8_0.condition.user_function = user_func_8_0;
+    add_begin_condition(&faults[8],fault_condition_8_0,0);
+    fault_condition fault_condition_8_1;
+    int time_8_1 = 20000;
+    fault_condition_8_1.type = TIME;
+    fault_condition_8_1.condition.time = time_8_1;
+    add_begin_condition(&faults[8],fault_condition_8_1,1);
+    fault_details fault_details9;
+    process_fault process_kill9;
+    process_kill9.type = 11;
+    fault_details9.process_fault = process_kill9;
+    create_fault(&faults[9],"process_kill5",4,4,11,1,fault_details9,0,0,0,2,1);
+
+    fault_condition fault_condition_9_0;
+    user_function user_func_9_0;
+    fault_condition_9_0.type = USER_FUNCTION;
+    build_user_function(&user_func_9_0,"/redisraft.so","handleLoadSnapshot",1);
+    fault_condition_9_0.condition.user_function = user_func_9_0;
+    add_begin_condition(&faults[9],fault_condition_9_0,0);
+    fault_condition fault_condition_9_1;
+    int time_9_1 = 20000;
+    fault_condition_9_1.type = TIME;
+    fault_condition_9_1.condition.time = time_9_1;
+    add_begin_condition(&faults[9],fault_condition_9_1,1);
 
     return faults;
 }

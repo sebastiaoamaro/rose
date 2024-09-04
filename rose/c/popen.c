@@ -19,7 +19,7 @@ void sig_handler(int signum){
     ready = 1;
 }
 
-FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid)
+FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid, int container_process)
 {   
 
     pid_t child_pid;
@@ -46,17 +46,17 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
 
         setpgid(child_pid, child_pid); //Needed so negative PIDs can kill children of /bin/sh
 
-        signal(SIGUSR1,sig_handler); // Register signal handler
+        if (!container_process){
+            signal(SIGUSR1,sig_handler); // Register signal handler
 
-        while(true){
-            if(ready){
-                //printf("Received signal \n");
-                break;
+            while(true){
+                if(ready){
+                    break;
+                }
+                sleep(0.000001);
+
             }
-            sleep(0.000001);
-
         }
-        //turn off signal
         int err = execvpe(command,args,env);
         printf("Err in execv is %d and errno is %d \n",err,errno);
         exit(0);

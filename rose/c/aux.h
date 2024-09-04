@@ -14,7 +14,7 @@
 #define MAX_RELEVANT_FILES 256
 #define MAX_ARGS 16
 #define MAX_FAULTS 32
-#define MAP_SIZE 128
+#define MAP_SIZE 32
 
 #define MAX_FILE_LOCATION_LEN 1024
 #define MAX_COMMAND_LEN 512
@@ -47,6 +47,8 @@ struct simplified_fault{
     int relevant_conditions;
     int fault_nr;
     int run;
+    int quorum_size;
+    int faults_done;
 };
 
 struct fault_key{
@@ -150,21 +152,16 @@ struct event {
     int fault_nr;
 	unsigned exit_code;
 	unsigned long long duration_ns;
-	char comm[TASK_COMM_LEN];
-	char filename[MAX_FILENAME_LEN];
     __u64 state_condition;
     int syscall_nr;
-    __u32 ip_proto;
-    __u32 ifindex;
-	__be32 src_addr;
-	__be32 dst_addr;
 };
 
 
 struct process_fault_args{
-	int *pid;
-	int *duration;
-    int *node_to_restart;
+	int pid;
+	int duration;
+    int node_to_restart;
+    char* name;
 };
 
 
@@ -184,5 +181,6 @@ void kill_process(void* args);
 void sleep_for_ms(long milliseconds);
 bool is_element_in_array(int arr[], int size, int element);
 void print_fault_schedule();
-int send_signal(int pid, int signal);
+int send_signal(int pid, int signal,char*);
+long get_children_pids(pid_t pid);
 #endif /* __AUX_H */

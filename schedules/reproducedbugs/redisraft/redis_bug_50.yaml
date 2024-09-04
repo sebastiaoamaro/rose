@@ -43,70 +43,70 @@ nodes:
     script: "./startredis.sh 5 172.19.1.14"
 
 faults:
-  block_ips_redis2:
-    type: block_ips
-    target: redis2
-    traced: redis2
-    ips_in: 
-      redis1
-      redis4
-    ips_out:
-      redis1 
-      redis4
-    begin_conditions:
-      time: 10000
+  # block_ips_redis2:
+  #   type: block_ips
+  #   target: redis2
+  #   traced: redis2
+  #   ips_in: 
+  #     redis1
+  #     redis4
+  #   ips_out:
+  #     redis1 
+  #     redis4
+  #   begin_conditions:
+  #     time: 10000
 
-  block_ips_redis3:
-    type: block_ips
-    target: redis3
-    traced: redis3
-    ips_in: 
-      redis4
-      redis5
-    ips_out: 
-      redis4
-      redis5
-    begin_conditions:
-      time: 10000
+  # block_ips_redis3:
+  #   type: block_ips
+  #   target: redis3
+  #   traced: redis3
+  #   ips_in: 
+  #     redis4
+  #     redis5
+  #   ips_out: 
+  #     redis4
+  #     redis5
+  #   begin_conditions:
+  #     time: 10000
 
-  block_ips_redis1:
-    type: block_ips
-    target: redis1
-    traced: redis1
-    ips_in: 
-      redis2
-      redis5
-    ips_out: 
-      redis2
-      redis5
-    begin_conditions:
-      time: 10000
+  # block_ips_redis1:
+  #   type: block_ips
+  #   target: redis1
+  #   traced: redis1
+  #   ips_in: 
+  #     redis2
+  #     redis5
+  #   ips_out: 
+  #     redis2
+  #     redis5
+  #   begin_conditions:
+  #     time: 10000
 
-  block_ips_redis4:
-    type: block_ips
-    target: redis4
-    traced: redis4
-    ips_in: 
-      redis2
-      redis3
-    ips_out: 
-      redis2
-      redis3
-    begin_conditions:
-      time: 10000
+  # block_ips_redis4:
+  #   type: block_ips
+  #   target: redis4
+  #   traced: redis4
+  #   ips_in: 
+  #     redis2
+  #     redis3
+  #   ips_out: 
+  #     redis2
+  #     redis3
+  #   begin_conditions:
+  #     time: 10000
 
-  block_ips_redis5:
-    type: block_ips
-    target: redis5
-    traced: redis5
-    ips_in: 
-      redis1
-      redis3
-    ips_out: 
-      redis1
-      redis3
-    begin_conditions:
-      time: 10000
+  # block_ips_redis5:
+  #   type: block_ips
+  #   target: redis5
+  #   traced: redis5
+  #   ips_in: 
+  #     redis1
+  #     redis3
+  #   ips_out: 
+  #     redis1
+  #     redis3
+  #   begin_conditions:
+  #     time: 10000
 
   process_kill0:
     type: process_kill

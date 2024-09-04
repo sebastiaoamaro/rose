@@ -293,6 +293,5 @@ check:
 out:
 	close_elf(e, fd);
 
-	printf("The symbol location is %d ",ret);
 	return ret;
 }

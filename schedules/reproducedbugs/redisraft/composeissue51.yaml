@@ -1,0 +1,94 @@
+services:
+  redis1:
+    image: redisraftold2d1cf30
+    container_name: redis1
+    privileged: true
+    environment:
+    - REDIS_NR=1
+    expose:
+      - "5001"
+
+    networks:
+      db:
+        ipv4_address: 172.19.1.10
+    tty: true
+  redis2:
+    image: redisraftold2d1cf30
+    container_name: redis2
+    privileged: true
+    environment:
+    - REDIS_NR=2
+    expose:
+      - "5001"
+      - "5002"
+
+    networks:
+      db:
+        ipv4_address: 172.19.1.11
+
+    tty: true
+
+  redis3:
+    image: redisraftold2d1cf30
+    container_name: redis3 
+    privileged: true
+    environment:
+    - REDIS_NR=3
+    expose:
+      - "5001"
+      - "5002"
+
+    networks:
+      db:
+        ipv4_address: 172.19.1.12
+
+    tty: true
+
+  redis4:
+    image: redisraftold2d1cf30
+    container_name: redis4
+    privileged: true
+    environment:
+    - REDIS_NR=4
+    expose:
+      - "5001"
+      - "5002"
+
+    networks:
+      db:
+        ipv4_address: 172.19.1.13
+
+    tty: true
+
+  redis5:
+    image: redisraftold2d1cf30
+    container_name: redis5
+    privileged: true
+    environment:
+    - REDIS_NR=5
+    expose:
+      - "5001"
+      - "5002"
+
+    networks:
+      db:
+        ipv4_address: 172.19.1.14
+
+    tty: true
+
+  client:
+    image: redisclient
+    container_name: client
+    privileged: true
+    networks:
+      db:
+        ipv4_address: 172.19.1.15
+    tty: true
+
+networks:
+  db:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.19.1.0/24

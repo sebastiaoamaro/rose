@@ -10,10 +10,12 @@
 
 static int count = 0;
 static int start = 0;
+
+void my_test_function();
 static void sig_handler(int sig)
 {
 	start = 1;
-	//printf("Starting workload \n");
+	printf("Starting workload \n");
 	fflush(stdout);
 }
 
@@ -23,9 +25,16 @@ int main(int argc, char *argv[]) {
     int fd = open("teste.txt", O_CREAT | O_RDWR, 0644);
     int count = 0;
     int workload_size = 10000000;
+    //int workload_size = 10000;
 
-    char *tracing_type = malloc(strlen(argv[1]) + 1);
-    strcpy(tracing_type, argv[1]);
+    char *tracing_type;
+    if (argc > 1){
+        tracing_type = malloc(strlen(argv[1]) + 1);
+        strcpy(tracing_type, argv[1]);
+    }else{
+        tracing_type = malloc(strlen("test") + 1);
+        strcpy(tracing_type, "test");
+    }
 
     signal(SIGUSR1, sig_handler);
 
@@ -33,25 +42,15 @@ int main(int argc, char *argv[]) {
         continue;
     }
     time_t start_time = time(NULL);
+    char string[15];
+
     for(int i=0;i < workload_size;i++){
 
-        char string[6] = "String";
+        //generateRandomString(string,15);
 
-        int fd = openat(-100,"teste.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        //printf("OPEN result is %d errno is %d\n",fd,errno);
+        //int res = write(fd,string,sizeof(string));
 
-
-        int res = write(fd,string,sizeof(string));
-        //printf("WRITE result is %d errno is %d count is %d\n",res,errno,count);
-
-        close(fd);
-
-        int fd_read = open("teste.txt", O_CREAT | O_RDWR, 0644);
-        unsigned char read_string[6];
-
-        int res_read = read(fd_read,&read_string,6);
-        //printf("READ result is %d errno is %d count is %d result is %s \n",res_read,errno,count,read_string);
-            //fdatasync(fd);
+        int fd = open("teste.txt", O_CREAT | O_RDWR, 0644);
 
         close(fd);
 
@@ -61,4 +60,21 @@ int main(int argc, char *argv[]) {
     printf("In tracing:%s Elapsed time: %.2f seconds\n",tracing_type, elapsed_time);
     fflush(stdout);
 
+}
+
+void generateRandomString(char *str, int length) {
+    char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    int charsetSize = sizeof(charset) - 1;
+
+    for (int i = 0; i < length; i++) {
+        int key = rand() % charsetSize;
+        str[i] = charset[key];
+    }
+
+    str[length] = '\0';  // Null-terminate the string
+}
+
+void my_test_function(){
+    int counter = 0;
+    counter++;
 }

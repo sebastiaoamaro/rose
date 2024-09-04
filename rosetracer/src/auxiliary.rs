@@ -1,24 +1,11 @@
-use anyhow::{anyhow, bail, Context, Result};
-use core::time::Duration;
-use libbpf_rs::libbpf_sys::BPF_ANY;
+use anyhow::{bail,Result};
 use libbpf_rs::MapFlags;
-use libbpf_rs::PerfBufferBuilder;
-use libloading::{Library, Symbol};
-use object::Object;
-use object::ObjectSymbol;
-use plain::Plain;
-use rand::Rng;
-use std::env;
-use std::ffi::CString;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::str;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread::sleep;
 
 #[repr(C)]
 pub struct syscall_op {
@@ -218,4 +205,28 @@ pub fn read_names_from_file(filename: &str) -> io::Result<Vec<String>> {
     let lines: Vec<String> = reader.lines().collect::<Result<_, _>>()?;
 
     Ok(lines)
+}
+
+
+pub fn collect_uprobe_stats(uprobe_counters: &libbpf_rs::Map,functions:Vec<String>){
+    print!("Collecing uprobe_stats \n");
+    let keys = uprobe_counters.keys();
+
+    for key in keys {
+        let result = uprobe_counters
+            .lookup(&key, MapFlags::ANY)
+            .expect("This key is not in uprobe_counters");
+
+        let key_array: [u8; 4] = key.try_into().ok().unwrap();
+
+        let key_value:i32 = i32::from_ne_bytes(key_array);
+
+        let value_array: [u8; 4] = result.unwrap().try_into().ok().unwrap();
+
+        let value:i32 = i32::from_ne_bytes(value_array);
+
+        if value > 0{
+            println!("Key is {} and value is {} for function {}",key_value,value,functions.get(key_value as usize).unwrap());
+        }
+    }
 }

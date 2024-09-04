@@ -16,6 +16,7 @@ class Fault:
     end_conditions = []
     trigger_statement_begin = ""
     trigger_statement_end = ""
+    exit = 0
 
 #Type of faults
 class file_system_operation:
@@ -165,6 +166,9 @@ def createFault(name,faultconfig,nodes_dict):
     if 'occurrences' in faultconfig:
         fault.occurrences = faultconfig['occurrences']
 
+    if 'exit' in faultconfig:
+        fault.exit = 1 if faultconfig['exit'] else 0
+
     #fault.trigger_statement_begin = faultconfig['begin_conditions']['trigger_statement']
 
     begin_conditions = faultconfig['begin_conditions']
@@ -231,7 +235,7 @@ def build_faults_cfile(file,nodes,faults):
             fault_details = build_fault_details(fault.type,fault_type_nr,fault_count,fault.fault_specifics,nodes,"")
 
             file.write(fault_details)
-            build_fault = """    create_fault(&faults[#faultnr],"#name",#target,#traced,#faulttype,#fault_category,fault_details#fault_nr,#repeat,#occurrences,#duration,#condition_count);\n\n"""
+            build_fault = """    create_fault(&faults[#faultnr],"#name",#target,#traced,#faulttype,#fault_category,fault_details#fault_nr,#repeat,#occurrences,#duration,#condition_count,#exit);\n\n"""
 
             build_fault = build_fault.replace("#faultnr",str(fault_count))
             build_fault = build_fault.replace("#name",fault.name)
@@ -246,6 +250,7 @@ def build_faults_cfile(file,nodes,faults):
             build_fault = build_fault.replace("#occurrences",str(fault.occurrences))
             build_fault = build_fault.replace("#duration",str(fault.duration))
             build_fault = build_fault.replace("#condition_count",str(len(fault.begin_conditions)))
+            build_fault = build_fault.replace("#exit",str(fault.exit))
             # build_fault = build_fault.replace("#faultnr",str(fault_count))
             # build_fault = build_fault.replace("#faultnr",str(fault_count))
             file.write(build_fault)
@@ -268,7 +273,7 @@ def build_faults_cfile(file,nodes,faults):
                 file.write(fault_details)
                 target_nr = nodes[node].node_nr
 
-                build_fault = """    create_fault(&faults[#faultnr],"#name",#target,#traced,#faulttype,#fault_category,fault_details#fault_nr,#repeat,#occurrences,#duration,#condition_count);\n\n"""
+                build_fault = """    create_fault(&faults[#faultnr],"#name",#target,#traced,#faulttype,#fault_category,fault_details#fault_nr,#repeat,#occurrences,#duration,#condition_count,#exit);\n\n"""
 
                 build_fault = build_fault.replace("#faultnr",str(fault_count))
                 build_fault = build_fault.replace("#name","block_ips")
@@ -283,6 +288,7 @@ def build_faults_cfile(file,nodes,faults):
                 build_fault = build_fault.replace("#occurrences",str(fault.occurrences))
                 build_fault = build_fault.replace("#duration",str(fault.duration))
                 build_fault = build_fault.replace("#condition_count",str(len(fault.begin_conditions)))
+                build_fault = build_fault.replace("#exit",str(fault.exit))
 
                 file.write(build_fault)
                 build_fault_conditions(file,fault_count,fault.begin_conditions)

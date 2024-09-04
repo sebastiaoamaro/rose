@@ -1,3 +1,3 @@
 #!/bin/bash
-rsync -rav --exclude rosetracer/target/ --exclude rosetracer/src/bpf/vmlinux.h -e ssh /home/sebastiaoamaro/phd/torefidevel/ sebasamaro@proteina01:./torefidevel/
-rsync -rav -e ssh /home/sebastiaoamaro/.tmux.conf sebasamaro@proteina01:./
+rsync -rav --exclude rosetracer/target/ --exclude rosetracer/src/bpf/vmlinux.h --exclude tests/bugdetection/ -e ssh /home/sebastiaoamaro/phd/torefidevel/ sebasamaro@$1:./torefidevel/
+#rsync -rav -e ssh /home/sebastiaoamaro/.tmux.conf sebasamaro@vitamina01:./

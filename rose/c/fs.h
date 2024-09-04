@@ -2,14 +2,14 @@
 #define __FS_H
 
 
-#define FILENAME_MAX		64
-#define MAX_JUMPS 			10
+//TODO THIS MIGHT BE TO SMALL BUT INSTRUCTION LIMIT IS BEING HIT
+#define FILENAME_MAX		32
+#define MAX_JUMPS 			8
 #define MAX_FILE_OFFSET		(FILENAME_MAX>>1)
 #define SUB_STR_MAX			512
 #define PATH_MAX	4096
 #define TASK_COMM_LEN	16
 
-struct fs_bpf* monitor_fs();
 
 struct file_info_simple {
 	int size;
