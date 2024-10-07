@@ -3,6 +3,7 @@ class user_function_condition:
     binary_location = ""
     symbol = ""
     arguments = []
+    offset = 0
     call_count = 0
 
 
@@ -32,6 +33,9 @@ def build_user_function(user_function_config):
             user_function.arguments.append(argument)
 
     user_function.call_count = user_function_config['call_count']
+
+    if 'offset' in user_function_config:
+        user_function.offset = int(user_function_config['offset'])
 
     return user_function
 
@@ -95,7 +99,7 @@ def build_fault_conditions(file,fault_nr,begin_conditions):
             fault_condition = """    fault_condition fault_condition_#faultnr_#condnr;\n"""
             fault_condition += """    user_function user_func_#faultnr_#condnr;\n"""
             fault_condition += """    fault_condition_#faultnr_#condnr.type = USER_FUNCTION;\n"""
-            fault_condition += """    build_user_function(&user_func_#faultnr_#condnr,"#binary_location","#location",#call_count);\n"""
+            fault_condition += """    build_user_function(&user_func_#faultnr_#condnr,"#binary_location","#location",#call_count,#offset);\n"""
             fault_condition = fault_condition.replace("#binary_location",condition.binary_location)
             fault_condition = fault_condition.replace("#location",condition.symbol)
             fault_condition = fault_condition.replace("#call_count",str(condition.call_count))
@@ -103,6 +107,7 @@ def build_fault_conditions(file,fault_nr,begin_conditions):
             fault_condition += """    add_begin_condition(&faults[#faultnr],fault_condition_#faultnr_#condnr,#condnr);\n"""
             fault_condition = fault_condition.replace("#faultnr",str(fault_nr))
             fault_condition = fault_condition.replace("#condnr",str(condition_counter))
+            fault_condition = fault_condition.replace("#offset",str(condition.offset))
             
             file.write(fault_condition)
         if isinstance(condition,int):

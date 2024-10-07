@@ -253,7 +253,6 @@ int trace_read_exit(struct trace_event_raw_sys_exit *ctx)
 	const unsigned int local_buff_size = 16;
     char local_buff[local_buff_size] = { 0x00 };
 
-	//read only 64 bytes
 	long int read_size = 16;
 
 	bpf_probe_read(&local_buff, read_size, (void*)buff_addr);

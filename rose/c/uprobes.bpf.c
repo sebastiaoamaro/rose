@@ -96,7 +96,8 @@ const volatile int primary_function = 0;
 
 
 static void entry(struct pt_regs *ctx)
-{
+{	
+	bpf_printk("In entry \n");
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
@@ -150,7 +151,6 @@ static void switch_leader(struct pt_regs *ctx)
 SEC("kprobe/dummy_kprobe")
 int BPF_KPROBE(dummy_kprobe)
 {
-
 	if (primary_function){
 		switch_leader(ctx);
 	}else{

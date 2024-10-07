@@ -22,6 +22,22 @@
 
 char* get_veth_interface_name(const char* container_name);
 
+
+void create_tracer(tracer* tracer,char* tracer_location, char* pipe_location, char* functions_file,char* binary_path){
+
+    memset(tracer->tracer_location,'\0',sizeof(tracer_location));
+    strcpy(tracer->tracer_location,tracer_location);
+
+    memset(tracer->pipe_location,'\0',sizeof(pipe_location));
+    strcpy(tracer->pipe_location,pipe_location);
+
+    memset(tracer->functions_file,'\0',sizeof(functions_file));
+    strcpy(tracer->functions_file,functions_file);
+
+    memset(tracer->binary_path,'\0',sizeof(binary_path));
+    strcpy(tracer->binary_path,binary_path);
+
+}
 void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script,char* cleanup_script, int cleanup_time){
     
     memset(exe_plan->setup.script,'\0',sizeof(setup_script));
@@ -116,13 +132,14 @@ void add_begin_condition(struct fault* fault,fault_condition fault_condition,int
     fault->fault_conditions_begin[position] = fault_condition;
 }
 
-void build_user_function(user_function* user_func,char* binary_location,char* symbol,int call_count){
+void build_user_function(user_function* user_func,char* binary_location,char* symbol,int call_count,int offset){
 
     memset(user_func->binary_location,'\0',sizeof(user_func->binary_location));
     strcpy(user_func->binary_location,binary_location);
     memset(user_func->symbol,'\0',sizeof(user_func->symbol));
     strcpy(user_func->symbol,symbol);
     user_func->call_count = call_count;
+    user_func->offset = offset;
 }
 
 void build_file_syscall(file_system_call* file_syscall,int syscall, char* directory_name,char* file_name,int call_count){

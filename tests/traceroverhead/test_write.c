@@ -15,7 +15,7 @@ void my_test_function();
 static void sig_handler(int sig)
 {
 	start = 1;
-	printf("Starting workload \n");
+	//printf("Starting workload \n");
 	fflush(stdout);
 }
 
@@ -24,8 +24,8 @@ int main(int argc, char *argv[]) {
     //printf("Pid %d \n",getpid());
     int fd = open("teste.txt", O_CREAT | O_RDWR, 0644);
     int count = 0;
-    int workload_size = 10000000;
-    //int workload_size = 10000;
+    int workload_size = 10000000/2;
+    //int workload_size = 1000000;
 
     char *tracing_type;
     if (argc > 1){
@@ -42,22 +42,29 @@ int main(int argc, char *argv[]) {
         continue;
     }
     time_t start_time = time(NULL);
-    char string[15];
+    //char string[15];
+    char string[6] = "String";
+
+    char read_string[6];
 
     for(int i=0;i < workload_size;i++){
 
         //generateRandomString(string,15);
 
-        //int res = write(fd,string,sizeof(string));
+        int res = write(fd,string,sizeof(string));
 
-        int fd = open("teste.txt", O_CREAT | O_RDWR, 0644);
+        int res_read = read(fd,&read_string,6);
 
-        close(fd);
+        //int fd = open("teste.txt", O_CREAT | O_RDWR, 0644);
 
-   }
+        //close(fd);
+
+    }
+    close(fd);
     time_t end_time = time(NULL);
     double elapsed_time = difftime(end_time, start_time);
-    printf("In tracing:%s Elapsed time: %.2f seconds\n",tracing_type, elapsed_time);
+    //printf("In tracing:%s Elapsed time: %.2f seconds\n",tracing_type, elapsed_time);
+    printf("%.2f \n",elapsed_time);
     fflush(stdout);
 
 }
@@ -78,3 +85,4 @@ void my_test_function(){
     int counter = 0;
     counter++;
 }
+ 

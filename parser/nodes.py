@@ -57,7 +57,6 @@ def createNode(name,nodeconfig,node_nr):
         node.leader_symbol = nodeconfig['leader_symbol']
 
     if 'leader' in keys:
-        print(nodeconfig['leader'])
         if nodeconfig['leader']:
             node.leader = 1
 

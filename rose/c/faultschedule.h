@@ -15,6 +15,17 @@
 #define MAX_ARGS 16
 #define MAX_FAULTS 32
 
+typedef struct Tracer{
+
+    char tracer_location[STRING_SIZE];
+    char pipe_location[STRING_SIZE];
+    char functions_file[STRING_SIZE];
+    char binary_path[STRING_SIZE];
+    int pipe_write_end;
+    int pid;
+
+}tracer;
+
 typedef struct Setup{
     char script[STRING_SIZE];
     int duration;
@@ -113,6 +124,7 @@ typedef struct user_function{
     //TODO arguments
     int call_count;
     int cond_nr;
+    int offset;
 }user_function;
 
 typedef struct file_system_call{
@@ -199,4 +211,6 @@ fault* build_faults_extra();
 int get_fault_count();
 
 execution_plan* build_execution_plan();
+
+tracer* build_tracer();
 #endif /* __FAULTSCHEDULE_H */

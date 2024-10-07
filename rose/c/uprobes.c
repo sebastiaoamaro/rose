@@ -127,7 +127,7 @@ static int attach_kprobes(struct uprobes_bpf *obj)
 	return 0;
 }
 
-static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *function)
+static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *function,int offset)
 {
 	char bin_path[PATH_MAX];
 	off_t func_off;
@@ -160,9 +160,10 @@ static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *f
 		goto out_binary;
 	}
 
+	
 	obj->links.dummy_kprobe =
 		bpf_program__attach_uprobe(obj->progs.dummy_kprobe, false,
-					   env.pid ?: -1, bin_path, func_off);
+					   env.pid ?: -1, bin_path, func_off+offset);
 	if (!obj->links.dummy_kprobe) {
 		err = -errno;
 		warn("Failed to attach uprobe: %ld\n", err);
@@ -186,11 +187,11 @@ out_binary:
 	return ret;
 }
 
-struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faultcount,int cond_pos,int timemode, int primary_function)
+struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faultcount,int cond_pos,int timemode, int primary_function,int offset)
 {
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
 
-	printf("In uprobe for function %s in binary %s \n",funcname,binary_location);
+	printf("In uprobe for function %s in binary %s at offset %d\n",funcname,binary_location,offset);
 	
 	struct uprobes_bpf *obj;
 	int i, err;
@@ -255,7 +256,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 		if (env.is_kernel_func)
 			err = attach_kprobes(obj);
 		else
-			err = attach_uprobes(obj,binary_location,funcname);
+			err = attach_uprobes(obj,binary_location,funcname,offset);
 		if (err){
 			printf("Error is %d \n",err);
 			return NULL;

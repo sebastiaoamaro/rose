@@ -68,18 +68,48 @@ struct {
 } syscalls_counter_array SEC(".maps");
 
 
+// struct {
+// 	__uint(type, BPF_MAP_TYPE_HASH);
+// 	__type(key, struct uprobe_key);
+// 	__type(value, int);
+// 	__uint(max_entries, 8192);
+// } uprobe_counters SEC(".maps");
+
+// struct {
+// 	__uint(type, BPF_MAP_TYPE_HASH);
+// 	__type(key, struct uprobe_key);
+// 	__type(value, int);
+// 	__uint(max_entries, 8192);
+// } uprobe_ret_counters SEC(".maps");
+
+
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__type(key, int);
 	__type(value, int);
-	__uint(max_entries, 8192);
-} uprobe_counters SEC(".maps");
+	__uint(max_entries, 512);
+} uprobes_counters SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__type(key, int);
+	__type(value, struct uprobe_key);
+	__uint(max_entries, 32768);
+} called_functions SEC(".maps");
 
 
+volatile int uprobe_counter = 0;
+volatile int uprobe_counter_ret = 0;
 
 struct accept_args_t
 {
     struct sockaddr_in *addr;
+};
+
+struct uprobe_key{
+	int pid;
+	int tid;
+	int cookie;
 };
 
 struct
@@ -89,14 +119,6 @@ struct
     __type(key, u64);
     __type(value, struct accept_args_t);
 } active_accept_args_map SEC(".maps");
-
-// Define a BPF map to store identifiers for each uprobe
-struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 4098);
-    __type(key, u64);
-    __type(value, u32);
-} uprobe_map SEC(".maps");
 
 
 enum tag { WRITE = 1, READ = 2 };
@@ -128,7 +150,7 @@ struct operation_info{
 volatile int io_ops_counter = 0;
 volatile int syscall_counter = 0;
 const volatile int pid_counter = 0;
-
+volatile int called_functions_counter = 0;
 
 /* trigger creation of event struct in skeleton code */
 struct event _event = {};
@@ -159,6 +181,12 @@ static inline int check_iops_counters(){
 static inline int check_syscall_counters(){
 	if (syscall_counter == 32767)
 		syscall_counter = 0;
+	return 0;
+}
+
+static inline int check_called_functions_counters(){
+	if (called_functions_counter == 32767)
+		called_functions_counter = 0;
 	return 0;
 }
 
@@ -375,72 +403,146 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 }
 
 
-SEC("tracepoint/syscalls/sys_enter_accept")
-int trace_accept_enter(struct trace_event_raw_sys_enter *ctx)
-{
-    u64 id = bpf_get_current_pid_tgid();
+// SEC("tracepoint/syscalls/sys_enter_accept")
+// int trace_accept_enter(struct trace_event_raw_sys_enter *ctx)
+// {
+//     u64 id = bpf_get_current_pid_tgid();
 
-    struct accept_args_t accept_args = {};
-    accept_args.addr = (struct sockaddr_in *)BPF_CORE_READ(ctx, args[1]);
-    bpf_map_update_elem(&active_accept_args_map, &id, &accept_args, BPF_ANY);
-    //bpf_printk("enter_accept accept_args.addr: %llx\n", accept_args.addr);
-    return 0;
-}
+//     struct accept_args_t accept_args = {};
+//     accept_args.addr = (struct sockaddr_in *)BPF_CORE_READ(ctx, args[1]);
+//     bpf_map_update_elem(&active_accept_args_map, &id, &accept_args, BPF_ANY);
+//     //bpf_printk("enter_accept accept_args.addr: %llx\n", accept_args.addr);
+//     return 0;
+// }
 
-SEC("tracepoint/syscalls/sys_exit_accept")
-int trace_accept_exit(struct trace_event_raw_sys_exit *ctx)
-{
+// SEC("tracepoint/syscalls/sys_exit_accept")
+// int trace_accept_exit(struct trace_event_raw_sys_exit *ctx)
+// {
 
-    u64 id = bpf_get_current_pid_tgid();
+//     u64 id = bpf_get_current_pid_tgid();
 
-    struct accept_args_t *args =
-        bpf_map_lookup_elem(&active_accept_args_map, &id);
-    if (args == NULL)
-    {
-        return 0;
-    }
-    //bpf_printk("exit_accept accept_args.addr: %llx\n", args->addr);
-    int ret_fd = (int)BPF_CORE_READ(ctx, ret);
-    if (ret_fd <= 0)
-    {
-        return 0;
-    }
+//     struct accept_args_t *args =
+//         bpf_map_lookup_elem(&active_accept_args_map, &id);
+//     if (args == NULL)
+//     {
+//         return 0;
+//     }
+//     //bpf_printk("exit_accept accept_args.addr: %llx\n", args->addr);
+//     int ret_fd = (int)BPF_CORE_READ(ctx, ret);
+//     if (ret_fd <= 0)
+//     {
+//         return 0;
+//     }
 
-    bpf_map_delete_elem(&active_accept_args_map, &id);
-}
+//     bpf_map_delete_elem(&active_accept_args_map, &id);
+// }
 
-SEC("tracepoint/syscalls/sys_enter_connect")
-int trace_connect_enter(struct trace_event_raw_sys_enter *ctx)
-{
-	u64 id = bpf_get_current_pid_tgid();
+// SEC("tracepoint/syscalls/sys_enter_connect")
+// int trace_connect_enter(struct trace_event_raw_sys_enter *ctx)
+// {
+// 	u64 id = bpf_get_current_pid_tgid();
 
-    struct accept_args_t accept_args = {};
-    accept_args.addr = (struct sockaddr_in *)BPF_CORE_READ(ctx, args[1]);
-}
+//     struct accept_args_t accept_args = {};
+//     accept_args.addr = (struct sockaddr_in *)BPF_CORE_READ(ctx, args[1]);
+// }
 
-SEC("tracepoint/syscalls/sys_exit_connect")
-int trace_connect_exit(struct trace_event_raw_sys_exit *ctx)
-{
-	u64 id = bpf_get_current_pid_tgid();
+// SEC("tracepoint/syscalls/sys_exit_connect")
+// int trace_connect_exit(struct trace_event_raw_sys_exit *ctx)
+// {
+// 	u64 id = bpf_get_current_pid_tgid();
 
-}
+// }
 
-SEC("uprobe/my_uprobe")
+// SEC("uprobe")
+// int handle_uprobe(struct pt_regs *ctx) {
+	
+// 	uprobe_counter++;
+// 	u64 cookie = bpf_get_attach_cookie(ctx);
+
+// 	u32 pid = bpf_get_current_pid_tgid() >> 32; // Get current PID
+
+// 	struct uprobe_key key = {
+// 		pid,
+// 		cookie
+// 	};
+
+// 	int *counter = bpf_map_lookup_elem(&uprobe_counters,&key);
+
+// 	if (counter){
+// 		int new_counter = *counter + 1;
+// 		bpf_map_update_elem(&uprobe_counters,&key,&new_counter,BPF_ANY);
+// 		//bpf_printk("Inserted %d for %d",new_counter,cookie);
+// 	}else{
+// 		int zero = 0;
+// 		bpf_map_update_elem(&uprobe_counters,&key,&zero,BPF_ANY);
+// 		//bpf_printk("NORMAL:Inserted 0 in cookie %d for pid %d \n",cookie,pid);
+// 	}
+
+// 	bpf_printk("IN UPROBE with count %d \n",uprobe_counter);
+//     return 0;
+// }
+
+// SEC("uprobe")
+// int handle_uprobe_ret(struct pt_regs *ctx) {
+	
+// 	uprobe_counter_ret++;
+// 	u64 cookie = bpf_get_attach_cookie(ctx);
+
+// 	u32 pid = bpf_get_current_pid_tgid() >> 32; // Get current PID
+
+// 	struct uprobe_key key = {
+// 		pid,
+// 		cookie
+// 	};
+
+// 	int *counter = bpf_map_lookup_elem(&uprobe_ret_counters,&key);
+
+// 	if (counter){
+// 		int new_counter = *counter + 1;
+// 		bpf_map_update_elem(&uprobe_ret_counters,&key,&new_counter,BPF_ANY);
+// 		//bpf_printk("Inserted %d for %d",new_counter,cookie);
+// 	}else{
+// 		int zero = 0;
+// 		bpf_map_update_elem(&uprobe_ret_counters,&key,&zero,BPF_ANY);
+// 		//bpf_printk("RET:Inserted 0 in cookie %d for pid %d \n",cookie,pid);
+// 	}
+
+// 	bpf_printk("IN UPROBE_ret with count %d \n",uprobe_counter_ret);
+//     return 0;
+// }
+
+SEC("uprobe")
 int handle_uprobe(struct pt_regs *ctx) {
 	
-	u64 cookie = bpf_get_attach_cookie(ctx);
 
-	int *counter = bpf_map_lookup_elem(&uprobe_counters,&cookie);
+		u64 cookie = bpf_get_attach_cookie(ctx);
 
-	if (counter){
-		int new_counter = *counter + 1;
-		bpf_map_update_elem(&uprobe_counters,&cookie,&new_counter,BPF_ANY);
-		//bpf_printk("Inserted %d for %d",new_counter,cookie);
-	}else{
-		int zero = 0;
-		bpf_map_update_elem(&uprobe_counters,&cookie,&zero,BPF_ANY);
-	}
+		u64 pid_tgid = bpf_get_current_pid_tgid();
+			u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
+			u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
 
-	//bpf_printk("IN UPROBE with cookie %d \n",cookie);
+
+		int *counter = bpf_map_lookup_elem(&uprobes_counters,&cookie);
+
+		if (counter){
+			int new_counter = *counter + 1;
+			bpf_map_update_elem(&uprobes_counters,&cookie,&new_counter,BPF_ANY);
+			//bpf_printk("Incremented for cookie %d \n",cookie);
+		}else{
+			int zero = 0;
+			bpf_map_update_elem(&uprobes_counters,&cookie,&zero,BPF_ANY);
+		}
+
+		struct uprobe_key key = {
+			pid,
+			tid,
+			cookie
+		};
+
+		bpf_map_update_elem(&called_functions, &called_functions_counter, &key, BPF_ANY);
+
+		called_functions_counter++;
+		check_called_functions_counters();
+
     return 0;
 }

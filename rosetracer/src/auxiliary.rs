@@ -1,5 +1,7 @@
 use anyhow::{bail,Result};
 use libbpf_rs::MapFlags;
+use libc::P_PGID;
+use std::collections::HashMap;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::{self, BufRead, BufReader, Write};
@@ -22,6 +24,12 @@ pub struct io_op {
     buffer: [u8; 64],
 }
 
+pub struct key{
+	pub pid:i32,
+    pub tid:i32,
+	pub cookie:i32,
+}
+
 pub fn bump_memlock_rlimit() -> Result<()> {
     let rlimit = libc::rlimit {
         rlim_cur: 128 << 20,
@@ -35,7 +43,7 @@ pub fn bump_memlock_rlimit() -> Result<()> {
     Ok(())
 }
 
-pub fn read_numbers_from_file(filename: &str) -> io::Result<Vec<u32>> {
+pub fn read_numbers_from_file(filename: &str) -> io::Result<Vec<i32>> {
     let path = Path::new(filename);
     let file = File::open(&path)?;
     let reader = io::BufReader::new(file);
@@ -44,7 +52,7 @@ pub fn read_numbers_from_file(filename: &str) -> io::Result<Vec<u32>> {
 
     for line in reader.lines() {
         let line = line?;
-        match line.trim().parse::<u32>() {
+        match line.trim().parse::<i32>() {
             Ok(num) => numbers.push(num),
             Err(e) => eprintln!("Error parsing number '{}': {}", line, e),
         }
@@ -53,7 +61,7 @@ pub fn read_numbers_from_file(filename: &str) -> io::Result<Vec<u32>> {
     Ok(numbers)
 }
 
-pub fn u32_to_u8_array_little_endian(value: u32) -> [u8; 4] {
+pub fn u32_to_u8_array_little_endian(value: i32) -> [u8; 4] {
     [
         value as u8,
         (value >> 8) as u8,
@@ -73,6 +81,14 @@ pub fn u64_to_u8_array_little_endian(value: u64) -> [u8; 8] {
         (value >> 48) as u8,
         (value >> 56) as u8,
     ]
+}
+
+pub fn vec_to_i32(bytes: Vec<u8>) -> i32 {
+    // Ensure the Vec<u8> has exactly 4 bytes
+    let byte_array: [u8; 4] = bytes.try_into().expect("Vec<u8> must have exactly 4 elements");
+
+    // Convert the [u8; 4] array into an i32
+    i32::from_le_bytes(byte_array) // Converts assuming little-endian byte order
 }
 
 pub fn write_to_file(filename: String, content: String) -> std::io::Result<()> {
@@ -207,8 +223,8 @@ pub fn read_names_from_file(filename: &str) -> io::Result<Vec<String>> {
     Ok(lines)
 }
 
-
-pub fn collect_uprobe_stats(uprobe_counters: &libbpf_rs::Map,functions:Vec<String>){
+pub fn collect_uprobe_stats(uprobe_counters: &libbpf_rs::Map,mut hashmap_uprobes:HashMap<i32,Vec<i32>>,functions:Vec<String>){
+        
     print!("Collecing uprobe_stats \n");
     let keys = uprobe_counters.keys();
 
@@ -217,16 +233,103 @@ pub fn collect_uprobe_stats(uprobe_counters: &libbpf_rs::Map,functions:Vec<Strin
             .lookup(&key, MapFlags::ANY)
             .expect("This key is not in uprobe_counters");
 
-        let key_array: [u8; 4] = key.try_into().ok().unwrap();
+        let mut pid = 0;
+        let mut cookie = 0;
 
-        let key_value:i32 = i32::from_ne_bytes(key_array);
+        unsafe {
+            let key: *const key = key.as_ptr() as *const key;
+            let readable_key: &key = &*key;
+
+            pid = readable_key.pid;
+
+            cookie = readable_key.cookie;
+
+            //println!("Pid is {}, cookie is {} ",readable_key.pid,readable_key.cookie);
+        }
 
         let value_array: [u8; 4] = result.unwrap().try_into().ok().unwrap();
 
+        //println!("Value array is {:?}",value_array);
+
         let value:i32 = i32::from_ne_bytes(value_array);
 
+        let mut vec_pid = hashmap_uprobes.get_mut(&pid).unwrap();
+    
+
         if value > 0{
-            println!("Key is {} and value is {} for function {}",key_value,value,functions.get(key_value as usize).unwrap());
+            vec_pid[cookie as usize] = value;
+
+            //println!("Key:({},{}) and value is {} for function {} in uprobe",pid,cookie,value,functions.get(cookie as usize).unwrap());
         }
     }
+
+
+    let mut probes_to_remove:Vec<i32> = vec![];
+    
+    for (pid, vec_uprobe) in &hashmap_uprobes {
+
+        for (index, element) in vec_uprobe.clone().iter_mut().enumerate() {
+
+            if *element>0{
+                if *element/100 > 1{
+                    println!("Found a probe to remove it was called {} in 10 seconds \n",*element);
+                    probes_to_remove.push(index as i32);
+                }
+            }
+        }
+    }
+
+
+}
+
+pub fn _collect_uprobe_ret_stats(uprobe_ret_counters:&libbpf_rs::Map,mut hashmap_uprobes_ret:HashMap<i32,Vec<i32>>,functions:Vec<String>){
+
+    let keys = uprobe_ret_counters.keys();
+
+    for key in keys {
+        let result = uprobe_ret_counters
+            .lookup(&key, MapFlags::ANY)
+            .expect("This key is not in uprobe_counters");
+
+        let mut pid = 0;
+        let mut cookie = 0;
+
+        unsafe {
+            let key: *const key = key.as_ptr() as *const key;
+            let readable_key: &key = &*key;
+
+            pid = readable_key.pid;
+
+            cookie = readable_key.cookie;
+
+            //println!("Pid is {}, cookie is {} ",readable_key.pid,readable_key.cookie);
+        }
+
+        let value_array: [u8; 4] = result.unwrap().try_into().ok().unwrap();
+
+        //println!("Value array is {:?}",value_array);
+
+        let value:i32 = i32::from_ne_bytes(value_array);
+
+        let mut vec_pid = hashmap_uprobes_ret.get_mut(&pid).unwrap();
+    
+
+        if value > 0{
+            vec_pid[cookie as usize] = value;
+            //println!("Key:({},{}) and value is {} for function {} in uprobe",pid,cookie,value,functions.get(cookie as usize).unwrap());
+        }
+    }
+
+
+    for (pid, vec_uprobe) in &hashmap_uprobes_ret {
+
+        for (index, element) in vec_uprobe.clone().iter_mut().enumerate() {
+
+
+            if *element>0{
+                println!("Pid: {}, Cookie: {}, Value_ret: {}", pid,index, *element);
+            }
+        }
+    }
+
 }

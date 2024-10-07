@@ -16,6 +16,8 @@
 #include <errno.h>
 #include <string.h>
 #include <bpf/bpf.h>
+#include <stdlib.h>
+#include <fcntl.h>
 //Modules
 #include <aux.skel.h>
 #include <process.h>
@@ -58,6 +60,10 @@ int setup_tc_progs();
 void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid, int current_pid_pre_restart);
 int get_node_nr_from_pid(int pid);
 void reinject_uprobes(int node_nr);
+void send_info_to_tracer();
+void create_tracer_pipe();
+void start_tracer();
+void open_tracer_pipe();
 
 const char *argp_program_version = "Tool for FI 0.01";
 const char *argp_program_bug_address = "sebastiao.amaro@ŧecnico.ulisboa.pt";
@@ -102,6 +108,7 @@ static struct constants {
 	int auxiliary_info_map_fd;
 	int nodes_status_map_fd;
 	int nodes_translator_map_fd;
+	char *collect_process_info_pipe;
 
 } constants;
 
@@ -113,12 +120,16 @@ struct process_args {
 static fault* faults;
 static node* nodes;
 static execution_plan* plan;
+static tracer* deployment_tracer;
+
 static int FAULT_COUNT = 0;
 static int DEVICE_COUNT = 0;
 static int NODE_COUNT = 0;
 static int QUORUM = 0;
 static int LEADER_PID = 0;
 int *majority;
+
+static pthread_t tracer_output;
 
 static pthread_mutex_t myMutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -155,34 +166,13 @@ static void sig_handler(int sig)
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
 	switch (key) {
-		case 'f':
-			FAULT_COUNT = strtol(arg,NULL,10);
-			faults = (struct fault*)malloc(FAULT_COUNT*sizeof(struct fault));
-			break;
-		case 'd':
-			DEVICE_COUNT = strtol(arg,NULL,10);
-			break;
 		case 'p':
-			constants.pid = strtol(arg,NULL,10);
-			break;
-		case 'i':
-			constants.inputfilename = (char *)malloc(sizeof(char)*strlen(arg));
-			strcpy(constants.inputfilename,arg);
-			break;
-		case 'u':
-			constants.uprobemode = 1;
-			break;
-		case 't':
-			constants.tracingmode = 1;
 			break;
 		case 'v':
 			constants.faultsverbose = 1;
 			break;
 		case 'h':
 			argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
-			break;
-		case 'm':
-			constants.maintainpid = 1;
 			break;
 		case ARGP_KEY_END:
 			if (state->argc < 2)
@@ -228,7 +218,17 @@ int main(int argc, char **argv)
 	get_fd_of_maps(aux_bpf);
 
 	//if(constants.faultsverbose)
-	print_block("Building Faults and Nodes");
+
+	deployment_tracer = build_tracer();
+
+	if (deployment_tracer){
+		create_tracer_pipe();
+		printf("Starting tracer \n");
+		start_tracer();
+		printf("Creating tracer pipe\n");
+		open_tracer_pipe();
+	}
+
 
 	plan = build_execution_plan();
 
@@ -240,7 +240,7 @@ int main(int argc, char **argv)
 	QUORUM = (NODE_COUNT/2)+1;
 	FAULT_COUNT = get_fault_count();
 
-	print_fault_schedule(plan,nodes,faults);
+	print_fault_schedule(plan,nodes,faults,deployment_tracer);
 
 	collect_container_pids();
 	printf("Finished Collecting container_pids \n");
@@ -389,10 +389,97 @@ int main(int argc, char **argv)
     }
 	}
 
+	if(deployment_tracer){
+		char message[] = "finished\n";
+
+		printf("Sent %s to tracer ",message);
+
+		if (write(deployment_tracer->pipe_write_end, message, strlen(message)) == -1) {  // +1 to include the null terminator
+        perror("write");
+        close(deployment_tracer->pipe_write_end);
+        exit(EXIT_FAILURE);
+    }
+
+		if (remove(deployment_tracer->pipe_location) == 0) {
+        printf("File '%s' deleted successfully.\n", deployment_tracer->pipe_location);
+    } else {
+        perror("Error deleting the file");  // Print an error message if the deletion fails
+    }
+
+	}
+
 	printf("Finished cleanup \n");
 
 
 	return 0;
+}
+
+void start_tracer(){
+
+
+	char *args_script[5];
+
+	char *env_script[1];
+
+	args_script[0] = "tracer";
+
+	args_script[1] = (char*)malloc(STRING_SIZE*sizeof(char));
+
+	strcpy(args_script[1],deployment_tracer->functions_file);
+
+	args_script[2] = (char*)malloc(STRING_SIZE*sizeof(char));
+	
+	strcpy(args_script[2],deployment_tracer->binary_path);
+
+	args_script[3] = (char*)malloc(STRING_SIZE*sizeof(char));
+
+	strcpy(args_script[3],deployment_tracer->pipe_location);
+
+	args_script[4]=(char*)malloc(1*sizeof(char));
+
+	args_script[4]= NULL;
+
+	env_script[0]=(char*)malloc(1*sizeof(char));
+
+	env_script[0]= NULL;
+
+	FILE *fp = custom_popen(deployment_tracer->tracer_location,args_script,env_script,'r',&deployment_tracer->pid,0);
+
+	struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
+
+	args->fp= fp;
+	args->pid = deployment_tracer->pid;
+	pthread_create(&tracer_output, NULL, (void *)print_output, (void*)args);
+
+	sleep(1);
+
+	send_signal(deployment_tracer->pid,SIGUSR1,"tracer");
+
+}
+
+void create_tracer_pipe(){
+	// Step 1: Create the FIFO with read/write permissions (0666)
+	if (mkfifo(deployment_tracer->pipe_location, 0666) == -1) {
+			perror("mkfifo");
+			exit(EXIT_FAILURE);
+	}
+
+	printf("FIFO '%s' created successfully.\n", deployment_tracer->pipe_location);
+}
+void open_tracer_pipe(){
+
+	int fd;
+
+	// Step 2: Open the FIFO in write-only mode
+	fd = open(deployment_tracer->pipe_location, O_WRONLY);
+	if (fd == -1) {
+			perror("open");
+			exit(EXIT_FAILURE);
+	}
+	printf("Opened FIFO '%s' for writing, fd is %d.\n", deployment_tracer->pipe_location,fd);
+
+	deployment_tracer->pipe_write_end = fd;
+
 }
 
 //Save FD of maps in constants
@@ -420,7 +507,6 @@ void run_setup(){
 	char *args_script[1];
 
 	char *env_script[1];
-
 
 	args_script[0]=(char*)malloc(1*sizeof(char));
 
@@ -570,8 +656,29 @@ void collect_container_processes(){
 			send_signal(script_pid,SIGSTOP,nodes[i].name);
 		}
 	}
+
+	if (deployment_tracer)
+		send_info_to_tracer();
 }
 
+
+void send_info_to_tracer(){
+
+	for(int i = 0; i< NODE_COUNT; i++){
+		char message[256];
+
+		snprintf(message,sizeof(message),"%s,%d\n",nodes[i].name,nodes[i].current_pid);
+
+		if (write(deployment_tracer->pipe_write_end, message, strlen(message)) == -1) {  // +1 to include the null terminator
+        perror("write");
+        close(deployment_tracer->pipe_write_end);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Message written to FIFO:%s\n", message);
+	}
+
+}
 
 void start_node_scripts(){
 	printf("Resuming Processes \n");
@@ -605,9 +712,8 @@ void print_output(void* args){
 
     while (fgets(inLine, sizeof(inLine), fp) != NULL)
     {
-
-		printf("%s\n", inLine);
-		fflush(stdout);
+			printf("%s\n", inLine);
+			fflush(stdout);
     }
 }
 
@@ -644,7 +750,8 @@ FILE* start_target_process(int node_number, int *pid){
 		token = strtok(NULL," ");
 		pos++;
    	}
-   	args_script[pos]= NULL;
+
+	args_script[pos]= NULL;
 
 	//Create ENV variables
 	char *token_env = strtok(nodes[node_number].env," ");
@@ -660,8 +767,6 @@ FILE* start_target_process(int node_number, int *pid){
 	token_env = strtok(NULL," ");
 
 	while(token_env != NULL ) {
-
-
 		env_script[pos_env]=(char*)malloc(STRING_SIZE*sizeof(char));
 		strcpy(env_script[pos_env],token_env);
 
@@ -878,9 +983,9 @@ void setup_begin_conditions(){
 					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
 					//printf("Combined path is %s \n",combined_path);
 
-					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0);
+					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
 				}else{
-					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0);
+					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
 				}
 				insert_relevant_condition_in_ebpf(i,pid,faults[i].fault_conditions_begin[j].condition.user_function.cond_nr,user_function.call_count);
 				user_func_cond_nr++;
@@ -909,9 +1014,9 @@ void setup_begin_conditions(){
 					//Combine paths
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1,0);
 				}else{
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].leader_symbol,FAULT_COUNT,0,constants.timemode, 1);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].leader_symbol,FAULT_COUNT,0,constants.timemode, 1,0);
 				}
 			}
 		}
@@ -926,10 +1031,10 @@ void setup_begin_conditions(){
 					//Combine paths
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1,0);
 
 				}else{
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].binary,FAULT_COUNT,0,constants.timemode, 1);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].binary,FAULT_COUNT,0,constants.timemode, 1,0);
 				}
 
 			}
@@ -1285,7 +1390,7 @@ int setup_tc_progs(){
 
 void count_time(){
 
-	int maximum_time = 300000;
+	int maximum_time = 150000;
 	while(1){
 		sleep_for_ms(50);
 		constants.time += 50;
@@ -1319,6 +1424,7 @@ void count_time(){
 			if (maximum_time == time_sec){
 				printf("Experiments maximum time reached \n");
 				exiting = true;
+				break;
 			}
 		}
 
@@ -1480,7 +1586,7 @@ void restart_process(void* args){
 
 	node *node = &nodes[node_to_restart];
 
-	send_signal(pid,SIGKILL,node->name);
+	//send_signal(pid,SIGKILL,node->name);
 
 	if (duration){
 		printf("Sleeping for %d \n",duration/1000);
@@ -1571,7 +1677,7 @@ void reinject_uprobes(int node_nr){
 		//Combine paths
 		char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 		snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes->binary);
-		node->leader_probe = uprobe(nodes->current_pid,nodes->leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1);
+		node->leader_probe = uprobe(nodes->current_pid,nodes->leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode,1,0);
 	}
 
 	for(int i=0;i<FAULT_COUNT;i++){
@@ -1590,9 +1696,9 @@ void reinject_uprobes(int node_nr){
 						char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 						snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
 						//printf("Combined path is %s \n",combined_path);
-						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0);
+						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
 					}else{
-						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0);
+						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
 					}
 					user_func_cond_nr++;
 				}

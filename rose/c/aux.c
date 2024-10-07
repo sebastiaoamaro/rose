@@ -402,8 +402,12 @@ int send_signal(int pid, int signal,char* node_name){
 }
 
 
-void print_fault_schedule(execution_plan* plan, node* nodes, fault * faults){
+void print_fault_schedule(execution_plan* plan, node* nodes, fault * faults,tracer* deployment_tracer){
 
+
+	if (deployment_tracer){
+	printf("Tracer config: \ntracer_location: %s \npipe_location: %s\nfunctions_file: %s\n",deployment_tracer->tracer_location,deployment_tracer->pipe_location,deployment_tracer->functions_file);
+	}
 
 	if(plan){
 		printf("Setup is %s it takes %d seconds to start, and workload is %s \n",plan->setup.script,plan->setup.duration,plan->workload.script);

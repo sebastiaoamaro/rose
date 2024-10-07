@@ -1,0 +1,140 @@
+execution_plan:
+  setup:
+    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/startrediscluster.sh
+    duration: 5
+  workload:
+    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/runworkload.sh
+nodes:
+  redis1:
+    container: true
+    binary: /redisraft.so
+    leader_symbol: raft_become_leader
+    ip: 172.19.1.10
+    leader: true
+    script: ./startredis.sh 1 172.19.1.10
+  redis2:
+    container: true
+    binary: /redisraft.so
+    leader_symbol: raft_become_leader
+    ip: 172.19.1.11
+    script: ./startredis.sh 2 172.19.1.11
+  redis3:
+    container: true
+    binary: /redisraft.so
+    leader_symbol: raft_become_leader
+    ip: 172.19.1.12
+    script: ./startredis.sh 3 172.19.1.12
+  redis4:
+    container: true
+    binary: /redisraft.so
+    leader_symbol: raft_become_leader
+    ip: 172.19.1.13
+    script: ./startredis.sh 4 172.19.1.13
+  redis5:
+    container: true
+    binary: /redisraft.so
+    leader_symbol: raft_become_leader
+    ip: 172.19.1.14
+    script: ./startredis.sh 5 172.19.1.14
+faults:
+  process_kill_all1:
+    type: process_kill
+    target: majority
+    begin_conditions:
+      time: 5000
+  block_ips_redis2:
+    type: block_ips
+    target: redis2
+    traced: redis2
+    duration: 25000
+    ips_in: redis1
+    ips_out: redis1
+    begin_conditions:
+      time: 10000
+  block_ips_redis3:
+    type: block_ips
+    target: redis3
+    traced: redis3
+    duration: 25000
+    ips_in: redis1
+    ips_out: redis1
+    begin_conditions:
+      time: 10000
+  block_ips_redis4:
+    type: block_ips
+    target: redis4
+    traced: redis4
+    duration: 25000
+    ips_in: redis1
+    ips_out: redis1
+    begin_conditions:
+      time: 10000
+  block_ips_redis5:
+    type: block_ips
+    target: redis5
+    traced: redis5
+    duration: 25000
+    ips_in: redis1
+    ips_out: redis1
+    begin_conditions:
+      time: 10000
+  process_kill1:
+    type: process_kill
+    target: redis1
+    traced: redis1
+    exit: true
+    begin_conditions:
+      user_function:
+        binary_location: /redisraft.so
+        symbol: handleLoadSnapshot
+        offset: 350
+        call_count: 1
+      time: 20000
+  process_kill2:
+    type: process_kill
+    target: redis2
+    traced: redis2
+    exit: true
+    begin_conditions:
+      user_function:
+        binary_location: /redisraft.so
+        symbol: handleLoadSnapshot
+        offset: 350
+        call_count: 1
+      time: 20000
+  process_kill3:
+    type: process_kill
+    target: redis3
+    traced: redis3
+    exit: true
+    begin_conditions:
+      user_function:
+        binary_location: /redisraft.so
+        symbol: handleLoadSnapshot
+        offset: 350
+        call_count: 1
+      time: 20000
+  process_kill4:
+    type: process_kill
+    target: redis4
+    traced: redis4
+    exit: true
+    begin_conditions:
+      user_function:
+        binary_location: /redisraft.so
+        symbol: handleLoadSnapshot
+        offset: 350
+        call_count: 1
+      time: 20000
+  process_kill5:
+    type: process_kill
+    target: redis5
+    traced: redis5
+    exit: true
+    begin_conditions:
+      user_function:
+        binary_location: /redisraft.so
+        symbol: handleLoadSnapshot
+        offset: 350
+        call_count: 1
+      time: 20000
