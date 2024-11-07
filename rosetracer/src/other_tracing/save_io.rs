@@ -1,6 +1,7 @@
 use anyhow::Result;
 use core::time::Duration;
-use libbpf_rs::MapFlags;
+use std::mem::MaybeUninit;
+use libbpf_rs::{MapCore, MapFlags};
 use std::io::{self, BufRead, BufReader, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -27,32 +28,33 @@ pub fn run_tracing(
     //skel_builder.obj_builder.debug(true);
 
     auxiliary::bump_memlock_rlimit()?;
-    let mut open_skel = skel_builder.open()?;
+    let mut open_object = MaybeUninit::uninit();
+    let mut open_skel = skel_builder.open(&mut open_object)?;
 
-    open_skel.rodata_mut().pid_counter = pid_count as i32;
+    open_skel.maps.rodata_data.pid_counter = pid_count as i32;
     //open_skel.rodata().pid_counter = pid_count as i32;
 
     let mut skel = open_skel.load()?;
 
     let _tracepoint_write_enter = skel
-        .progs_mut()
-        .trace_write()
+        .progs
+        .trace_write
         .attach_tracepoint("syscalls", "sys_enter_write")?;
 
     let _tracepoint_enter_read = skel
-        .progs_mut()
-        .trace_read_enter()
+        .progs
+        .trace_read_enter
         .attach_tracepoint("syscalls", "sys_enter_read")?;
 
     let _tracepoint_exit_read = skel
-        .progs_mut()
-        .trace_read_exit()
+        .progs
+        .trace_read_exit
         .attach_tracepoint("syscalls", "sys_exit_read")?;
 
     for (index, pid) in pids.iter().enumerate() {
         let pid_vec = auxiliary::u32_to_u8_array_little_endian(*pid);
-        skel.maps_mut()
-            .pids()
+        skel.maps
+            .pids
             .update(&pid_vec, &pid_vec, MapFlags::ANY)?;
     }
 

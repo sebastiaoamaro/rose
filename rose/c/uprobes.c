@@ -191,7 +191,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 {
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
 
-	printf("In uprobe for function %s in binary %s at offset %d\n",funcname,binary_location,offset);
+	printf("In uprobe for function %s in binary %s at offset %d with cond_pos %d\n",funcname,binary_location,offset,cond_pos);
 	
 	struct uprobes_bpf *obj;
 	int i, err;

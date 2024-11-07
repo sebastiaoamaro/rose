@@ -33,13 +33,13 @@ struct faultstate_simple{
 
 struct simplified_fault{
     int faulttype;
-    int duration;
+    __u64 duration;
     int done;
     __u64 start_time;
     struct faultstate_simple initial;
     struct faultstate_simple end;
     int pid;
-    int fault_target;
+    int target;
     int repeat;
     int occurrences;
     int return_value;
@@ -49,6 +49,7 @@ struct simplified_fault{
     int run;
     int quorum_size;
     int faults_done;
+    __u64 timestamp;
 };
 
 struct fault_key{

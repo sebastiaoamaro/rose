@@ -69,6 +69,7 @@ typedef struct Node {
     int leader;
     int running;
     char **args;
+    int if_index;
 }node;
 
 

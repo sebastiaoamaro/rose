@@ -1,3 +1,0 @@
-configs-redis-2-1
-configs-redis-3-1
-configs-redis-1-1

@@ -1,6 +1,6 @@
 #!/bin/bash
+workload_size=5000000
 #workload_size=500000
-workload_size=2500000
 runs=5
 # maindirectory=/home/sebastiaoamaro/phd/torefidevel/rosetracer/
 # main=/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
@@ -18,44 +18,44 @@ chmod +x configs/setup.sh
 chmod +x runycsb.sh
 
 sudo rm -r /redis/*
-sudo rm /tmp/read_average*
 
 ulimit -n 4096
 #rm results/*
-#for topology in 3 6 12
-for topology in 6
+for topology in 3 6
 do
-    # for (( run=1; run<=$runs; run++ ))
-    # do
-    #     sudo /vagrant/tests/redis/configs/setup.sh $topology
-    #     #sudo /home/sebastiaoamaro/phd/torefidevel/tests/redis/configs/setup.sh $topology
-    #     #Normal run
-    #     docker compose -f configs/docker-compose$topology.yaml up -d
-    #     sleep 30
-    #     redis-cli --cluster create $(cat configs/ips$topology.txt) --cluster-yes
-    #     sleep 30
+    for (( run=1; run<=$runs; run++ ))
+    do
+        sudo /vagrant/tests/redis/configs/setup.sh $topology
+        #sudo /home/sebastiaoamaro/phd/torefidevel/tests/redis/configs/setup.sh $topology
+        #Normal run
+        docker compose -f configs/docker-compose$topology.yaml up -d
+        sleep 30
+        redis-cli --cluster create $(cat configs/ips$topology.txt) --cluster-yes
+        sleep 30
 
-    #     echo Starting Workload
-    #     #/usr/bin/time -ao stats/times$date.txt -f "$run:v:$topology:%e" ./ycsb.sh $workload_size topology$topology:$run
-    #     ./ycsb.sh $workload_size topology$topology:$run
-    #     docker compose -f configs/docker-compose$topology.yaml down
-    #     sudo rm -r /redis/*
-    # done
+        echo Starting Workload
+        #/usr/bin/time -ao stats/times$date.txt -f "$run:v:$topology:%e" ./ycsb.sh $workload_size topology$topology:$run
+        #sudo perf record -ag -o vanilla.perf &
+        #perf_pid=$!
+        ./ycsb.sh $workload_size topology$topology:$run
+        #sudo kill -2 $perf_pid
+        docker compose -f configs/docker-compose$topology.yaml down
+        sudo rm -r /redis/*
+    done
 
 ############################################################################################################
 ############################################################################################################
 ############################################################################################################
 
     #Tracing active
-    pids="pids.txt"
+    container_and_pid="container_and_pid.txt"
     container_names="container_names.txt"
-    functions_file="functions.txt"
+    functions_file="../../tracertests/functions.txt"
     file="check.txt"
 
     binary_path="/usr/local/bin/redis-server"
 
     sudo rm $file
-
     for (( run=1; run<=$runs; run++ ))
     do
         sudo /vagrant/tests/redis/configs/setup.sh $topology
@@ -65,8 +65,9 @@ do
         redis-cli --cluster create $(cat configs/ips$topology.txt) --cluster-yes
         sleep 30
 
-        ./retrievecontainerinfo.sh $pids $container_names
-        sudo $main $pids "tracer" $functions_file $container_names $binary_path &
+        ./retrievecontainerinfo.sh $container_and_pid
+        sudo $main "production_tracer" $functions_file $binary_path $container_and_pid &
+
         ebpf_PID=$!
         while [ ! -s "$file" ]; do
             #echo "File is empty or does not exist. Waiting..."
@@ -75,12 +76,15 @@ do
 
         echo Starting Workload
 
+        #sudo perf record -ag -o tracing.perf &
+        #perf_pid=$!
         ./runycsb.sh $workload_size tracerontopology$topology:$run
 
-        echo Sent -2 to $ebpf_PID
+        #sudo kill -2 $perf_pid
 
         sudo kill -2 $ebpf_PID
         docker compose -f configs/docker-compose$topology.yaml down
+        cp /tmp/history.txt results/history$topology:$run.txt
         sudo rm -r /redis/*
     done
 

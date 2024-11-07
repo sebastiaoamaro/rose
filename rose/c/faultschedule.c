@@ -17,7 +17,7 @@
 #include "aux.h"
 
 #define NODE_COUNT 5
-#define FAULT_COUNT 6
+#define FAULT_COUNT 5
 
 
 char* get_veth_interface_name(const char* container_name);
@@ -83,6 +83,8 @@ void create_node(node* node, char* name,int pid, char* veth, char* ip, char* scr
     node->leader_probe = NULL;
 
     node->leader = leader;
+
+    node->if_index = 0;
 
 
     if (container){
@@ -243,12 +245,13 @@ char* get_veth_interface_name(const char* container_name) {
 }
 execution_plan* build_execution_plan(){
     execution_plan* exe_plan = ( execution_plan*)malloc(1 * sizeof(execution_plan));
-    create_execution_plan(exe_plan,"/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/startrediscluster.sh",5,"/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/runworkload.sh","",0);
+    create_execution_plan(exe_plan,"/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/startrediscluster.sh",5,"/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/runworkload.sh","/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/cleanup.sh",15);
     return exe_plan;
 }
  tracer* build_tracer(){
-
-    return NULL;
+    tracer* deployment_tracer = (tracer*)malloc(1 * sizeof(tracer));
+    create_tracer(deployment_tracer,"/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer","/tmp/containerpid","/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt","/redisraft.so");
+    return deployment_tracer;
 }
 node* build_nodes(){
     node* nodes = ( node*)malloc(NODE_COUNT * sizeof(node));
@@ -329,23 +332,6 @@ fault* build_faults_extra(){
     fault_condition_4_0.type = TIME;
     fault_condition_4_0.condition.time = time_4_0;
     add_begin_condition(&faults[4],fault_condition_4_0,0);
-    fault_details fault_details5;
-    process_fault process_kill5;
-    process_kill5.type = 11;
-    fault_details5.process_fault = process_kill5;
-    create_fault(&faults[5],"process_kill1",0,0,11,1,fault_details5,0,0,0,2,1);
-
-    fault_condition fault_condition_5_0;
-    user_function user_func_5_0;
-    fault_condition_5_0.type = USER_FUNCTION;
-    build_user_function(&user_func_5_0,"/redisraft.so","handleLoadSnapshot",1,638);
-    fault_condition_5_0.condition.user_function = user_func_5_0;
-    add_begin_condition(&faults[5],fault_condition_5_0,0);
-    fault_condition fault_condition_5_1;
-    int time_5_1 = 20000;
-    fault_condition_5_1.type = TIME;
-    fault_condition_5_1.condition.time = time_5_1;
-    add_begin_condition(&faults[5],fault_condition_5_1,1);
 
     return faults;
 }

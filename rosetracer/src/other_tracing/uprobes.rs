@@ -32,9 +32,10 @@ pub fn run_tracing(
     //skel_builder.obj_builder.debug(true);
 
     auxiliary::bump_memlock_rlimit()?;
-    let mut open_skel = skel_builder.open()?;
+    let mut open_object = MaybeUninit::uninit();
+    let mut open_skel = skel_builder.open(&mut open_object)?;
 
-    open_skel.rodata_mut().pid_counter = pid_count as i32;
+    open_skel.maps.rodata_data.pid_counter = pid_count as i32;
     //open_skel.rodata().pid_counter = pid_count as i32;
 
     let mut skel = open_skel.load()?;
@@ -49,7 +50,7 @@ pub fn run_tracing(
     for (index, pid) in pids.clone().iter().enumerate() {
         let opts = UprobeOpts{ref_ctr_offset:0,cookie:0,retprobe:false,func_name:function_name.clone(),..Default::default()};
 
-        let uprobe = skel.progs_mut().handle_uprobe().attach_uprobe_with_opts(*pid as i32, binary_path.clone(), 0, opts).expect("failed to attach prog");
+        let uprobe = skel.progs.handle_uprobe.attach_uprobe_with_opts(*pid as i32, binary_path.clone(), 0, opts).expect("failed to attach prog");
 
         uprobes.push(uprobe);
 

@@ -48,13 +48,6 @@ struct {
 } rb SEC(".maps");
 
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, MAP_SIZE);
-    __type(key, struct pair);
-    __type(value, __u32);
-} network SEC(".maps");
-
-struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAP_SIZE);
 	__type(key, struct tc_key);
@@ -212,18 +205,6 @@ int monitor(struct __sk_buff *ctx)
 			return 0;
 			}
 		}
-	}
-
-	__u32 *current_bytes;
-	__u32 new_bytes;
-	__u32 zero = 0;
-
-	current_bytes = bpf_map_lookup_or_try_init(&network,&pair,&zero);
-
-	if (current_bytes){
-		new_bytes = ctx->len + *current_bytes;
-
-		bpf_map_update_elem(&network,&pair,&new_bytes,BPF_ANY);
 	}
 
 

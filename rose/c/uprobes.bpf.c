@@ -96,12 +96,10 @@ const volatile int primary_function = 0;
 
 
 static void entry(struct pt_regs *ctx)
-{	
-	bpf_printk("In entry \n");
+{
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
-	bpf_printk("in uprobe for pid:%d cond_pos:%d \n",pid,cond_pos);
 	int result = process_current_state(cond_pos,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 
 }
@@ -134,7 +132,7 @@ static void switch_leader(struct pt_regs *ctx)
 
 	bpf_map_update_elem(&nodes_status,&pid,&one,BPF_ANY);
 
-	bpf_printk("Updated nodes_status %d \n",pid);
+	//bpf_printk("Updated nodes_status %d \n",pid);
 
 	struct event *e;
 	e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
@@ -151,6 +149,7 @@ static void switch_leader(struct pt_regs *ctx)
 SEC("kprobe/dummy_kprobe")
 int BPF_KPROBE(dummy_kprobe)
 {
+	bpf_printk("In uprobe for cond_pos:%d \n",cond_pos);
 	if (primary_function){
 		switch_leader(ctx);
 	}else{

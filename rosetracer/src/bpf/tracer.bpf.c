@@ -3,24 +3,11 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_tracing.h>
-
+#include <bpf/bpf_endian.h>
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-#define memcpy(dest, src, n) __builtin_memcpy((dest), (src), (n))
-
-// Map to fold the buffer sized from 'read' calls
-struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 8192);
-    __type(key, int);
-    __type(value, struct operation_info);
-} map_buff_addrs SEC(".maps");
-
-struct {
-	__uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-	__uint(key_size, sizeof(u32));
-	__uint(value_size, sizeof(u32));
-} events SEC(".maps");
+#define ETH_P_IP 0x0800
+#define HISTORY_SIZE 1048576
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
@@ -29,128 +16,78 @@ struct {
 	__uint(max_entries, 64);
 } pids SEC(".maps");
 
-
-struct {
-	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__type(key, u32);
-	__type(value, struct io_op);
-	__uint(max_entries, 32768);
-} io_ops SEC(".maps");
-
-
-struct {
-	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__type(key, u32);
-	__type(value, struct syscall_op);
-	__uint(max_entries, 32768);
-} syscalls SEC(".maps");
-
-struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__type(key, u64);
-	__type(value, u64);
-	__uint(max_entries, 8192);
-} syscalls_time SEC(".maps");
-
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, int);
-	__type(value, int);
-	__uint(max_entries, 8192);
-} syscalls_counter SEC(".maps");
-
+	__type(value, u32);
+	__uint(max_entries, 1024);
+} connect_map SEC(".maps");
 
 struct {
-	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__type(key, int);
-	__type(value, int);
-	__uint(max_entries, 8192);
-} syscalls_counter_array SEC(".maps");
-
-
-// struct {
-// 	__uint(type, BPF_MAP_TYPE_HASH);
-// 	__type(key, struct uprobe_key);
-// 	__type(value, int);
-// 	__uint(max_entries, 8192);
-// } uprobe_counters SEC(".maps");
-
-// struct {
-// 	__uint(type, BPF_MAP_TYPE_HASH);
-// 	__type(key, struct uprobe_key);
-// 	__type(value, int);
-// 	__uint(max_entries, 8192);
-// } uprobe_ret_counters SEC(".maps");
-
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, struct pair);
+	__type(value, struct network_info);
+	__uint(max_entries, 128);
+} network_delays SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__type(key, int);
 	__type(value, int);
 	__uint(max_entries, 512);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } uprobes_counters SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__type(key, int);
-	__type(value, struct uprobe_key);
-	__uint(max_entries, 32768);
-} called_functions SEC(".maps");
+	__type(value, struct event);
+	__uint(max_entries, HISTORY_SIZE);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} history SEC(".maps");
 
-
-volatile int uprobe_counter = 0;
-volatile int uprobe_counter_ret = 0;
 
 struct accept_args_t
 {
     struct sockaddr_in *addr;
 };
 
-struct uprobe_key{
-	int pid;
-	int tid;
-	int cookie;
+struct pair
+{
+	u32 src;
+	u32 dst;
 };
 
-struct
+struct network_info
 {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 4096);
-    __type(key, u64);
-    __type(value, struct accept_args_t);
-} active_accept_args_map SEC(".maps");
-
-
-enum tag { WRITE = 1, READ = 2 };
+	u32 frequency;
+	u64 last_time_seen;
+};
 
 struct event {
-	u8 tag;
-	u64 pid;
-};
-
-struct syscall_op {
-	int id;
-	u64 pid_tgid;
+	u64 type;
+	u64 timestamp;
+	u64 id;
+	u32 pid;
+	u32 tid;
 	int ret;
-	u64 time;
+	u32 arg1;
+	u32 arg2;
+	u32 arg3;
+	u32 arg4;
 };
 
-struct io_op {
-	int tag;
-	int pid;
-	int size;
-	char buffer[64];
+struct connect_data_t {
+    int family;
+    __u32 saddr;
 };
 
-struct operation_info{
-	int pid;
-	long unsigned int buff_addr;
-};
 
-volatile int io_ops_counter = 0;
-volatile int syscall_counter = 0;
+enum type { SYSCALL_ENTER = 1,SYSCALL_EXIT = 2, UPROBE = 3,NETWORK_DELAY = 4 };
+
 const volatile int pid_counter = 0;
-volatile int called_functions_counter = 0;
+volatile int event_counter = 0;
+volatile int delay_counter = 0;
 
 /* trigger creation of event struct in skeleton code */
 struct event _event = {};
@@ -172,199 +109,95 @@ static inline int check_pid_prog() {
     }
 }
 
-static inline int check_iops_counters(){
-	if (io_ops_counter == 32767)
-		io_ops_counter = 0;
-	return 0;
-}
 
-static inline int check_syscall_counters(){
-	if (syscall_counter == 32767)
-		syscall_counter = 0;
-	return 0;
-}
-
-static inline int check_called_functions_counters(){
-	if (called_functions_counter == 32767)
-		called_functions_counter = 0;
-	return 0;
-}
-
-SEC("tp/syscalls/sys_enter_write")
-int trace_write(struct trace_event_raw_sys_enter *ctx)
-{	
-	int pid_relevant = check_pid_prog();
-
-	if (!pid_relevant)
-		return 0;
-	size_t pid_tgid = bpf_get_current_pid_tgid();
-    int pid = pid_tgid >> 32;
-
-	long unsigned int buff_addr = ctx->args[1];
-
-	const unsigned int local_buff_size = 64;
-    char local_buff[local_buff_size] = { 0x00 };
-
-	bpf_probe_read_user(&local_buff, 64, (void*)buff_addr);
-	
-	//bpf_printk("tracepoint write %s \n",local_buff);
-
-
-	struct io_op io_op = {
-	};	
-
-	io_op.tag = WRITE;
-
-	io_op.pid = pid;
-
-	bpf_probe_read(&(io_op.buffer),64,local_buff);
-
-	bpf_map_update_elem(&io_ops, &io_ops_counter, &io_op, BPF_ANY);
-
-	io_ops_counter++;
-
-	check_iops_counters();
-
-
-	return 0;
-
-}
-
-SEC("tp/syscalls/sys_enter_read")
-int trace_read_enter(struct trace_event_raw_sys_enter *ctx)
-{	
-
-	int pid_relevant = check_pid_prog();
-
-	if (!pid_relevant)
-		return 0;
-
-	size_t pid_tgid = bpf_get_current_pid_tgid();
-    int pid = pid_tgid >> 32;
-
-
-	 // Get FD
-    //unsigned int fd = (unsigned int)ctx->args[0];
-
-	// Store buffer address from arguments in map
-    long unsigned int buff_addr = ctx->args[1];
-
-	struct operation_info op_info = {
-		pid,
-		buff_addr
-	};
-
-    bpf_map_update_elem(&map_buff_addrs, &pid, &op_info, BPF_ANY);
-	//bpf_printk("tracepoint read \n");
-	return 0;
-
-}
-
-SEC("tp/syscalls/sys_exit_read")
-int trace_read_exit(struct trace_event_raw_sys_exit *ctx)
-{
-
-	int pid_relevant = check_pid_prog();
-
-	if (!pid_relevant)
-		return 0;
-
-	size_t pid_tgid = bpf_get_current_pid_tgid();
-    int pid = pid_tgid >> 32;
-
-	struct operation_info *op_info = bpf_map_lookup_elem(&map_buff_addrs, &pid);
-
-	if (!op_info)
-		return 0;
-
-	long unsigned int pbuff_addr = op_info->buff_addr;
-
-    if (pbuff_addr == 0) {
-        return 0;
-    }
-
-	long int buff_size = ctx->ret;
-
-
-	long unsigned int buff_addr = pbuff_addr;
-	const unsigned int local_buff_size = 16;
-    char local_buff[local_buff_size] = { 0x00 };
-
-	//read only 64 bytes
-	long int read_size = 16;
-
-	bpf_probe_read(&local_buff, read_size, (void*)buff_addr);
-
-	struct io_op io_op = {};	
-
-	io_op.tag = READ;
-
-	io_op.pid = pid;
-
-	io_op.size = buff_size;
-
-	bpf_probe_read(&(io_op.buffer),64,local_buff);
-
-	bpf_map_update_elem(&io_ops, &io_ops_counter, &io_op, BPF_ANY);
-
-	struct io_op *io_op_test = bpf_map_lookup_elem(&io_ops, &io_ops_counter);
-
-	if(io_op_test){
-		//bpf_printk("This is %d Have: %s counter is %d",io_op_test->tag,io_op_test->buffer,io_ops_counter);
+static inline int update_event_counter(){
+	if (event_counter == HISTORY_SIZE - 1) {
+		event_counter = 0;
+		bpf_printk("Reset event counter");
 	}
-
-	io_ops_counter++;
-	check_iops_counters();
-
-	
-
+	else
+		event_counter++;
 	return 0;
-
 }
+
+// SEC("tracepoint/syscalls/sys_enter_connect")
+// int trace_connect_entry(struct trace_event_raw_sys_enter *ctx) {
+
+// 		int pid_relevant = check_pid_prog();
+
+// 		if (!pid_relevant)
+// 			return 0;
+
+//     struct connect_data_t data = {};
+//     struct sockaddr_in *addr_in;
+    
+//     // Get address struct and length from syscall arguments
+//     struct sockaddr *uservaddr = (struct sockaddr *)ctx->args[1];
+//     int addrlen = (int)ctx->args[2];
+    
+//     // Check family and extract address information
+//     bpf_probe_read_user(&data.family, sizeof(data.family), &uservaddr->sa_family);
+    
+// 		addr_in = (struct sockaddr_in *)uservaddr;
+// 		bpf_probe_read_user(&data.saddr, sizeof(data.saddr), &addr_in->sin_addr.s_addr);
+
+// 		//bpf_printk("Syscall connect called with address %d\n", data.saddr);
+
+// 		bpf_map_update_elem(&connect_map,&pid_relevant, &data.saddr, BPF_ANY);
+
+//     return 0;
+// }
 
 SEC("tp/syscalls/sys_enter")
 int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 
-	int pid_relevant = check_pid_prog();
-
-	if (!pid_relevant)
-		return 0;
-
-	int id = ctx->id;
-
-	//Need to save
-    //u64 time = bpf_ktime_get_ns();
-
-	//bpf_map_update_elem(&syscalls_time, &pid_tgid, &time, BPF_ANY);
-
-	// int *counter = bpf_map_lookup_elem(&syscalls_counter,&id);
-
-	// if (counter){
-	// 	int new_counter = *counter + 1;
-	// 	bpf_map_update_elem(&syscalls_counter,&id,&new_counter,BPF_ANY);
-	// 	//bpf_printk("Inserted %d for %d",id,new_counter);
-	// }else{
-	// 	int zero = 0;
-	// 	bpf_map_update_elem(&syscalls_counter,&id,&zero,BPF_ANY);
-	// }
+	
+		int id = ctx->id;
+		if (id == 0 || id == 1 || id == 257 || id == 82 || id == 232 || id == 233 || id == 281 || id == 202 || id ==237 || id == 39){
+			return 0;
+		}
 
 
-	int *counter = bpf_map_lookup_elem(&syscalls_counter_array,&id);
+		int pid_relevant = check_pid_prog();
 
-	if (counter){
-		int new_counter = *counter + 1;
-		bpf_map_update_elem(&syscalls_counter_array,&id,&new_counter,BPF_ANY);
-		//bpf_printk("Inserted %d for %d",id,new_counter);
-	}else{
-		int zero = 0;
-		bpf_map_update_elem(&syscalls_counter_array,&id,&zero,BPF_ANY);
-	}
+		if (!pid_relevant)
+			return 0;
+
+		u64 pid_tgid = bpf_get_current_pid_tgid();
+		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
+		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
+
+		u64 timestamp = bpf_ktime_get_ns();
+
+		struct event key = {
+			SYSCALL_ENTER,
+			timestamp,
+			id,
+			pid,
+			tid,
+			0,
+			0,
+			0,
+			0,
+			0
+		};
+
+		bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
+		update_event_counter();
 
     return 0;
 }
 
 SEC("tp/syscalls/sys_exit")
 int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
+
+	
+	int id = ctx->id;
+
+	if (id == 0 || id == 233 || id == 202 || id == 39 || id == 257 || id == 82){
+		return 0;
+	}
+	
 	int pid_relevant = check_pid_prog();
 
 	if (!pid_relevant)
@@ -375,174 +208,170 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 	if (ret<0){
 
 		u64 pid_tgid = bpf_get_current_pid_tgid();
+		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
+		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
 
-		//u64 *time_start = bpf_map_lookup_elem(&syscalls_time, &pid_tgid);
-
-		//if(!time_start)
-			//return 0;
-
-		u64 time_end = bpf_ktime_get_ns();
-
-		//u64 time = time_end - *time_start;
-
-		int id = ctx->id;
-		struct syscall_op syscall_op = {
+		u64 timestamp = bpf_ktime_get_ns();
+		struct event key = {
+			SYSCALL_EXIT,
+			timestamp,
 			id,
-			pid_tgid,
+			pid,
+			tid,
 			ret,
-			time_end
+			0,
+			0,
+			0,
+			0
 		};
-
-		bpf_map_update_elem(&syscalls, &syscall_counter, &syscall_op, BPF_ANY);
-
-		syscall_counter++;
-		check_syscall_counters();
+			bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
+	
+			update_event_counter();
 	}
 
     return 0;
 }
 
 
-// SEC("tracepoint/syscalls/sys_enter_accept")
-// int trace_accept_enter(struct trace_event_raw_sys_enter *ctx)
-// {
-//     u64 id = bpf_get_current_pid_tgid();
-
-//     struct accept_args_t accept_args = {};
-//     accept_args.addr = (struct sockaddr_in *)BPF_CORE_READ(ctx, args[1]);
-//     bpf_map_update_elem(&active_accept_args_map, &id, &accept_args, BPF_ANY);
-//     //bpf_printk("enter_accept accept_args.addr: %llx\n", accept_args.addr);
-//     return 0;
-// }
-
-// SEC("tracepoint/syscalls/sys_exit_accept")
-// int trace_accept_exit(struct trace_event_raw_sys_exit *ctx)
-// {
-
-//     u64 id = bpf_get_current_pid_tgid();
-
-//     struct accept_args_t *args =
-//         bpf_map_lookup_elem(&active_accept_args_map, &id);
-//     if (args == NULL)
-//     {
-//         return 0;
-//     }
-//     //bpf_printk("exit_accept accept_args.addr: %llx\n", args->addr);
-//     int ret_fd = (int)BPF_CORE_READ(ctx, ret);
-//     if (ret_fd <= 0)
-//     {
-//         return 0;
-//     }
-
-//     bpf_map_delete_elem(&active_accept_args_map, &id);
-// }
-
-// SEC("tracepoint/syscalls/sys_enter_connect")
-// int trace_connect_enter(struct trace_event_raw_sys_enter *ctx)
-// {
-// 	u64 id = bpf_get_current_pid_tgid();
-
-//     struct accept_args_t accept_args = {};
-//     accept_args.addr = (struct sockaddr_in *)BPF_CORE_READ(ctx, args[1]);
-// }
-
-// SEC("tracepoint/syscalls/sys_exit_connect")
-// int trace_connect_exit(struct trace_event_raw_sys_exit *ctx)
-// {
-// 	u64 id = bpf_get_current_pid_tgid();
-
-// }
-
-// SEC("uprobe")
-// int handle_uprobe(struct pt_regs *ctx) {
-	
-// 	uprobe_counter++;
-// 	u64 cookie = bpf_get_attach_cookie(ctx);
-
-// 	u32 pid = bpf_get_current_pid_tgid() >> 32; // Get current PID
-
-// 	struct uprobe_key key = {
-// 		pid,
-// 		cookie
-// 	};
-
-// 	int *counter = bpf_map_lookup_elem(&uprobe_counters,&key);
-
-// 	if (counter){
-// 		int new_counter = *counter + 1;
-// 		bpf_map_update_elem(&uprobe_counters,&key,&new_counter,BPF_ANY);
-// 		//bpf_printk("Inserted %d for %d",new_counter,cookie);
-// 	}else{
-// 		int zero = 0;
-// 		bpf_map_update_elem(&uprobe_counters,&key,&zero,BPF_ANY);
-// 		//bpf_printk("NORMAL:Inserted 0 in cookie %d for pid %d \n",cookie,pid);
-// 	}
-
-// 	bpf_printk("IN UPROBE with count %d \n",uprobe_counter);
-//     return 0;
-// }
-
-// SEC("uprobe")
-// int handle_uprobe_ret(struct pt_regs *ctx) {
-	
-// 	uprobe_counter_ret++;
-// 	u64 cookie = bpf_get_attach_cookie(ctx);
-
-// 	u32 pid = bpf_get_current_pid_tgid() >> 32; // Get current PID
-
-// 	struct uprobe_key key = {
-// 		pid,
-// 		cookie
-// 	};
-
-// 	int *counter = bpf_map_lookup_elem(&uprobe_ret_counters,&key);
-
-// 	if (counter){
-// 		int new_counter = *counter + 1;
-// 		bpf_map_update_elem(&uprobe_ret_counters,&key,&new_counter,BPF_ANY);
-// 		//bpf_printk("Inserted %d for %d",new_counter,cookie);
-// 	}else{
-// 		int zero = 0;
-// 		bpf_map_update_elem(&uprobe_ret_counters,&key,&zero,BPF_ANY);
-// 		//bpf_printk("RET:Inserted 0 in cookie %d for pid %d \n",cookie,pid);
-// 	}
-
-// 	bpf_printk("IN UPROBE_ret with count %d \n",uprobe_counter_ret);
-//     return 0;
-// }
-
 SEC("uprobe")
 int handle_uprobe(struct pt_regs *ctx) {
-	
+		
+		int pid_relevant = check_pid_prog();
+
+		if (!pid_relevant)
+			return 0;
 
 		u64 cookie = bpf_get_attach_cookie(ctx);
 
 		u64 pid_tgid = bpf_get_current_pid_tgid();
-			u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
-			u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
+		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
+		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
 
+
+		u64 timestamp = bpf_ktime_get_ns();
 
 		int *counter = bpf_map_lookup_elem(&uprobes_counters,&cookie);
 
 		if (counter){
 			int new_counter = *counter + 1;
 			bpf_map_update_elem(&uprobes_counters,&cookie,&new_counter,BPF_ANY);
-			//bpf_printk("Incremented for cookie %d \n",cookie);
 		}else{
 			int zero = 0;
 			bpf_map_update_elem(&uprobes_counters,&cookie,&zero,BPF_ANY);
 		}
+		
+		//bpf_printk("Saw an event for cookie %d \n",cookie);
 
-		struct uprobe_key key = {
+		struct event key = {
+			UPROBE,
+			timestamp,
+			cookie,
 			pid,
 			tid,
-			cookie
+			1,
+			0,
+			0,
+			0,
+			0
 		};
 
-		bpf_map_update_elem(&called_functions, &called_functions_counter, &key, BPF_ANY);
+		bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
 
-		called_functions_counter++;
-		check_called_functions_counters();
+		update_event_counter();
 
     return 0;
+}
+
+static bool is_tcp(struct ethhdr *eth, void *data_end)
+{
+    // Ensure Ethernet header is within bounds
+    if ((void *)(eth + 1) > data_end)
+        return false;
+
+    // Only handle IPv4 packets
+    if (bpf_ntohs(eth->h_proto) != ETH_P_IP)
+        return false;
+
+    struct iphdr *ip = (struct iphdr *)(eth + 1);
+
+    // Ensure IP header is within bounds
+    if ((void *)(ip + 1) > data_end)
+        return false;
+
+    // Check if the protocol is TCP
+    if (ip->protocol != IPPROTO_TCP)
+        return false;
+
+    return true;
+}
+
+SEC("xdp")
+int xdp_pass(struct xdp_md *ctx)
+{
+    // Pointers to packet data
+    void *data = (void *)(long)ctx->data;
+    void *data_end = (void *)(long)ctx->data_end;
+
+    // Parse Ethernet header
+    struct ethhdr *eth = data;
+
+    // Check if the packet is a TCP packet
+    if (!is_tcp(eth, data_end)) {
+        return XDP_PASS;
+    }
+
+    // Cast to IP header
+    struct iphdr *ip = (struct iphdr *)(eth + 1);
+
+    // Calculate IP header length
+    int ip_hdr_len = ip->ihl * 4;
+    if (ip_hdr_len < sizeof(struct iphdr)) {
+        return XDP_PASS;
+    }
+
+		u32 src_ip = ip->saddr;
+		u32 dst_ip = ip->daddr;
+
+		struct pair pair = {
+			src_ip,
+			dst_ip
+		};
+
+		struct network_info *net_info = bpf_map_lookup_elem(&network_delays,&pair);
+		u64 timestamp = bpf_ktime_get_ns();
+		if (net_info){
+			u64 delay = timestamp - net_info->last_time_seen;
+			net_info->last_time_seen = timestamp;
+			net_info->frequency++;
+			bpf_map_update_elem(&network_delays,&pair,net_info,BPF_ANY);
+			if(delay > 5000000000){
+					struct event event = {
+						NETWORK_DELAY,
+						timestamp,
+						0,
+						NETWORK_DELAY,
+						0,
+						0,
+						src_ip,
+						dst_ip,
+						(delay/1000000),
+						net_info->frequency
+					};
+					//bpf_printk("Found a delay of %llu",delay);
+					bpf_map_update_elem(&history,&event_counter,&event,BPF_ANY);
+		
+					update_event_counter();
+			}	
+		}else{
+			struct network_info net_info = {
+				0,
+				timestamp
+			};
+			//bpf_printk("No delay found");
+			bpf_map_update_elem(&network_delays,&pair,&net_info,BPF_ANY);
+		}
+
+		//bpf_printk("Src ip: %pI4, Dst ip: %pI4",&src_ip,&dst_ip);
+
+    return XDP_PASS;
 }

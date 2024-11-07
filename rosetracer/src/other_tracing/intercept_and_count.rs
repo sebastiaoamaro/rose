@@ -1,6 +1,7 @@
 use anyhow::Result;
 use core::time::Duration;
-use libbpf_rs::MapFlags;
+use std::mem::MaybeUninit;
+use libbpf_rs::{MapCore, MapFlags};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
@@ -26,27 +27,28 @@ pub fn run_tracing(
     //skel_builder.obj_builder.debug(true);
 
     auxiliary::bump_memlock_rlimit()?;
-    let mut open_skel = skel_builder.open()?;
+    let mut open_object = MaybeUninit::uninit();
+    let mut open_skel = skel_builder.open(&mut open_object)?;
 
-    open_skel.rodata_mut().pid_counter = pid_count as i32;
+    open_skel.maps.rodata_data.pid_counter = pid_count as i32;
     //open_skel.rodata().pid_counter = pid_count as i32;
 
     let mut skel = open_skel.load()?;
 
     let _tracepoint_sys_enter = skel
-        .progs_mut()
-        .trace_sys_enter()
+        .progs
+        .trace_sys_enter
         .attach_tracepoint("raw_syscalls", "sys_enter")?;
 
     let _tracepoint_sys_exit = skel
-        .progs_mut()
-        .trace_sys_exit()
+        .progs
+        .trace_sys_exit
         .attach_tracepoint("raw_syscalls", "sys_exit")?;
 
     for (index, pid) in pids.iter().enumerate() {
         let pid_vec = auxiliary::u32_to_u8_array_little_endian(*pid);
-        skel.maps_mut()
-            .pids()
+        skel.maps
+            .pids
             .update(&pid_vec, &pid_vec, MapFlags::ANY)?;
     }
 
