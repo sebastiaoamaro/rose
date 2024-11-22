@@ -11,9 +11,11 @@ def parse_tracer(tracer_yaml):
 
     tracer.pipe_location = tracer_yaml['pipe_location']
 
-    tracer.functions_file = tracer_yaml['functions_file']
+    if "functions_file" in tracer_yaml:
+        tracer.functions_file = tracer_yaml['functions_file']
 
-    tracer.binary_path = tracer_yaml['binary_to_examine']
+    if "binary_path" in tracer_yaml:
+        tracer.binary_path = tracer_yaml['binary_to_examine']
 
 
     return tracer

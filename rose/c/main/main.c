@@ -42,7 +42,8 @@ void process_fs(const struct event*);
 void inject_fault(int faulttype,int pid,int fault_id,int syscall_nr);
 void setup_begin_conditions();
 void setup_node_scripts();
-void start_node_scripts();
+void start_container_nodes_scripts();
+void start_nodes_scripts();
 void collect_container_processes();
 FILE* start_target_process(int node_number,int *pid);
 FILE* start_target_process_in_container(int node_number,int *pid);
@@ -62,7 +63,7 @@ void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid, int current_pid_
 int get_node_nr_from_pid(int pid);
 void reinject_uprobes(int node_nr);
 void send_info_to_tracer();
-void send_node_and_pid_to_tracer(int pid, char* node_name,int if_index);
+void send_node_and_pid_to_tracer(int container_pid,int pid, char* node_name,int if_index);
 void create_tracer_pipe();
 void start_tracer();
 void open_tracer_pipe();
@@ -155,6 +156,19 @@ static void bump_memlock_rlimit(void)
 	}
 }
 
+static void bump_file_rlimit(void)
+{
+	struct rlimit rlim_new = {
+		.rlim_cur	= 65356,
+		.rlim_max	= 65356,
+	};
+
+	if (setrlimit(RLIMIT_NOFILE, &rlim_new)) {
+		fprintf(stderr, "Failed to increase RLIMIT_MEMLOCK limit!\n");
+		exit(1);
+	}
+}
+
 //Variable to exit
 static volatile bool exiting = false;
 
@@ -196,7 +210,8 @@ static const struct argp argp = {
 
 int main(int argc, char **argv)
 {
-
+	//bump_memlock_rlimit();
+	bump_file_rlimit();
 	/* Set up libbpf errors and debug info callback */
 	libbpf_set_print(libbpf_print_fn);
 
@@ -299,13 +314,16 @@ int main(int argc, char **argv)
 	// printf("Press Any Key to Continue\n");
 	// getchar();
 
-	//TODO: only for container experiments should this be before the count_time
-	start_node_scripts();
+	//TODO: flag with start_before_workload in node
 
-	//TODO: Finish wait_time in parser
+	//If they are containers with start before the workload
+	start_container_nodes_scripts();
 	sleep(15);
 	pthread_t thread_id;
 	pthread_create(&thread_id, NULL, (void *)count_time, NULL);
+
+	//If they are not container we assume there is no workload
+	start_nodes_scripts();
 	start_workload();
 
 	while (!exiting) {
@@ -322,36 +340,27 @@ int main(int argc, char **argv)
 	}
 
 	cleanup:
-
-	printf("Running cleanup \n");
 	sleep(15);
-
-	if (deployment_tracer){
-
-		struct timespec ts;
-
-		long long timestamp = 0;
-		if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
-				timestamp = (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
-		} else {
-				// Fallback or error handling in case clock_gettime fails
-				perror("clock_gettime");
-				return -1;
-		}
-		FILE *fptr;
-		fptr = fopen("/tmp/history.txt", "a");
-
-		fprintf(fptr,"Node:any,Pid:0,Tid:0,event_name:End,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n",timestamp);
-
-		fclose(fptr);
-	}
+	printf("Running cleanup \n");
 
 	for(int i =0; i< NODE_COUNT;i++){
 
-		//Temp comment for testing
-		// if(strlen(nodes[i].script)){
-		// 	kill(nodes[i].current_pid,9);
-		// }
+		if(strlen(nodes[i].script)){
+			printf("Going to kill script %s with pid %d \n",nodes[i].script,nodes[i].current_pid);
+			kill(nodes[i].current_pid,SIGKILL);
+			//kill(nodes[i].container_pid,SIGKILL);
+		}
+		printf("Before access to plan \n");
+
+		//Killing workload process
+
+		if(plan){
+			if (plan->workload.pid){
+				printf("Killing workload \n");
+				kill(plan->workload.pid,SIGKILL);
+			}
+		}
+		printf("After access to plan \n");
 		if(nodes[i].pid_tc_in > 0){
 			printf("Going to kill pid_tc_in %d \n",nodes[i].pid_tc_in);
 			kill(nodes[i].pid_tc_in,SIGKILL);
@@ -361,6 +370,26 @@ int main(int argc, char **argv)
 			kill(nodes[i].pid_tc_out,SIGKILL);
 		}
 	}
+
+	// if (deployment_tracer){
+
+	// 	struct timespec ts;
+
+	// 	long long timestamp = 0;
+	// 	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+	// 			timestamp = (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+	// 	} else {
+	// 			// Fallback or error handling in case clock_gettime fails
+	// 			perror("clock_gettime");
+	// 			return -1;
+	// 	}
+	// 	FILE *fptr;
+	// 	fptr = fopen("/tmp/history.txt", "a");
+
+	// 	fprintf(fptr,"Node:any,Pid:0,Tid:0,event_type:experiment,event_name:End,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n",timestamp);
+
+	// 	fclose(fptr);
+	// }
 
 
 	if(!block_bpf)
@@ -394,14 +423,16 @@ int main(int argc, char **argv)
 
 	free(faults);
 
-	if(strcmp(plan->cleanup.script,"")){
-		printf("Running cleanup script %s \n",plan->cleanup.script);
-		int status = system(plan->cleanup.script);
-		if (status == -1) {
-        	printf("Failed to call script.\n");
-    	} else {
-        	printf("Script executed successfully.\n");
-    }
+	if (plan){
+		if(strcmp(plan->cleanup.script,"")){
+			printf("Running cleanup script %s \n",plan->cleanup.script);
+			int status = system(plan->cleanup.script);
+			if (status == -1) {
+						printf("Failed to call script.\n");
+				} else {
+						printf("Script executed successfully.\n");
+			}
+		}
 	}
 
 	if(deployment_tracer){
@@ -424,11 +455,11 @@ int main(int argc, char **argv)
 							printf("Key: %d, Value: %llu\n", key, value.timestamp);
 
 							if (target == -2)
-								fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n","majority",value.faulttype,value.timestamp);
+								fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n","majority",value.faulttype,value.timestamp);
 							if (target == -1)
-								fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n","leader",value.faulttype,value.timestamp);
+								fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n","leader",value.faulttype,value.timestamp);
 							if (target >= 0)
-								fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n",nodes[target].name,value.faulttype,value.timestamp);
+								fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n",nodes[target].name,value.faulttype,value.timestamp);
 						}
 				}
 				key = next_key;
@@ -603,22 +634,22 @@ void start_workload(){
 
 	if (deployment_tracer){
 
-		struct timespec ts;
+	// 	struct timespec ts;
 
-		long long timestamp = 0;
-    if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
-        timestamp = (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
-    } else {
-        // Fallback or error handling in case clock_gettime fails
-        perror("clock_gettime");
-        return -1;
-    }
+	// 	long long timestamp = 0;
+  //   if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+  //       timestamp = (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+  //   } else {
+  //       // Fallback or error handling in case clock_gettime fails
+  //       perror("clock_gettime");
+  //       return -1;
+  //   }
 
 		FILE *fptr;
 
 		fptr = fopen("/tmp/history.txt", "w");
 
-		fprintf(fptr,"Node:any,Pid:0,Tid:0,event_name:Start,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n", timestamp);
+	// 	fprintf(fptr,"Node:any,Pid:0,Tid:0,event_type:experiment,event_name:Start,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n", timestamp);
 
 		fclose(fptr);
 	}
@@ -632,36 +663,16 @@ void collect_container_pids(){
 	while (node_count != NODE_COUNT){
 		node_count = 0;
 		for(int i=0; i < NODE_COUNT;i++){
-			nodes[i].container_pid = get_container_pid(nodes[i].name);
-			if(nodes[i].container_pid)
+			if (nodes[i].container){
+				nodes[i].container_pid = get_container_pid(nodes[i].name);
+				if(nodes[i].container_pid){
+					node_count++;
+				}
+			}
+			else{
 				node_count++;
-
-			//Old way of getting pids for containers
-            // if (nodes[i].pid == 0 && new_pid!=0){
-            //     printf("Booting pid for %s is %d \n",nodes[i].name,new_pid);
-            //     nodes[i].pid = new_pid;
-            //    	nodes[i].current_pid = new_pid;
-            //     node_count++;
-            // }
-			// else if(new_pid == nodes[i].current_pid){
-			// 	//printf("Skipped %s is %d \n",nodes[i].name,new_pid);
-			// 	node_count++;
-			// 	continue;
-			// }
-            // else if (new_pid != nodes[i].pid && new_pid!=0){
-			// 	int old_pid = nodes[i].current_pid;
-            //    	printf("New pid for %s is %d \n",nodes[i].name,new_pid);
-            //    	nodes[i].current_pid = new_pid;
-            //    	node_count++;
-
-            //     update_node_pid_ebpf(i,new_pid,old_pid);
-            // }
-            // else if(new_pid == nodes[i].current_pid){
-            // 	node_count++;
-            // }
+			}
 		}
-		//TODO: for some reason this matters
-		//sleep_for_ms(50);
 	}
 
 }
@@ -688,6 +699,8 @@ void setup_node_scripts(){
 		}
 		else{
 			FILE *fp = start_target_process(i,&nodes[i].pid);
+			printf("Node %d with pid %d \n",i,nodes[i].pid);
+			nodes[i].current_pid = nodes[i].pid;
 		}
 		//nodes[i].pid = constants.target_pid;
 		//printf("Starting process with pid is %d \n",nodes[i].pid);
@@ -724,16 +737,19 @@ void send_info_to_tracer(){
 	for(int i = 0; i< NODE_COUNT; i++){
 			if(nodes[i].container){
 				nodes[i].if_index = get_interface_index(nodes[i].veth);
-				send_node_and_pid_to_tracer(nodes[i].current_pid,nodes[i].name,nodes[i].if_index);
+				send_node_and_pid_to_tracer(nodes[i].container_pid,nodes[i].current_pid,nodes[i].name,nodes[i].if_index);
+			}
+			else{
+				send_node_and_pid_to_tracer(nodes[i].container_pid,nodes[i].current_pid,nodes[i].name,nodes[i].if_index);
 			}
 	}
 
 }
 
-void send_node_and_pid_to_tracer(int pid, char* node_name,int if_index){
+void send_node_and_pid_to_tracer(int container_pid,int pid, char* node_name,int if_index){
 		char message[256];
 
-		snprintf(message,sizeof(message),"%s,%d,%d\n",node_name,pid,if_index);
+		snprintf(message,sizeof(message),"%s,%d,%d,%d\n",node_name,container_pid,pid,if_index);
 
 		if (write(deployment_tracer->pipe_write_end, message, strlen(message)) == -1) {  // +1 to include the null terminator
         perror("write");
@@ -744,14 +760,19 @@ void send_node_and_pid_to_tracer(int pid, char* node_name,int if_index){
     printf("Message written to tracer:%s\n", message);
 }
 
-void start_node_scripts(){
-	printf("Resuming Processes \n");
+void start_nodes_scripts(){
 	for(int i=0;i<NODE_COUNT;i++){
-		if (nodes[i].container)
-			kill(nodes[i].pid,SIGCONT);
-
-		else if(strlen(nodes[i].script)){
+		if (!(nodes[i].container)){
+			printf("Resuming Node %d \n",i);
 			kill(nodes[i].pid,SIGUSR1);
+		}
+	}	
+}
+void start_container_nodes_scripts(){
+	for(int i=0;i<NODE_COUNT;i++){
+		if (nodes[i].container){
+			printf("Resuming Container %d \n",i);
+			kill(nodes[i].pid,SIGCONT);
 		}
 
 		if(nodes[i].pid_tc_in !=0){
@@ -1065,7 +1086,7 @@ void setup_begin_conditions(){
 				}
 			}
 		}
-		//printf("has_time_condition %d and relevant conditions %d \n",has_time_condition,faults[i].rel)
+		//printf("has_time_condition %d and relevant conditions %d \n",has_time_condition,faults[i].relevant_conditions);
 		if (has_time_condition && (faults[i].relevant_conditions == 1)){
 			printf("Need to process all syscalls to check time \n");
 			constants.timemode = 1;
@@ -1162,6 +1183,7 @@ void add_faults_to_bpf(){
 		new_fault.timestamp = 0;
 		new_fault.faulttype = faults[i].faulttype;
 		new_fault.done = faults[i].done;
+		printf("Done is %d \n",faults[i].done);
 		new_fault.quorum_size = QUORUM;
 		new_fault.faults_done = 0;
 
@@ -1460,13 +1482,13 @@ void count_time(){
 
 	int maximum_time = 120000;
 	while(1){
-		sleep_for_ms(50);
-		constants.time += 50;
+		sleep_for_ms(10);
+		constants.time += 10;
 		int time_sec = constants.time;
 
 		for (int i = 0; i< FAULT_COUNT;i++){
 			int fault_time = faults[i].initial.fault_type_conditions[TIME_FAULT];
-			if (fault_time == time_sec){
+			if (fault_time >= time_sec){
 
 				struct simplified_fault fault;
 				int err_lookup;
@@ -1474,13 +1496,16 @@ void count_time(){
 				if (err_lookup){
 					printf("Did not find elem in count_time errno is %d \n",errno);
 				}
-				printf("Changing time property to true in Fault:%d done:%d \n",fault.fault_nr,fault.done);
 
 				if (fault.done){
-					printf("SKIPPED %d \n",fault.done);
+					//printf("SKIPPED fault nr%d  with done %d\n",i,fault.done);
 					continue;
 				}
-
+				if (fault.initial.conditions_match[TIME_FAULT] > 0){
+					continue;
+				}
+				printf("Time value property is %d \n",fault.initial.conditions_match[TIME_FAULT]);
+				printf("Changing time property to true in Fault:%d done:%d \n",fault.fault_nr,fault.done);
 				fault.initial.conditions_match[TIME_FAULT] = 1;
 				fault.run+=1;
 				int error = bpf_map_update_elem(constants.bpf_map_fault_fd,&i,&fault,BPF_ANY);
@@ -1489,11 +1514,28 @@ void count_time(){
 
 			}
 		}
-		//Check if last fault is done
-		struct simplified_fault last_fault;
+		//Check if faults are done
+
+
 		int err_lookup;
-		int last_fault_idx = FAULT_COUNT-1;
-		err_lookup = bpf_map_lookup_elem(constants.bpf_map_fault_fd, &last_fault_idx,&last_fault);
+		int done_count = 0;
+		for (int i = 0; i< FAULT_COUNT;i++){
+			struct simplified_fault fault;
+			int err_lookup;
+			int fault_time = faults[i].initial.fault_type_conditions[TIME_FAULT];
+			err_lookup = bpf_map_lookup_elem(constants.bpf_map_fault_fd, &i,&fault);
+
+			if (fault.done){
+				done_count++;
+			}		
+		}
+		
+		if (done_count == FAULT_COUNT){
+			printf("All faults are done \n");
+			exiting = true;
+			break;
+		}
+
 
 		if (maximum_time == time_sec){
 			printf("Experiments maximum time reached \n");
@@ -1501,18 +1543,6 @@ void count_time(){
 			break;
 		}
 
-		else if (last_fault.target == -2){
-			if (last_fault.done == QUORUM){
-				printf("Last fault was for a majority exiting \n");
-				exiting = true;
-				break;
-			}
-		}
-		else if(last_fault.done){
-			printf("Last fault was a normal exiting \n");
-			exiting = true;
-			break;
-		}
 	}
 
 	//Sleep one minute before ending the experiment
@@ -1682,7 +1712,7 @@ void restart_process(void* args){
 	}
 
 	if (node->container && deployment_tracer){
-		send_node_and_pid_to_tracer(node->current_pid,node->name,node->if_index);
+		send_node_and_pid_to_tracer(node->container_pid,node->current_pid,node->name,node->if_index);
 	}
 	//Sometimes this is to fast and the process did not yet start
 	update_node_pid_ebpf(node_to_restart,node->current_pid,node->pid,current_pid_pre_restart);

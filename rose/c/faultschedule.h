@@ -8,7 +8,7 @@
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
 #define FUNCNAME_MAX 512
-#define MAX_FUNCTIONS 8
+#define MAX_FUNCTIONS 32
 #define FILENAME_MAX 64
 #define FAULTSSUPPORTED 21
 #define MAX_RELEVANT_FILES 256
@@ -170,6 +170,7 @@ typedef struct fault {
     int traced;
     int category;
     int faulttype;
+    int done;
     fault_details fault_details;
     fault_condition *fault_conditions_begin;
     fault_condition *fault_conditions_end;
@@ -183,7 +184,6 @@ typedef struct fault {
     char func_names[MAX_FUNCTIONS][FUNCNAME_MAX];
     struct uprobes_bpf *list_of_functions[MAX_FUNCTIONS];
 
-    int done;
     struct faultstate initial;
     struct faultstate end;
     int pid;

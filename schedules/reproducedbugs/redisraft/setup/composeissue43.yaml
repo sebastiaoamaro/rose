@@ -21,7 +21,7 @@ services:
     expose:
       - "5001"
       - "5002"
-
+    
     networks:
       db:
         ipv4_address: 172.19.1.11

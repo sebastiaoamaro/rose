@@ -11,6 +11,16 @@ class Node:
     leader_symbol = ""
     leader = 0
 
+    def to_yaml(self):
+        return {self.name:{
+        'name': self.name,
+        'container': self.container == 1,
+        'binary': self.binary,
+        'leader_symbol': self.leader_symbol,
+        'ip':self.ip,
+        'leader': self.leader == 1,
+        'script': self.script,
+        }}
 def parse_nodes(nodes):
     
     nodes_dict = {}

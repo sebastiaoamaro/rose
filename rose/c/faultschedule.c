@@ -16,8 +16,8 @@
 #include "faultschedule.h"
 #include "aux.h"
 
-#define NODE_COUNT 5
-#define FAULT_COUNT 5
+#define NODE_COUNT 1
+#define FAULT_COUNT 1
 
 
 char* get_veth_interface_name(const char* container_name);
@@ -245,93 +245,39 @@ char* get_veth_interface_name(const char* container_name) {
 }
 execution_plan* build_execution_plan(){
     execution_plan* exe_plan = ( execution_plan*)malloc(1 * sizeof(execution_plan));
-    create_execution_plan(exe_plan,"/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/startrediscluster.sh",5,"/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/runworkload.sh","/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/cleanup.sh",15);
+    create_execution_plan(exe_plan,"",0,"","",0);
     return exe_plan;
 }
  tracer* build_tracer(){
     tracer* deployment_tracer = (tracer*)malloc(1 * sizeof(tracer));
-    create_tracer(deployment_tracer,"/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer","/tmp/containerpid","/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt","/redisraft.so");
+    create_tracer(deployment_tracer,"/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer","/tmp/containerpid","","");
     return deployment_tracer;
 }
 node* build_nodes(){
     node* nodes = ( node*)malloc(NODE_COUNT * sizeof(node));
-    create_node(&nodes[0],"redis1",0,"","172.19.1.10","./startredis.sh 1 172.19.1.10","",1,"/redisraft.so","raft_become_leader",1);
-    create_node(&nodes[1],"redis2",0,"","172.19.1.11","./startredis.sh 2 172.19.1.11","",1,"/redisraft.so","raft_become_leader",0);
-    create_node(&nodes[2],"redis3",0,"","172.19.1.12","./startredis.sh 3 172.19.1.12","",1,"/redisraft.so","raft_become_leader",0);
-    create_node(&nodes[3],"redis4",0,"","172.19.1.13","./startredis.sh 4 172.19.1.13","",1,"/redisraft.so","raft_become_leader",0);
-    create_node(&nodes[4],"redis5",0,"","172.19.1.14","./startredis.sh 5 172.19.1.14","",1,"/redisraft.so","raft_become_leader",0);
+    create_node(&nodes[0],"zookeeper",0,"","","/home/sebastiaoamaro/phd/rw/Anduril/ground_truth/zookeeper-3157/run-original-test.sh","",0,"","",0);
 
     return nodes;
 }
 fault* build_faults_extra(){
     fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));
     fault_details fault_details0;
-    process_fault process_kill0;
-    process_kill0.type = 11;
-    fault_details0.process_fault = process_kill0;
-    create_fault(&faults[0],"process_kill_all1",-2,0,11,1,fault_details0,0,0,0,1,0);
+    file_system_operation file_syscall0;
+    file_syscall0.syscall = 8;
+    file_syscall0.syscall_condition = 22;
+    strcpy(file_syscall0.directory_name,"");
+    strcpy(file_syscall0.file_name,"/tmp/zookeeper_test_file");
+    file_syscall0.success = 0;
+    file_syscall0.return_value = -1;
+    fault_details0.file_system_op = file_syscall0;
+    create_fault(&faults[0],"write_fail",0,0,8,3,fault_details0,0,0,0,1,0);
 
     fault_condition fault_condition_0_0;
-    int time_0_0 = 5000;
-    fault_condition_0_0.type = TIME;
-    fault_condition_0_0.condition.time = time_0_0;
+    file_system_call file_syscall_0_0;
+    fault_condition_0_0.type = FILE_SYSCALL;
+    build_file_syscall(&file_syscall_0_0,FDATASYNCFILE_STATE,"","",5);
+    fault_condition_0_0.condition.file_system_call = file_syscall_0_0;
     add_begin_condition(&faults[0],fault_condition_0_0,0);
-    fault_details fault_details1;
-    block_ips block_ips1;
-    add_ip_to_block_extra(&block_ips1,"172.19.1.10",0,1);
-    add_ip_to_block_extra(&block_ips1,"172.19.1.10",0,2);
-    fault_details1.block_ips = block_ips1;
-    fault_details1.block_ips.count_in = 1;
-    fault_details1.block_ips.count_out = 1;
-    create_fault(&faults[1],"block_ips_redis2",1,1,5,0,fault_details1,0,0,25000,1,0);
-
-    fault_condition fault_condition_1_0;
-    int time_1_0 = 10000;
-    fault_condition_1_0.type = TIME;
-    fault_condition_1_0.condition.time = time_1_0;
-    add_begin_condition(&faults[1],fault_condition_1_0,0);
-    fault_details fault_details2;
-    block_ips block_ips2;
-    add_ip_to_block_extra(&block_ips2,"172.19.1.10",0,1);
-    add_ip_to_block_extra(&block_ips2,"172.19.1.10",0,2);
-    fault_details2.block_ips = block_ips2;
-    fault_details2.block_ips.count_in = 1;
-    fault_details2.block_ips.count_out = 1;
-    create_fault(&faults[2],"block_ips_redis3",2,2,5,0,fault_details2,0,0,25000,1,0);
-
-    fault_condition fault_condition_2_0;
-    int time_2_0 = 10000;
-    fault_condition_2_0.type = TIME;
-    fault_condition_2_0.condition.time = time_2_0;
-    add_begin_condition(&faults[2],fault_condition_2_0,0);
-    fault_details fault_details3;
-    block_ips block_ips3;
-    add_ip_to_block_extra(&block_ips3,"172.19.1.10",0,1);
-    add_ip_to_block_extra(&block_ips3,"172.19.1.10",0,2);
-    fault_details3.block_ips = block_ips3;
-    fault_details3.block_ips.count_in = 1;
-    fault_details3.block_ips.count_out = 1;
-    create_fault(&faults[3],"block_ips_redis4",3,3,5,0,fault_details3,0,0,25000,1,0);
-
-    fault_condition fault_condition_3_0;
-    int time_3_0 = 10000;
-    fault_condition_3_0.type = TIME;
-    fault_condition_3_0.condition.time = time_3_0;
-    add_begin_condition(&faults[3],fault_condition_3_0,0);
-    fault_details fault_details4;
-    block_ips block_ips4;
-    add_ip_to_block_extra(&block_ips4,"172.19.1.10",0,1);
-    add_ip_to_block_extra(&block_ips4,"172.19.1.10",0,2);
-    fault_details4.block_ips = block_ips4;
-    fault_details4.block_ips.count_in = 1;
-    fault_details4.block_ips.count_out = 1;
-    create_fault(&faults[4],"block_ips_redis5",4,4,5,0,fault_details4,0,0,25000,1,0);
-
-    fault_condition fault_condition_4_0;
-    int time_4_0 = 10000;
-    fault_condition_4_0.type = TIME;
-    fault_condition_4_0.condition.time = time_4_0;
-    add_begin_condition(&faults[4],fault_condition_4_0,0);
 
     return faults;
 }

@@ -24,13 +24,6 @@ struct {
 } connect_map SEC(".maps");
 
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__type(key, struct pair);
-	__type(value, struct network_info);
-	__uint(max_entries, 128);
-} network_delays SEC(".maps");
-
-struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__type(key, int);
 	__type(value, int);
@@ -52,18 +45,6 @@ struct accept_args_t
     struct sockaddr_in *addr;
 };
 
-struct pair
-{
-	u32 src;
-	u32 dst;
-};
-
-struct network_info
-{
-	u32 frequency;
-	u64 last_time_seen;
-};
-
 struct event {
 	u64 type;
 	u64 timestamp;
@@ -83,7 +64,7 @@ struct connect_data_t {
 };
 
 
-enum type { SYSCALL_ENTER = 1,SYSCALL_EXIT = 2, UPROBE = 3,NETWORK_DELAY = 4 };
+enum type { SYSCALL_ENTER = 1,SYSCALL_EXIT = 2, UPROBE = 3};
 
 const volatile int pid_counter = 0;
 volatile int event_counter = 0;
@@ -153,7 +134,7 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 
 	
 		int id = ctx->id;
-		if (id == 0 || id == 1 || id == 257 || id == 82 || id == 232 || id == 233 || id == 281 || id == 202 || id ==237 || id == 39){
+		if (id == 0 || id == 1 || id == 257 || id == 82 || id == 232 || id == 233 || id == 281 || id == 202 || id ==237 || id == 39 || id == 8 || id == 74){
 			return 0;
 		}
 
@@ -282,96 +263,74 @@ int handle_uprobe(struct pt_regs *ctx) {
     return 0;
 }
 
-static bool is_tcp(struct ethhdr *eth, void *data_end)
-{
-    // Ensure Ethernet header is within bounds
-    if ((void *)(eth + 1) > data_end)
-        return false;
+// SEC("xdp")
+// int xdp_pass(struct xdp_md *ctx)
+// {
+//     // Pointers to packet data
+//     void *data = (void *)(long)ctx->data;
+//     void *data_end = (void *)(long)ctx->data_end;
 
-    // Only handle IPv4 packets
-    if (bpf_ntohs(eth->h_proto) != ETH_P_IP)
-        return false;
+//     // Parse Ethernet header
+//     struct ethhdr *eth = data;
 
-    struct iphdr *ip = (struct iphdr *)(eth + 1);
+//     // Check if the packet is a TCP packet
+//     if (!is_tcp(eth, data_end)) {
+//         return XDP_PASS;
+//     }
 
-    // Ensure IP header is within bounds
-    if ((void *)(ip + 1) > data_end)
-        return false;
+//     // Cast to IP header
+//     struct iphdr *ip = (struct iphdr *)(eth + 1);
 
-    // Check if the protocol is TCP
-    if (ip->protocol != IPPROTO_TCP)
-        return false;
+//     // Calculate IP header length
+//     int ip_hdr_len = ip->ihl * 4;
+//     if (ip_hdr_len < sizeof(struct iphdr)) {
+//         return XDP_PASS;
+//     }
 
-    return true;
-}
+// 		u32 src_ip = ip->saddr;
+// 		u32 dst_ip = ip->daddr;
 
-SEC("xdp")
-int xdp_pass(struct xdp_md *ctx)
-{
-    // Pointers to packet data
-    void *data = (void *)(long)ctx->data;
-    void *data_end = (void *)(long)ctx->data_end;
+// 		struct pair pair = {
+// 			src_ip,
+// 			dst_ip
+// 		};
 
-    // Parse Ethernet header
-    struct ethhdr *eth = data;
-
-    // Check if the packet is a TCP packet
-    if (!is_tcp(eth, data_end)) {
-        return XDP_PASS;
-    }
-
-    // Cast to IP header
-    struct iphdr *ip = (struct iphdr *)(eth + 1);
-
-    // Calculate IP header length
-    int ip_hdr_len = ip->ihl * 4;
-    if (ip_hdr_len < sizeof(struct iphdr)) {
-        return XDP_PASS;
-    }
-
-		u32 src_ip = ip->saddr;
-		u32 dst_ip = ip->daddr;
-
-		struct pair pair = {
-			src_ip,
-			dst_ip
-		};
-
-		struct network_info *net_info = bpf_map_lookup_elem(&network_delays,&pair);
-		u64 timestamp = bpf_ktime_get_ns();
-		if (net_info){
-			u64 delay = timestamp - net_info->last_time_seen;
-			net_info->last_time_seen = timestamp;
-			net_info->frequency++;
-			bpf_map_update_elem(&network_delays,&pair,net_info,BPF_ANY);
-			if(delay > 5000000000){
-					struct event event = {
-						NETWORK_DELAY,
-						timestamp,
-						0,
-						NETWORK_DELAY,
-						0,
-						0,
-						src_ip,
-						dst_ip,
-						(delay/1000000),
-						net_info->frequency
-					};
-					//bpf_printk("Found a delay of %llu",delay);
-					bpf_map_update_elem(&history,&event_counter,&event,BPF_ANY);
+// 		struct network_info *net_info = bpf_map_lookup_elem(&network_delays,&pair);
+// 		u64 timestamp = bpf_ktime_get_ns();
+// 		if (net_info){
+// 			u64 delay = timestamp - net_info->last_time_seen;
+// 			net_info->last_time_seen = timestamp;
+// 			net_info->frequency++;
+// 			bpf_map_update_elem(&network_delays,&pair,net_info,BPF_ANY);
+// 			if(delay > 5000000000){
+// 					struct event event = {
+// 						NETWORK_DELAY,
+// 						timestamp,
+// 						0,
+// 						NETWORK_DELAY,
+// 						0,
+// 						0,
+// 						src_ip,
+// 						dst_ip,
+// 						(delay/1000000),
+// 						net_info->frequency
+// 					};
+// 					//bpf_printk("Found a delay of %llu",delay);
+// 					bpf_map_update_elem(&history,&event_counter,&event,BPF_ANY);
 		
-					update_event_counter();
-			}	
-		}else{
-			struct network_info net_info = {
-				0,
-				timestamp
-			};
-			//bpf_printk("No delay found");
-			bpf_map_update_elem(&network_delays,&pair,&net_info,BPF_ANY);
-		}
+// 					update_event_counter();
+// 			}	
+// 		}else{
+// 			struct network_info net_info = {
+// 				1,
+// 				timestamp
+// 			};
+// 			//bpf_printk("No delay found");
+// 			bpf_map_update_elem(&network_delays,&pair,&net_info,BPF_ANY);
+// 		}
 
-		//bpf_printk("Src ip: %pI4, Dst ip: %pI4",&src_ip,&dst_ip);
+// 		//bpf_printk("Src ip: %pI4, Dst ip: %pI4",&src_ip,&dst_ip);
 
-    return XDP_PASS;
-}
+//     return XDP_PASS;
+// }
+

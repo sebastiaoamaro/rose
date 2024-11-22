@@ -2,17 +2,19 @@ nodes:
   zookeeper:
     container: false
     script: /home/sebastiaoamaro/phd/rw/Anduril/ground_truth/zookeeper-2247/run-original-test.sh
+
 faults:
   write_fail:
     type: file_system_operation
     details:
       name: fdatasync
       return_value: -5
-      success: false
+      success: False
+    #repeatable: True
     target: zookeeper
     traced: zookeeper
     begin_conditions:
     - condition1:
         type: file_syscall
         syscall_name: fdatasync
-        call_count: 20
+        call_count: 12

@@ -147,10 +147,10 @@ int monitor(struct __sk_buff *ctx)
 	
 	bpf_skb_load_bytes(ctx, nhoff + offsetof(struct iphdr, protocol), &(ip_proto), 1);
 
-	if (ip_proto != IPPROTO_GRE) {
-		bpf_skb_load_bytes(ctx, nhoff + offsetof(struct iphdr, saddr), &(pair.src_addr), 4);
-		bpf_skb_load_bytes(ctx, nhoff + offsetof(struct iphdr, daddr), &(pair.dst_addr), 4);
-	}
+	//if (ip_proto != IPPROTO_GRE) {
+	bpf_skb_load_bytes(ctx, nhoff + offsetof(struct iphdr, saddr), &(pair.src_addr), 4);
+	bpf_skb_load_bytes(ctx, nhoff + offsetof(struct iphdr, daddr), &(pair.dst_addr), 4);
+	//}
 
 	//bpf_printk("e->src_addr is %d and e->dst_addr is %d \n",pair.src_addr,pair.dst_addr);
 
@@ -202,7 +202,7 @@ int monitor(struct __sk_buff *ctx)
 
 		}else{
 			//bpf_printk("Ips is NULL and if_index is %d \n",if_index);
-			return 0;
+			return TC_ACT_OK;
 			}
 		}
 	}

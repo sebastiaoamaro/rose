@@ -19,7 +19,40 @@ struct {
 	__type(key, int);
 	__type(value, struct event);
 	__uint(max_entries, HISTORY_SIZE);
-} called_functions SEC(".maps");
+} history SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, struct pair);
+	__type(value, struct network_info);
+	__uint(max_entries, 128);
+} network_information SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__type(key, int);
+	__type(value, struct event);
+	__uint(max_entries, HISTORY_SIZE);
+} history_delays SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__type(key, int);
+	__type(value, int);
+	__uint(max_entries, 1);
+} event_counter_for_delays SEC(".maps");
+
+struct pair
+{
+	u32 src;
+	u32 dst;
+};
+
+struct network_info
+{
+	u32 frequency;
+	u64 last_time_seen;
+};
 
 struct event {
 	u64 type;
@@ -28,4 +61,8 @@ struct event {
 	u32 pid;
 	u32 tid;
 	int ret;
+	u32 arg1;
+	u32 arg2;
+	u32 arg3;
+	u32 arg4;
 };

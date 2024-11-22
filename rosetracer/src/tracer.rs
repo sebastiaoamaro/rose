@@ -3,12 +3,16 @@ use libbpf_rs::Link;
 use libbpf_rs::MapCore;
 use libbpf_rs::MapFlags;
 use libbpf_rs::UprobeOpts;
+use nix::sys::signal::kill;
+use nix::sys::signal::Signal;
+use nix::unistd::Pid;
 use pin_maps::PinMapsSkelBuilder;
 use crate::auxiliary;
 use crate::auxiliary::collect_functions_called_array;
+use crate::auxiliary::collect_network_delays;
+use crate::auxiliary::collect_network_info;
 use crate::auxiliary::monitor_pid;
-use crate::auxiliary::process_uprobes_array_map;
-use crate::auxiliary::write_to_file;
+use crate::auxiliary::start_xdp_in_container;
 use libbpf_rs::skel::OpenSkel as _;
 use libbpf_rs::skel::SkelBuilder as _;
 use std::collections::HashMap;
@@ -47,7 +51,7 @@ pub fn run_tracing(
 
     let mut skel_maps = open_skel_maps.load()?;
 
-    let res = skel_maps.maps.called_functions.unpin("/sys/fs/bpf/history");
+    let res = skel_maps.maps.history.unpin("/sys/fs/bpf/history");
 
     match res {
         Ok(_) => println!("Successfully unpinned map"),
@@ -59,6 +63,33 @@ pub fn run_tracing(
         Ok(_) => println!("Successfully unpinned map"),
         Err(e) => println!("Error unpinning map: {}", e),
     }
+
+    let res = skel_maps.maps.network_information.unpin("/sys/fs/bpf/network_information");
+
+    match res {
+        Ok(_) => println!("Successfully unpinned map"),
+        Err(e) => println!("Error unpinning map: {}", e),
+    }
+
+    let res = skel_maps.maps.history_delays.unpin("/sys/fs/bpf/history_delays");
+
+    match res {
+        Ok(_) => println!("Successfully unpinned map"),
+        Err(e) => println!("Error unpinning map: {}", e),
+    }
+
+    let res = skel_maps.maps.event_counter_for_delays.unpin("/sys/fs/bpf/event_counter_for_delays");
+
+    match res {
+        Ok(_) => println!("Successfully unpinned map"),
+        Err(e) => println!("Error unpinning map: {}", e),
+    }
+
+    skel_maps.maps.history.pin("/sys/fs/bpf/history").expect("Failed to pin map");
+    skel_maps.maps.uprobes_counters.pin("/sys/fs/bpf/uprobes_counters").expect("Failed to pin map");
+    skel_maps.maps.network_information.pin("/sys/fs/bpf/network_information").expect("Failed to pin map");
+    skel_maps.maps.history_delays.pin("/sys/fs/bpf/history_delays").expect("Failed to pin map");
+    skel_maps.maps.event_counter_for_delays.pin("/sys/fs/bpf/event_counter_for_delays").expect("Failed to pin map");
 
     //Init variables for tracing
 
@@ -72,6 +103,7 @@ pub fn run_tracing(
     //skel_builder.obj_builder.debug(true);
 
     let mut open_object_tracer = MaybeUninit::uninit();
+    
     let open_skel = skel_builder.open(&mut open_object_tracer)?;
 
     let mut skel = open_skel.load()?;
@@ -92,6 +124,8 @@ pub fn run_tracing(
     let mut join_handles = vec![];
 
     let mut tx_handles = vec![];   
+
+    let mut xdp_pids = vec![];
 
     //Loop read from a pipe to get pid+container
     if Path::new(&collect_process_info_pipe).exists() {
@@ -118,9 +152,11 @@ pub fn run_tracing(
 
             let node_name = parts[0].to_string();
 
-            let pid:i32 = parts[1].parse().unwrap();
+            let container_pid:i32 = parts[1].parse().unwrap();
 
-            let if_index:i32 = parts[2].parse().unwrap();
+            let pid:i32 = parts[2].parse().unwrap();
+
+            let if_index:i32 = parts[3].parse().unwrap();
 
             let pid_vec = auxiliary::u32_to_u8_array_little_endian(pid);
 
@@ -130,17 +166,17 @@ pub fn run_tracing(
 
             let node_already_traced = hashmap_node_to_pid.get(&node_name.clone()).is_some();
             
-            if node_already_traced{
                 hashmap_pid_to_node.insert(pid, node_name.clone());
                 hashmap_node_to_pid.insert(node_name.clone(), pid);
-                continue;
-            }else {
-                hashmap_pid_to_node.insert(pid, node_name.clone());
-                hashmap_node_to_pid.insert(node_name.clone(), pid);
-
                 let (tx, rx) = mpsc::channel();
                 tx_handles.push(tx);
-                start_tracing(pid, node_name.clone(),if_index, &mut hashmap_links, functions.clone(), binary_path.clone(), &mut skel,rx,&mut join_handles);                
+                start_tracing(pid, node_name.clone(),container_pid,if_index, &mut hashmap_links, functions.clone(), binary_path.clone(), &mut skel,rx,&mut join_handles);                
+            
+            if !node_already_traced{
+                if if_index != 0 {
+                    let pid = start_xdp_in_container(container_pid, if_index);
+                    xdp_pids.push(pid);
+                }
             }
 
         }
@@ -156,12 +192,19 @@ pub fn run_tracing(
         handle.join().unwrap();
     }
 
-    process_uprobes_array_map(&skel.maps.uprobes_counters);
+    for pid in xdp_pids{
+        let pid = Pid::from_raw(pid as i32); // Convert the PID to a Pid type
+        println!("Killing xdp_pid: {}", pid);
+        kill(pid, Signal::SIGKILL).expect("Failed to kill xdp_pid"); 
+    }
+    
 
+    collect_network_info(&skel_maps.maps.network_information);
 
-    write_to_file("/tmp/uprobe_stats.txt".to_string(), format!("{}\n","probes_to_remove:")).expect("Failed to write to stats file");
+    collect_network_delays(&skel_maps.maps.history_delays);
 
     collect_functions_called_array(&skel.maps.history,functions.clone(),hashmap_pid_to_node);
+
 
      // Attempt to delete the file
      match fs::remove_file(collect_process_info_pipe.clone()) {
@@ -175,16 +218,20 @@ pub fn run_tracing(
     Ok(())
 }
 
-pub fn start_tracing(pid:i32,container_name:String,if_index:i32,hashmap_links:&mut HashMap<i32,Vec<Link>>,functions: Vec<String>,binary_path:String,skel:& mut TracerSkel, rx:Receiver<()>,join_handles: &mut Vec<JoinHandle<()>>) {
+pub fn start_tracing(pid:i32,container_name:String,container_pid:i32,if_index:i32,hashmap_links:&mut HashMap<i32,Vec<Link>>,functions: Vec<String>,binary_path:String,skel:& mut TracerSkel, rx:Receiver<()>,join_handles: &mut Vec<JoinHandle<()>>) {
 
-    
     println!("Started tracing for pid {} with node_name {}",pid,container_name);
     hashmap_links.insert(pid, vec![]);
 
-    let xdp_prog = skel.progs.xdp_pass.attach_xdp(if_index).expect("Failed to attach xdp");
-    hashmap_links.get_mut(&pid).unwrap().push(xdp_prog);
-    //hashmap_links_ret.insert(*pid, vec![0;512]);
+    let handle = thread::spawn(move || {
+        monitor_pid(pid, rx).expect("Monitoring failed");
+    });
 
+    join_handles.push(handle);
+
+    // let xdp_prog = skel.progs.xdp_pass.attach_xdp(if_index-1).expect("Failed to attach xdp");
+    // hashmap_links.get_mut(&pid).unwrap().push(xdp_prog);
+    //hashmap_links_ret.insert(*pid, vec![0;512]);
     let container_location = auxiliary::get_overlay2_location(&container_name).unwrap();
 
     let binary_location = format!("{}{}", container_location, binary_path);
@@ -206,12 +253,6 @@ pub fn start_tracing(pid:i32,container_name:String,if_index:i32,hashmap_links:&m
             }
         }
     }
-    
-    let handle = thread::spawn(move || {
-        monitor_pid(pid, rx).expect("Monitoring failed");
-    });
-
-    join_handles.push(handle);
 
     
 }

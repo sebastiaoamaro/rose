@@ -6,6 +6,8 @@ class user_function_condition:
     offset = 0
     call_count = 0
 
+    def to_yaml(self):
+        return {"type":"user_function","binary_location":str(self.binary_location),"symbol":str(self.symbol),"offset":str(self.offset),"call_count":str(self.call_count)}
 
 class file_syscall:
     syscall_name = ""
@@ -24,6 +26,8 @@ class syscall_condition:
 class time_cond:
     time = 0
 
+    def to_yaml(self):
+        return {"type":"time","time":str(self.time)}
 
 def build_time(time_config):
     time = time_cond()
@@ -148,6 +152,8 @@ def get_cond_type_nr(type,condition):
                     return 22
                 case "fdatasync":
                     return "FDATASYNCFILE_STATE"
+                case "fsync":
+                        return "FSYNC_STATE"
         case 3:
             match condition.syscall_name:
                 case "process_start":
@@ -174,5 +180,7 @@ def get_cond_type_nr(type,condition):
                     return 16
                 case "fdatasync":
                     return "FDATASYNC_STATE"
+                case "fsync":
+                    return "FSYNC_STATE"
         case 4:
             return 21

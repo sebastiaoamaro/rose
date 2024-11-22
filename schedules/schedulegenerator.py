@@ -137,6 +137,20 @@ def main():
         output_folder = sys.argv[5]
 
         create_schedules_based_on_offset(output_folder,base_schedule,binary,function_name)
+
+    if mode == "call_count":
+        if len(sys.argv) != 7:
+            print("You must give the fault nr, cond nr and the outputfolder")
+            return
+        fault_name = sys.argv[3]
+        cond_name = sys.argv[4]
+        call_count_max = int(sys.argv[5])
+
+        output_folder = sys.argv[6]
+
+        create_schedules_based_changing_call_count(output_folder,base_schedule,fault_name,cond_name,call_count_max)
+
+
     
 
 def create_schedules_based_on_offset(output_folder,base_schedule,binary,function_name):
@@ -146,6 +160,18 @@ def create_schedules_based_on_offset(output_folder,base_schedule,binary,function
         create_new_schedule(base_schedule,output_folder+"test"+str(offset)+".yaml",offset,function_name)
 
 
+def create_schedules_based_changing_call_count(output_folder,base_schedule,fault_name,cond_name,call_count_max):
+    with open(base_schedule, 'r') as file:
+        data = ordered_load(file, yaml.SafeLoader)
+
+        for i in range(1,call_count_max+1):
+             for j in range(0,len(data["faults"][fault_name]["begin_conditions"])):
+                cond = data["faults"][fault_name]["begin_conditions"][j]
+                if cond_name in cond:
+                    data["faults"][fault_name]["begin_conditions"][j][cond_name]["call_count"] = i
+                    new_file = output_folder+"test"+str(i)+".yaml"
+                    with open(new_file, 'w') as file:
+                        yaml.dump(data, file, Dumper=yaml.SafeDumper, sort_keys=False)
 
 if __name__ == "__main__":
     main()

@@ -166,7 +166,7 @@ int trace_write(struct trace_event_raw_sys_enter *ctx)
 	long unsigned int buff_addr = ctx->args[1];
 
 	const unsigned int local_buff_size = 16;
-    char local_buff[local_buff_size] = { 0x00 };
+	char local_buff[local_buff_size] = { 0x00 };
 
 	bpf_probe_read_user(&local_buff, 16, (void*)buff_addr);
 
@@ -210,7 +210,7 @@ int trace_read_enter(struct trace_event_raw_sys_enter *ctx)
     //unsigned int fd = (unsigned int)ctx->args[0];
 
 	// Store buffer address from arguments in map
-    long unsigned int buff_addr = ctx->args[1];
+	long unsigned int buff_addr = ctx->args[1];
 
 	struct operation_info op_info = {
 		pid,
@@ -251,7 +251,7 @@ int trace_read_exit(struct trace_event_raw_sys_exit *ctx)
 
 	long unsigned int buff_addr = pbuff_addr;
 	const unsigned int local_buff_size = 16;
-    char local_buff[local_buff_size] = { 0x00 };
+	char local_buff[local_buff_size] = { 0x00 };
 
 	long int read_size = 16;
 

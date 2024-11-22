@@ -53,7 +53,7 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
                 if(ready){
                     break;
                 }
-                sleep(0.000001);
+                usleep(1000);
 
             }
         }

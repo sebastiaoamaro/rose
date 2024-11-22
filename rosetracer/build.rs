@@ -14,6 +14,7 @@ fn main() {
     build_bpf_file("uprobes", "src/bpf/uprobes.bpf.c");
     build_bpf_file("tracer", "src/bpf/tracer.bpf.c");
     build_bpf_file("pin_maps", "src/bpf/pin_maps.bpf.c");
+    build_bpf_file("xdp", "src/bpf/xdp.bpf.c");
 }
 
 fn build_bpf_file(bpf_file: &str, file_name: &str) {

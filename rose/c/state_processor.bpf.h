@@ -74,11 +74,10 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 		pid_to_use,
 		state_key
 	};
-
+	
 	struct info_state *current_state;
 
 	current_state = bpf_map_lookup_elem(relevant_state_info,&information_pid);
-
 	if (current_state){
 		current_state->current_value++;
 		int value = current_state->current_value;
@@ -263,18 +262,6 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 			}
 		}
 
-		//THIS SHOULD WORK SINCE WE ALWAYS GO OVER EVERY FAULT
-		// for(int i = 0;i <STATE_PROPERTIES_COUNT;i++ ){
-		// if(state_condition>0 && state_condition<(STATE_PROPERTIES_COUNT+MAX_FUNCTIONS)){
-		// 	if (fault->initial.conditions_match[state_condition]){
-		// 		run+=1;
-		// 		fault->run = run;
-		// 		//bpf_printk("Incremented value in run %d \n",fault->initial.conditions_match[state_condition]);
-		// 	}
-
-		// }
-		//	}
-
 		int zero = 0;
 		//bpf_printk("Run is %d and rc %d \n",run,relevant_conditions);
 		if (run >= relevant_conditions){
@@ -453,7 +440,7 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 			}
 
 		}else{
-			//bpf_printk("Fault is ready to run with type %d at pid %d\n",fault_type,pid_to_target);
+			bpf_printk("Fault is ready to run with type %d at pid %d\n",fault_type,pid_to_target);
 			__u64 time = bpf_ktime_get_ns();
 			__u64 time_ms = time / 1000000;
 			fault->start_time = time_ms;
@@ -473,11 +460,11 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 		if (fault->repeat){
 			bpf_printk("Repeat on \n");
 			fault->done = 0;
+			for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
+				fault->initial.conditions_match[i] = 0;
+			}
 		}
 		//bpf_printk("Cleared conditions \n");
-		for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
-			fault->initial.conditions_match[i] = 0;
-		}
 
 		return 0;
 
@@ -497,18 +484,18 @@ static inline void inject_override(int pid,int fault,struct pt_regs* ctx,int sys
 
 
 	if (description_of_fault){
-		//bpf_printk("Fault is ON \n");
+		//bpf_printk("Fault is ON occurrences is %d counter is %d \n",description_of_fault->occurences,description_of_fault->counter);
 			if (description_of_fault->on){
 				if (description_of_fault->counter < description_of_fault->occurences){
 					description_of_fault->counter+=1;
 					//u64 ts = bpf_ktime_get_ns();
-					//bpf_printk("Injected fault %d ocurrence: %d with return value %d at ts %u \n",fault,description_of_fault->counter,description_of_fault->return_value,ts);
+					bpf_printk("Injected fault %d ocurrence: %d with return value %d\n",fault,description_of_fault->occurences,description_of_fault->return_value);
 					bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
 
 				}
 				else if(description_of_fault->occurences == 0){
 					//u64 ts = bpf_ktime_get_ns();
-					//bpf_printk("Injected fault %d with return value %d at ts %u \n",fault,description_of_fault->return_value,ts);
+					bpf_printk("Injected fault %d with return value %d\n",fault,description_of_fault->return_value);
 					description_of_fault->on = 0;
 					bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
 

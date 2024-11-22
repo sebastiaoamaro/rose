@@ -3,7 +3,7 @@ use libbpf_rs::Link;
 use libbpf_rs::{MapCore, MapFlags};
 use libbpf_rs::UprobeOpts;
 use pin_maps::PinMapsSkelBuilder;
-use crate::auxiliary;
+use crate::auxiliary::{self, start_xdp_in_container};
 use crate::auxiliary::collect_functions_called_array;
 use crate::auxiliary::write_to_file;
 use libbpf_rs::skel::OpenSkel as _;
@@ -118,7 +118,7 @@ pub fn run_tracing(
 
     collect_functions_called_array(&skel.maps.history,functions.clone(),hashmap_pid_to_node);
 
-    skel_maps.maps.called_functions.unpin("/sys/fs/bpf/history").expect("Failed to unpin \n");
+    skel_maps.maps.history.unpin("/sys/fs/bpf/history").expect("Failed to unpin \n");
     skel_maps.maps.uprobes_counters.unpin("/sys/fs/bpf/uprobes_counters").expect("Failed to unpin \n");
 
     
@@ -130,15 +130,16 @@ pub fn run_tracing(
 
 }
 
-pub fn start_tracing(pid:i32,container_name:String,veth_index:u32,hashmap_links:&mut HashMap<i32,Vec<Link>>,functions: Vec<String>,binary_path:String,skel:& mut TracerSkel,unattachable_probes:&mut Vec<u64>){
+pub fn start_tracing(pid:i32,container_name:String,if_index:u32,hashmap_links:&mut HashMap<i32,Vec<Link>>,functions: Vec<String>,binary_path:String,skel:& mut TracerSkel,unattachable_probes:&mut Vec<u64>){
    
     println!("Started tracing for pid {} with node_name {}",pid,container_name);
 
     //let _tracepoint_sys_enter = skel.progs.trace_sys_enter.attach_tracepoint("raw_syscalls", "sys_enter").expect("Failed to attach sys_enter");    
     hashmap_links.insert(pid, vec![]);
 
-    let xdp_prog = skel.progs.xdp_pass.attach_xdp(veth_index as i32).expect("Failed to attach xdp");
-    hashmap_links.get_mut(&pid).unwrap().push(xdp_prog);
+    start_xdp_in_container(pid, (if_index-1) as i32);
+    // let xdp_prog = skel.progs.xdp_pass.attach_xdp(veth_index as i32).expect("Failed to attach xdp");
+    // hashmap_links.get_mut(&pid).unwrap().push(xdp_prog);
 
     let container_location = auxiliary::get_overlay2_location(&container_name).unwrap();
 

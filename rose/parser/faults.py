@@ -1,4 +1,4 @@
-from conditions import build_file_syscall, build_syscall, build_user_function, get_cond_type_nr,build_fault_conditions,file_syscall,build_time
+from parser.conditions import build_file_syscall, build_syscall, build_user_function, get_cond_type_nr,build_fault_conditions,file_syscall,build_time
 
 class Fault:
     name = ""
@@ -17,6 +17,30 @@ class Fault:
     trigger_statement_begin = ""
     trigger_statement_end = ""
     exit = 0
+
+    def to_yaml(self):
+        fault = {}
+        fault["type"] = self.type
+        fault["target"] = self.target
+        fault["traced"] = self.traced
+        fault["duration"] = self.duration
+        fault["begin_conditions"] = []
+        cond_count = 0
+        for condition in self.begin_conditions:
+            condition_nr = "condition_nr" + str(cond_count)
+            fault["begin_conditions"].append({condition_nr:condition.to_yaml()})
+            cond_count+=1
+
+        if self.type == "block_ips":
+            fault["ips_in"] = []
+            fault["ips_out"] = []
+
+            for ip in self.fault_specifics.nodes_in:
+                fault["ips_in"].append(ip)
+            for ip in self.fault_specifics.nodes_out:
+                fault["ips_out"].append(ip)
+        return fault
+
 
 #Type of faults
 class file_system_operation:
@@ -88,10 +112,10 @@ def createFault(name,faultconfig,nodes_dict):
         nodes_in = []
         nodes_out = []
         if "ips_in" in faultconfig:
-            for node in faultconfig['ips_in'].split():
+            for node in faultconfig['ips_in']:
                 nodes_in.append(node)
         if "ips_out" in faultconfig:
-            for node in faultconfig['ips_out'].split():
+            for node in faultconfig['ips_out']:
                 nodes_out.append(node)
 
 
@@ -176,8 +200,8 @@ def createFault(name,faultconfig,nodes_dict):
     fault.begin_conditions = []
 
     conditions_count = 0
-    for name,condition in begin_conditions.items():
-
+    for condition in begin_conditions:
+        condition = next(iter(condition.values()))
         type_cond = condition['type']
         if type_cond == 'trigger_statement':
             continue
@@ -511,5 +535,7 @@ def get_fault_type_nr(type,fault_specifics):
                     return 20
                 case "fdatasync":
                     return "FDATASYNCFILE_FAULT"
+                case "fsync":
+                    return "FSYNC"
     return 0
 

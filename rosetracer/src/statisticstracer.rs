@@ -128,7 +128,7 @@ pub fn run_tracing(
     }
 
 
-    skel_maps.maps.called_functions.unpin("/sys/fs/bpf/called_functions").expect("Failed to unpin \n");
+    skel_maps.maps.history.unpin("/sys/fs/bpf/history").expect("Failed to unpin \n");
     skel_maps.maps.uprobes_counters.unpin("/sys/fs/bpf/uprobes_counters").expect("Failed to unpin \n");
 
     println!("Done tracing");

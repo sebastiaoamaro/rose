@@ -155,7 +155,7 @@ static inline bool string_contains(char *str1,char *str2,int size) {
     #pragma unroll
     for (int i = 0; i < FILENAME_MAX; ++i){
         if (comparand[count] == comparand2[i] ){
-            //bpf_printk("%c and %c \n",comparand[count],comparand2[i]);
+            // bpf_printk("%c and %c \n",comparand[count],comparand2[i]);
             count++;
             if(str_len == count){
                 return true; 
@@ -163,6 +163,7 @@ static inline bool string_contains(char *str1,char *str2,int size) {
             continue;
         }
         if(str_len == count){
+            bpf_printk("They are equal str_len is %d \n",str_len);
             return true; 
         }
     }

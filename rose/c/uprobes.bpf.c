@@ -149,7 +149,7 @@ static void switch_leader(struct pt_regs *ctx)
 SEC("kprobe/dummy_kprobe")
 int BPF_KPROBE(dummy_kprobe)
 {
-	bpf_printk("In uprobe for cond_pos:%d \n",cond_pos);
+	//bpf_printk("In uprobe for cond_pos:%d \n",cond_pos);
 	if (primary_function){
 		switch_leader(ctx);
 	}else{

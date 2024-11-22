@@ -162,7 +162,7 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 		struct file *file = get_file_from_fd(fd);
 
 		if(!file){
-			//bpf_printk("File not found \n");
+			bpf_printk("File not found \n");
 			return 2;
 		}
 
@@ -190,11 +190,16 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 			sys_info.file_specific_code
 		};
 		struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&info_key);
-		bpf_printk("File is %s \n",&(fi.filename[fi.offset]));
+		//bpf_printk("File is %s \n",&(fi.filename[fi.offset]));
 		if(file_open){
-			//bpf_printk("Comparing %s and %s \n",&(fi.filename[fi.offset]),file_open->filename);
-			if(string_contains(file_open,&(fi.filename[fi.offset]),fi.offset)){
-				bpf_printk("Found %s and %s \n",&(fi.filename[fi.offset]),file_open->filename);
+			if (fi.size == 0){
+				return 0;
+			}
+			//bpf_printk("Comparing %s and %s \n with offset %d",&(fi.filename[fi.offset]),file_open->filename,fi.size);
+			if(string_contains(file_open->filename,&(fi.filename[fi.offset]),fi.size)){
+
+				bpf_printk("Size %d found %s and %s \n",fi.size,&(fi.filename[fi.offset]),file_open->filename);
+				
 				struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);
 				if(fds){
 					u64 position = fds->size;
@@ -210,6 +215,8 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 					&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 				inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 
+			}else{
+				return 0;
 			}
 		}
 	}
@@ -731,7 +738,21 @@ int BPF_KPROBE(__x64_sys_fsync,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	//bpf_printk("Detected fsync PID is %d \n",pid);
+		int fd = PT_REGS_PARM1_CORE(regs);
+
+	struct sys_info sys_info = {
+		fd,
+		FSYNC_STATE,
+		FSYNCFILE_STATE,
+		FSYNC,
+		FSYNC_FILE,
+		fault_count,
+		time_only
+	};
+
+	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
+	inject_override(pid,sys_info.general_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
+	
 }
 
 SEC("ksyscall/fdatasync")

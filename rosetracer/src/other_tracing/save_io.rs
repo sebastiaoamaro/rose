@@ -29,6 +29,7 @@ pub fn run_tracing(
 
     auxiliary::bump_memlock_rlimit()?;
     let mut open_object = MaybeUninit::uninit();
+    
     let mut open_skel = skel_builder.open(&mut open_object)?;
 
     open_skel.maps.rodata_data.pid_counter = pid_count as i32;
