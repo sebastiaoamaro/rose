@@ -5,7 +5,7 @@ TARGET_DIR=$1
 # cleanup_script="/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/cleanup.sh"
 # result_folder="/home/sebastiaoamaro/phd/torefidevel/tests/bugdetection/redisraft/currentrun"
 
-condition_script="/home/sebastiaoamaro/phd/rw/Anduril/ground_truth/zookeeper-2247/detectbug.sh"
+condition_script="/home/sebastiaoamaro/phd/rw/Anduril/ground_truth/zookeeper-4203/detectbug.sh"
 cleanup_script="echo No cleanup"
 result_folder="/home/sebastiaoamaro/phd/torefidevel/tests/bugdetection/zookeeper/currentrun"
 

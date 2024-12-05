@@ -340,7 +340,7 @@ int main(int argc, char **argv)
 	}
 
 	cleanup:
-	sleep(15);
+	sleep(60);
 	printf("Running cleanup \n");
 
 	for(int i =0; i< NODE_COUNT;i++){

@@ -2,21 +2,22 @@ execution_plan:
   tracer:
     tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
+
 nodes:
-  zookeeper:
+  hdfs:
     container: false
-    script: /home/sebastiaoamaro/phd/rw/Anduril/ground_truth/zookeeper-4203/run-original-test.sh
+    script: /home/sebastiaoamaro/phd/rw/Anduril/experiment/hdfs-15032/run-original-test.sh
+
 faults:
-  write_fail:
+  syscall_fail:
     type: syscall
     details:
-      name: accept
-      return_value: -5
-      success: false
-    target: zookeeper
-    traced: zookeeper
+      name: connect
+      return_value: -111
+    target: hdfs
+    traced: hdfs
     begin_conditions:
     - condition1:
         type: syscall
-        syscall_name: accept
-        call_count: 16
+        syscall_name: connect
+        call_count: 65

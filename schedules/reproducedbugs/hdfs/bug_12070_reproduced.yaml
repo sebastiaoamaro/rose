@@ -1,0 +1,24 @@
+execution_plan:
+  tracer:
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+    pipe_location: /tmp/containerpid
+
+nodes:
+  hdfs:
+    container: false
+    script: /home/sebastiaoamaro/phd/rw/Anduril/experiment/hdfs-12070/run-original-test.sh
+
+faults:
+  syscall_fail:
+    type: syscall
+    details:
+      name: newfstatat
+      return_value: -13
+    target: hdfs
+    traced: hdfs
+    begin_conditions:
+    - condition1:
+        type: file_syscall
+        syscall_name: newfstatat
+        file_name: .meta
+        call_count: 10

@@ -80,6 +80,7 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 	current_state = bpf_map_lookup_elem(relevant_state_info,&information_pid);
 	if (current_state){
 		current_state->current_value++;
+		//bpf_printk("Increment value is %d \n",current_state->current_value);
 		int value = current_state->current_value;
 		if(current_state->relevant_states){
 			for (int i=0;i<fault_count;i++){

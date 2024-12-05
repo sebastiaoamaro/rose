@@ -1,18 +1,22 @@
+execution_plan:
+  tracer:
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+    pipe_location: /tmp/containerpid
 nodes:
   zookeeper:
     container: false
-    script: /home/sebastiaoamaro/phd/rw/Anduril/ground_truth/zookeeper-2247/run-original-test.sh
+    script: /home/sebastiaoamaro/phd/rw/Anduril/ground_truth/zookeeper-4203/run-original-test.sh
 faults:
   write_fail:
-    type: file_system_operation
+    type: syscall
     details:
-      name: fdatasync
+      name: accept
       return_value: -5
       success: false
     target: zookeeper
     traced: zookeeper
     begin_conditions:
     - condition1:
-        type: file_syscall
-        syscall_name: fdatasync
+        type: syscall
+        syscall_name: accept
         call_count: 8

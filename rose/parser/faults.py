@@ -81,7 +81,7 @@ def parse_faults(faults,nodes):
 def createFault(name,faultconfig,nodes_dict):
 
     fault = Fault()
-
+    print(faultconfig)
     fault.name = name
 
     fault.type = faultconfig['type']
@@ -139,12 +139,15 @@ def createFault(name,faultconfig,nodes_dict):
             if 'directory_name' in faultconfig['details']:
                 file_system_operation_fault.directory_name = faultconfig['details']['directory_name']
 
-            # success = faultconfig['details']['success']
-            
-            # if success == "True":
-            #     file_system_operation_fault.success = 1
-            # else:
-            #     file_system_operation_fault.success = 0
+            if 'sucess' in faultconfig['details']:
+
+                success = faultconfig['details']['success']
+                
+                if success:
+                    file_system_operation_fault.success = 1
+                else:
+                    file_system_operation_fault.success = 0
+
             file_system_operation_fault.return_value = faultconfig['details']['return_value']
 
             fault.fault_specifics = file_system_operation_fault
@@ -154,6 +157,15 @@ def createFault(name,faultconfig,nodes_dict):
         syscall_fault = syscall()
         syscall_fault.syscall_name = faultconfig['details']['name']
         syscall_fault.return_value = faultconfig['details']['return_value']
+
+        if 'success' in faultconfig['details']:
+
+            success = faultconfig['details']['success']
+
+            if success:
+                syscall_fault.success = 1
+            else:
+                syscall_fault.success = 0
 
         fault.fault_specifics = syscall_fault
 
@@ -178,16 +190,16 @@ def createFault(name,faultconfig,nodes_dict):
             fault.target_nr = -2
 
     if 'repeatable' in faultconfig:
-
         repeatable = faultconfig['repeatable']
-
-        if(repeatable == "True"):
+        print(repeatable)
+        if(repeatable):
             fault.repeatable = 1
 
     if 'duration' in faultconfig:
         fault.duration = faultconfig['duration']
 
     if 'occurrences' in faultconfig:
+        print(faultconfig['occurrences'])
         fault.occurrences = faultconfig['occurrences']
 
     if 'exit' in faultconfig:
@@ -503,39 +515,55 @@ def get_fault_type_nr(type,fault_specifics):
         case "process_restart":
             return 22
         case "syscall":
-            match fault_specifics.syscall_name:
-                #Needs success = 0
-                case "write":
-                    return 2
-                case "read":
-                    return 3
-                case "open":
-                    return 15
-                case "mkdir":
-                    return 23
-                case "newfstatat":
-                    return 17
-                case "openat":
-                    return 18
-                case "fdatasync":
-                    return "FDATASYNC_FAULT"
+            if fault_specifics.success == 0:
+                match fault_specifics.syscall_name:
+                    #Needs success = 0
+                    case "write":
+                        return 2
+                    case "read":
+                        return 3
+                    case "open":
+                        return 15
+                    case "mkdir":
+                        return 23
+                    case "newfstatat":
+                        return "NEWFSTATAT_FAULT"
+                    case "openat":
+                        return "OPENAT_FAULT"
+                    case "fdatasync":
+                        return "FDATASYNC_FAULT"
+                    case "pwrite64":
+                        return "PWRITE64_FAULT"
+                    case "accept":
+                        return "ACCEPT_FAULT"
+                    case "close":
+                        return "CLOSE_FAULT"
+                    case "futex":
+                        return "FUTEX_FAULT"
+                    case "connect":
+                        return "CONNECT_FAULT"
+                    
+            if fault_specifics.success == 1:
+                match fault_specifics.syscall_name:
+                    case "fdatasync":
+                        return "FDATASYNC_RET_FAULT"
         case "file_system_operation":
-            match fault_specifics.syscall_name:
-                case "write":
-                    return 8
-                case "read":
-                    return 9
-                case "mkdir":
-                    return 23
-                case "newfstatat":
-                    return 24
-                case "openat":
-                    return 25
-                case "open":
-                    return 20
-                case "fdatasync":
-                    return "FDATASYNCFILE_FAULT"
-                case "fsync":
-                    return "FSYNC"
-    return 0
+            if fault_specifics.success == 0:
+                match fault_specifics.syscall_name:
+                    case "write":
+                        return 8
+                    case "read":
+                        return 9
+                    case "mkdir":
+                        return 23
+                    case "newfstatat":
+                        return 24
+                    case "openat":
+                        return "OPENAT_FILE"
+                    case "open":
+                        return 20
+                    case "fdatasync":
+                        return "FDATASYNCFILE_FAULT"
+                    case "fsync":
+                        return "FSYNC"
 

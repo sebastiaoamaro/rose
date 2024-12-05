@@ -443,7 +443,7 @@ void print_fault_schedule(execution_plan* plan, node* nodes, fault * faults,trac
 			case DROP_PACKETS:
 				break;
 			case WRITE_FILE: case READ_FILE: case WRITE_RET: case READ_RET: case OPEN:
-			case MKDIR: case NEWFSTATAT:  case OPENAT: case NEWFSTATAT_RET: case OPENAT_RET:
+			case MKDIR: case NEWFSTATAT_FAULT:  case OPENAT_FAULT: case NEWFSTATAT_RET: case OPENAT_RET:
 				break;
 			case PROCESS_KILL: case PROCESS_STOP:
 				break;

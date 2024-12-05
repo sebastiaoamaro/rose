@@ -53,12 +53,13 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
                 if(ready){
                     break;
                 }
-                usleep(1000);
+                sleep(1);
 
             }
         }
         int err = execvpe(command,args,env);
-        printf("Err in execv is %d and errno is %d \n",err,errno);
+        if (err < 0)
+            printf("Err in execv is %d and errno is %d for command %s \n",command,err,errno);
         exit(0);
     }
     else

@@ -134,7 +134,7 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 
 	
 		int id = ctx->id;
-		if (id == 0 || id == 1 || id == 257 || id == 82 || id == 232 || id == 233 || id == 281 || id == 202 || id ==237 || id == 39 || id == 8 || id == 74){
+		if (id == 0 || id == 1 || id == 82 || id == 232 || id == 233 || id == 281 || id == 202 || id ==237 || id == 39 || id == 8 || id == 74){
 			return 0;
 		}
 

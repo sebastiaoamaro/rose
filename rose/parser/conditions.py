@@ -145,15 +145,17 @@ def get_cond_type_nr(type,condition):
         case 2:
             match condition.syscall_name:
                 case "openat":
-                    return 20
+                    return "OPENAT_SPECIFIC"
                 case "newfstatat":
-                    return 19
+                    return "NEWFSTATAT_FILE_STATE"
                 case "write":
                     return 22
                 case "fdatasync":
-                    return "FDATASYNCFILE_STATE"
+                    return "FDATASYNC_FILE_STATE"
                 case "fsync":
-                        return "FSYNC_STATE"
+                    return "FSYNC_STATE"
+                case "read":
+                    return "READ_FILE"
         case 3:
             match condition.syscall_name:
                 case "process_start":
@@ -175,12 +177,22 @@ def get_cond_type_nr(type,condition):
                 case "mkdir":
                     return 14
                 case "newfstatat":
-                    return 15
+                    return "NEWFSTATAT_STATE"
                 case "openat":
                     return 16
                 case "fdatasync":
                     return "FDATASYNC_STATE"
                 case "fsync":
                     return "FSYNC_STATE"
+                case "pwrite64":
+                    return "PWRITE64_STATE"
+                case "accept":
+                    return "ACCEPT_STATE"
+                case "close":
+                    return "CLOSE_STATE"
+                case "futex":
+                    return "FUTEX_STATE"
+                case "connect":
+                    return "CONNECT_STATE"
         case 4:
             return 21

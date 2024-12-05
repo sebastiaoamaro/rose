@@ -4,24 +4,23 @@ execution_plan:
     pipe_location: /tmp/containerpid
 
 nodes:
-  zookeeper:
+  kafka:
     container: false
-    script: /home/sebastiaoamaro/phd/rw/Anduril/ground_truth/zookeeper-2247/run-original-test.sh
+    script: /home/sebastiaoamaro/phd/rw/Anduril/experiment/kafka-9374/run-original-test.sh
 
 faults:
-  write_fail:
+  read_fail:
     type: syscall
     details:
-      name: write
-      return_value: -5
+      name: connect
+      return_value: -1
       #success: True
       repeatable: True
     #repeatable: True
-    target: zookeeper
-    traced: zookeeper
+    target: kafka
+    traced: kafka
     begin_conditions:
     - condition1:
-        type: file_syscall
-        syscall_name: write
-        file_name: log.100000001
-        call_count: 5
+        type: syscall
+        syscall_name: connect
+        call_count: 20

@@ -262,20 +262,17 @@ node* build_nodes(){
 fault* build_faults_extra(){
     fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));
     fault_details fault_details0;
-    file_system_operation file_syscall0;
-    file_syscall0.syscall = 8;
-    file_syscall0.syscall_condition = 22;
-    strcpy(file_syscall0.directory_name,"");
-    strcpy(file_syscall0.file_name,"/tmp/zookeeper_test_file");
-    file_syscall0.success = 0;
-    file_syscall0.return_value = -1;
-    fault_details0.file_system_op = file_syscall0;
-    create_fault(&faults[0],"write_fail",0,0,8,3,fault_details0,0,0,0,1,0);
+    syscall_operation syscall0;
+    syscall0.syscall = 3;
+    syscall0.success = 0;
+    syscall0.return_value = 0;
+    fault_details0.syscall = syscall0;
+    create_fault(&faults[0],"write_fail",0,0,3,2,fault_details0,0,0,0,1,0);
 
     fault_condition fault_condition_0_0;
     file_system_call file_syscall_0_0;
     fault_condition_0_0.type = FILE_SYSCALL;
-    build_file_syscall(&file_syscall_0_0,FDATASYNCFILE_STATE,"","",5);
+    build_file_syscall(&file_syscall_0_0,READ_FILE,"","snapshot.0",1);
     fault_condition_0_0.condition.file_system_call = file_syscall_0_0;
     add_begin_condition(&faults[0],fault_condition_0_0,0);
 
