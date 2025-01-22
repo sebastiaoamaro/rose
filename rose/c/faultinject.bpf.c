@@ -112,6 +112,7 @@ const volatile int time_only = 0;
 // static void call_state_processor(struct sys_info sys_info,int pid){
 // 	process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes);
 // }
+
 /* Declare the external kfunc */
 extern int bpf_strstr(const char* str,const char* str2, int str_len) __ksym;
 
@@ -447,12 +448,12 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 
 	if(file_open){
 		//bpf_printk("Filename is %s \n",file_open->filename);
-		//bpf_printk("In open comparing %s and %s \n",path,file_open->filename);
+		bpf_printk("In open comparing %s and %s \n",path,file_open->filename);
 
 		int string_equal = 0;
 		for (int i = 0; i < 4; i++){
 			const char str1[64];
-    	bpf_probe_read(&str1, sizeof(str1),path+i*64);
+    		bpf_probe_read(&str1, sizeof(str1),path+i*64);
 			int result = bpf_strstr(file_open->filename,str1,file_open->size);
 			if (result){
 				bpf_printk("Found matching string in iteration %d \n",i);
@@ -466,17 +467,11 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 			return 0;
 		}
 
-		//bpf_printk("New path is %s\n",path);
-		//bpf_printk("Filename is %s \n",file_open->filename);
+		bpf_printk("Found %s and %s \n",file_open->filename,path);
+		process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
+			&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
+		inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 
-		//if(string_contains(file_open->filename,new_path,file_open->size)){
-
-			bpf_printk("Found %s and %s \n",file_open->filename,path);
-			process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
-				&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
-			inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
-
-		//}
 	}
 
 	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,
@@ -648,7 +643,7 @@ int BPF_KPROBE(__x64_sys_newfstatat,struct pt_regs *regs)
 				bpf_probe_read(&str1, sizeof(str1),path+i*64);
 				int result = bpf_strstr(file_open->filename,str1,file_open->size);
 				if (result){
-					bpf_printk("Found matching string in iteration %d \n",i);
+					//bpf_printk("Found matching string %s and %s \n",file_open->filename,path);
 					string_equal = result;
 					break;
 				}
@@ -699,9 +694,9 @@ int BPF_KSYSCALL(clone,int flags)
     int THREAD_FLAG = 0x10000;
 
 
-	if (!(flags & THREAD_FLAG)){
-		return 0;
-	}
+		if (!(flags & THREAD_FLAG)){
+			return 0;
+		}
 
 	int result = process_current_state(THREADS_CREATED,pid,fault_count,time_only,
 		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
@@ -939,6 +934,15 @@ int BPF_KPROBE(__x64_sys_accept,struct pt_regs *regs)
 SEC("ksyscall/futex")
 int BPF_KPROBE(__x64_sys_futex,struct pt_regs *regs)
 {
+
+	int op = (int) PT_REGS_PARM2_CORE(regs);
+
+	if (op != 0 & 128){
+		//bpf_printk("Not a wait op \n");
+		return 0;
+	}
+	//bpf_printk("Op value is %d \n",op);
+
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;

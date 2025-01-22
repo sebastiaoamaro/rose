@@ -150,7 +150,6 @@ static inline void process_counter(int stateinfo,int state_condition_value, int 
 	maps.auxiliary_info	 = auxiliary_info;
 	maps.nodes_status = nodes_status;
 
-
 	data.state_condition = stateinfo;
 	data.state_condition_value = state_condition_value;
 	data.pid_to_use = pid_to_use;
@@ -410,6 +409,14 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 				fault->timestamp = time;
 				bpf_send_signal(9);
 			}
+			if (fault_type == PROCESS_STOP){
+				bpf_printk("Stopping with bpf_send_signal pid %d\n", pid_to_target);
+				__u64 time = bpf_ktime_get_ns();
+				__u64 time_ms = time / 1000000;
+				fault->start_time = time_ms;
+				fault->timestamp = time;
+				//bpf_send_signal(19);
+			}
 
 			//Send to userspace a message 
 			struct event *e;
@@ -441,7 +448,7 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 			}
 
 		}else{
-			bpf_printk("Fault is ready to run with type %d at pid %d\n",fault_type,pid_to_target);
+			bpf_printk("Fault is ready to run with type %d at pid %d \n",fault_type,pid_to_target);
 			__u64 time = bpf_ktime_get_ns();
 			__u64 time_ms = time / 1000000;
 			fault->start_time = time_ms;

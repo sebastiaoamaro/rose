@@ -32,6 +32,7 @@ mod pin_maps{
 use tracer::*;
 
 pub fn run_tracing(
+    mode:String,
     functions: Vec<String>,
     binary_path:String,
     node_and_pid:String

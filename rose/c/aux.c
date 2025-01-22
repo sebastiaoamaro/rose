@@ -390,14 +390,14 @@ void pause_process(void* args){
 	char *name = ((struct process_fault_args*)args)->name;
 
 	send_signal(pid,SIGSTOP,name);
-	printf("Sleeping for %d \n",duration);
+	printf("Sleeping for %d before sending SIGCONT\n",duration);
 	sleep_for_ms(duration);
 	send_signal(pid,SIGCONT,name);
 }
 
 
 int send_signal(int pid, int signal,char* node_name){
-	printf("Sending %d to %s \n",signal,node_name);
+	printf("Sending %d to %s with pid %d \n",signal,node_name,pid);
 	kill(pid,signal);
 }
 

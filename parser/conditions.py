@@ -6,6 +6,8 @@ class user_function_condition:
     offset = 0
     call_count = 0
 
+    def to_yaml(self):
+        return {"type":"user_function","binary_location":str(self.binary_location),"symbol":str(self.symbol),"offset":str(self.offset),"call_count":str(self.call_count)}
 
 class file_syscall:
     syscall_name = ""
@@ -20,6 +22,19 @@ class syscall_condition:
     cond_nr = 0
     call_count = 0
     cond_nr = 0
+
+class time_cond:
+    time = 0
+
+    def to_yaml(self):
+        return {"type":"time","time":int(self.time)}
+
+def build_time(time_config):
+    time = time_cond()
+
+    time.time = time_config['time']
+
+    return time
 
 def build_user_function(user_function_config):
     user_function = user_function_condition()
@@ -110,10 +125,10 @@ def build_fault_conditions(file,fault_nr,begin_conditions):
             fault_condition = fault_condition.replace("#offset",str(condition.offset))
             
             file.write(fault_condition)
-        if isinstance(condition,int):
+        if isinstance(condition,time_cond):
             fault_condition = """    fault_condition fault_condition_#faultnr_#condnr;\n"""
             fault_condition += """    int time_#faultnr_#condnr = #time;\n"""
-            fault_condition = fault_condition.replace("#time",str(condition))
+            fault_condition = fault_condition.replace("#time",str(condition.time))
             fault_condition += """    fault_condition_#faultnr_#condnr.type = TIME;\n"""
             fault_condition += """    fault_condition_#faultnr_#condnr.condition.time = time_#faultnr_#condnr;\n"""        
             fault_condition += """    add_begin_condition(&faults[#faultnr],fault_condition_#faultnr_#condnr,#condnr);\n"""
@@ -130,13 +145,17 @@ def get_cond_type_nr(type,condition):
         case 2:
             match condition.syscall_name:
                 case "openat":
-                    return 20
+                    return "OPENAT_SPECIFIC"
                 case "newfstatat":
-                    return 19
+                    return "NEWFSTATAT_FILE_STATE"
                 case "write":
                     return 22
                 case "fdatasync":
-                    return "FDATASYNCFILE_STATE"
+                    return "FDATASYNC_FILE_STATE"
+                case "fsync":
+                    return "FSYNC_STATE"
+                case "read":
+                    return "READ_FILE"
         case 3:
             match condition.syscall_name:
                 case "process_start":
@@ -158,10 +177,22 @@ def get_cond_type_nr(type,condition):
                 case "mkdir":
                     return 14
                 case "newfstatat":
-                    return 15
+                    return "NEWFSTATAT_STATE"
                 case "openat":
                     return 16
                 case "fdatasync":
                     return "FDATASYNC_STATE"
+                case "fsync":
+                    return "FSYNC_STATE"
+                case "pwrite64":
+                    return "PWRITE64_STATE"
+                case "accept":
+                    return "ACCEPT_STATE"
+                case "close":
+                    return "CLOSE_STATE"
+                case "futex":
+                    return "FUTEX_STATE"
+                case "connect":
+                    return "CONNECT_STATE"
         case 4:
             return 21

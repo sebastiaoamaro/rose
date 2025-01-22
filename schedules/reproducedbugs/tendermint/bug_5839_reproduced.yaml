@@ -1,40 +1,53 @@
+execution_plan:
+  tracer:
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+    pipe_location: /tmp/containerpid
+  cleanup:
+    duration: 30
+
 nodes:
   tendermint:
-    script: schedules/reproducedbugs/tendermint.sh
+    container: false
+    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/tendermint/tendermint.sh
 faults:
   change_fstat_result:
-    type: file_system_operation
+    type: syscall
     details:
       name: newfstatat
-      file_name: /.tendermint/data
       return_value: -1
       success: False
 
+    traced: tendermint
     target: tendermint
     begin_conditions:
-      condition1:
-        type: user_function
-        binary_location: "/home/sebastiaoamaro/phd/tendermint/build/tendermint"
-        symbol: github.com/tendermint/tendermint/libs/os.EnsureDir
-        call_count: 1
-      condition2:
-        type: syscall
-        syscall_name: newfstatat
-        call_count: 1
-        
+      - condition1:
+          type: user_function
+          binary_location: "/home/sebastiaoamaro/phd/torefidevel/rw/tendermint/build/tendermint"
+          symbol: github.com/tendermint/tendermint/libs/os.EnsureDir
+          call_count: 1
+      - condition2:
+          type: file_syscall
+          syscall_name: newfstatat
+          file_name: /.tendermint/data
+          call_count: 1
+          
   change_open_result:
-    type: file_system_operation
+    type: syscall
     details:
       name: openat
-      file_name: /.tendermint/data/priv.json
       return_value: -1
       success: False
     target: tendermint
     
     begin_conditions:
-      condition1:
-        type: user_function
-        binary_location: "/home/sebastiaoamaro/phd/tendermint/build/tendermint"
-        symbol: github.com/tendermint/tendermint/libs/os.EnsureDir
-        call_count: 3
+      - condition1:
+          type: user_function
+          binary_location: "/home/sebastiaoamaro/phd/torefidevel/rw/tendermint/build/tendermint"
+          symbol: github.com/tendermint/tendermint/libs/os.EnsureDir
+          call_count: 3
+      - condition2:
+          type: file_syscall
+          syscall_name: openat
+          file_name: /.tendermint/data/priv
+          call_count: 1
 

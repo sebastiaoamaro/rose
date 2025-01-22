@@ -18,8 +18,10 @@ def parse_execution_plan(plan):
     if "setup" in plan:
         setup = Setup()
 
-        setup.script = plan['setup']['script']
-        setup.duration = int(plan['setup']['duration'])
+        if "script" in plan['setup']:
+            setup.script = plan['setup']['script']
+        if "duration" in plan['setup']:
+            setup.duration = int(plan['setup']['duration'])
 
         exe_plan.setup = setup
 
@@ -28,18 +30,21 @@ def parse_execution_plan(plan):
 
         workload.script = plan['workload']['script']
 
-        wait_time = 0;
+        wait_time = 0
         if "wait_time" in plan['workload']:
             wait_time = int(plan['workload']['wait_time'])
+            
+        workload.wait_time = wait_time
 
         exe_plan.workload = workload
-        exe_plan.wait_time = wait_time
 
     if "cleanup" in plan:
         cleanup = Cleanup()
 
-        cleanup.script = plan['cleanup']['script']
-        cleanup.duration = int(plan['cleanup']['duration']) 
+        if "script" in plan['cleanup']:
+            cleanup.script = plan['cleanup']['script']
+        if "duration" in plan['cleanup']:
+            cleanup.duration = int(plan['cleanup']['duration']) 
 
         exe_plan.cleanup = cleanup
 
@@ -52,7 +57,7 @@ def build_plan_cfile(file,plan):
     exe_plan_malloc = """    execution_plan* exe_plan = ( execution_plan*)malloc(1 * sizeof(execution_plan));\n"""
     file.write(exe_plan_malloc)
 
-    exe_plan_setup = """    create_execution_plan(exe_plan,"#setup_script",#setup_duration,"#workload_script","#cleanup_script",#cleanup_sleep_time);"""
+    exe_plan_setup = """    create_execution_plan(exe_plan,"#setup_script",#setup_duration,"#workload_script","#cleanup_script",#cleanup_sleep_time,#wait_time);"""
 
 
     if not plan.setup is None:
@@ -64,8 +69,10 @@ def build_plan_cfile(file,plan):
 
     if not plan.workload is None:
         exe_plan_setup = exe_plan_setup.replace("#workload_script",plan.workload.script)
+        exe_plan_setup = exe_plan_setup.replace("#wait_time",str(plan.workload.wait_time))
     else:
         exe_plan_setup = exe_plan_setup.replace("#workload_script","")
+        exe_plan_setup = exe_plan_setup.replace("#wait_time",str(0))
 
     if not plan.cleanup is None:
         exe_plan_setup =  exe_plan_setup.replace("#cleanup_sleep_time",str(plan.cleanup.duration))

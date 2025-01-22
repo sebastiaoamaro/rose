@@ -134,7 +134,6 @@ int *majority;
 
 static pthread_t tracer_output;
 
-static pthread_mutex_t myMutex = PTHREAD_MUTEX_INITIALIZER;
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
@@ -257,12 +256,14 @@ int main(int argc, char **argv)
 	FAULT_COUNT = get_fault_count();
 
 	print_fault_schedule(plan,nodes,faults,deployment_tracer);
-
 	print_block("Setting up nodes \n");
 	collect_container_pids();
+
+
 	setup_node_scripts();
 	collect_container_processes();
-
+	// printf("Press Any Key to Continue\n");
+	// getchar();
 	setup_begin_conditions();
 
 	add_faults_to_bpf();
@@ -311,18 +312,18 @@ int main(int argc, char **argv)
 
 	constants.time=0;
 
-	// printf("Press Any Key to Continue\n");
-	// getchar();
 
 	//TODO: flag with start_before_workload in node
 
 	//If they are containers with start before the workload
 	start_container_nodes_scripts();
-	sleep(15);
+	if(plan->workload.wait_time > 0 ){
+		printf("Sleeping for %d seconds before workload\n",plan->workload.wait_time);
+		sleep(plan->workload.wait_time);
+	}
 	pthread_t thread_id;
 	pthread_create(&thread_id, NULL, (void *)count_time, NULL);
 
-	//If they are not container we assume there is no workload
 	start_nodes_scripts();
 	start_workload();
 
@@ -340,57 +341,10 @@ int main(int argc, char **argv)
 	}
 
 	cleanup:
-	sleep(60);
+
+	printf("Sleeping for %d seconds before cleanup\n",plan->cleanup.duration);
+	sleep(plan->cleanup.duration);
 	printf("Running cleanup \n");
-
-	for(int i =0; i< NODE_COUNT;i++){
-
-		if(strlen(nodes[i].script)){
-			printf("Going to kill script %s with pid %d \n",nodes[i].script,nodes[i].current_pid);
-			kill(nodes[i].current_pid,SIGKILL);
-			//kill(nodes[i].container_pid,SIGKILL);
-		}
-		printf("Before access to plan \n");
-
-		//Killing workload process
-
-		if(plan){
-			if (plan->workload.pid){
-				printf("Killing workload \n");
-				kill(plan->workload.pid,SIGKILL);
-			}
-		}
-		printf("After access to plan \n");
-		if(nodes[i].pid_tc_in > 0){
-			printf("Going to kill pid_tc_in %d \n",nodes[i].pid_tc_in);
-			kill(nodes[i].pid_tc_in,SIGKILL);
-		}
-		if(nodes[i].pid_tc_out > 0){
-			printf("Going to kill pid_tc_out %d \n",nodes[i].pid_tc_out);
-			kill(nodes[i].pid_tc_out,SIGKILL);
-		}
-	}
-
-	// if (deployment_tracer){
-
-	// 	struct timespec ts;
-
-	// 	long long timestamp = 0;
-	// 	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
-	// 			timestamp = (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
-	// 	} else {
-	// 			// Fallback or error handling in case clock_gettime fails
-	// 			perror("clock_gettime");
-	// 			return -1;
-	// 	}
-	// 	FILE *fptr;
-	// 	fptr = fopen("/tmp/history.txt", "a");
-
-	// 	fprintf(fptr,"Node:any,Pid:0,Tid:0,event_type:experiment,event_name:End,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n",timestamp);
-
-	// 	fclose(fptr);
-	// }
-
 
 	if(!block_bpf)
 		block_bpf__destroy(block_bpf);
@@ -446,24 +400,24 @@ int main(int argc, char **argv)
 
 		// Iterate through all entries
 		while (!bpf_map_get_next_key(constants.bpf_map_fault_fd, &key, &next_key)) {
-				// Look up value for current key
-				if (!bpf_map_lookup_elem(constants.bpf_map_fault_fd, &key, &value)) {
+			// Look up value for current key
+			if (!bpf_map_lookup_elem(constants.bpf_map_fault_fd, &key, &value)) {
 
-						if (value.timestamp > 0){
-							int fault_nr = value.fault_nr;
-							int target = value.target;
-							printf("Key: %d, Value: %llu\n", key, value.timestamp);
+				if (value.timestamp > 0){
+					int fault_nr = value.fault_nr;
+					int target = value.target;
+					printf("Key: %d, Value: %llu\n", key, value.timestamp);
 
-							if (target == -2)
-								fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n","majority",value.faulttype,value.timestamp);
-							if (target == -1)
-								fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n","leader",value.faulttype,value.timestamp);
-							if (target >= 0)
-								fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n",nodes[target].name,value.faulttype,value.timestamp);
-						}
+					if (target == -2)
+						fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n","majority",value.faulttype,value.timestamp);
+					if (target == -1)
+						fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n","leader",value.faulttype,value.timestamp);
+					if (target >= 0)
+						fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n",nodes[target].name,value.faulttype,value.timestamp);
 				}
-				key = next_key;
-		}
+			}
+			key = next_key;
+	}
 		fclose(fptr);
 		char message[] = "finished\n";
 		
@@ -474,9 +428,36 @@ int main(int argc, char **argv)
 
 		waitpid(deployment_tracer->pid);
 
-		printf("Tracer finished \n");
-		close(deployment_tracer->pipe_write_end);
+		//printf("Tracer finished \n");
+		//close(deployment_tracer->pipe_write_end);
 		
+	}
+
+	for(int i =0; i< NODE_COUNT;i++){
+
+		if(strlen(nodes[i].script)){
+			printf("Going to kill script %s with pid %d \n",nodes[i].script,nodes[i].current_pid);
+			kill(nodes[i].current_pid,SIGKILL);
+			//kill(nodes[i].container_pid,SIGKILL);
+		}
+
+		//Killing workload process
+
+		if(plan){
+			if (plan->workload.pid){
+				printf("Killing workload \n");
+				kill(plan->workload.pid,SIGKILL);
+			}
+		}
+
+		if(nodes[i].pid_tc_in > 0){
+			printf("Going to kill pid_tc_in %d \n",nodes[i].pid_tc_in);
+			kill(nodes[i].pid_tc_in,SIGKILL);
+		}
+		if(nodes[i].pid_tc_out > 0){
+			printf("Going to kill pid_tc_out %d \n",nodes[i].pid_tc_out);
+			kill(nodes[i].pid_tc_out,SIGKILL);
+		}
 	}
 
 	printf("Finished cleanup \n");
@@ -618,41 +599,31 @@ void run_setup(){
 	kill(plan->setup.pid,SIGUSR1);
 
 	//Sleep while we wait for setup to start
-	if(plan->setup.duration >0){
+	if(plan->setup.duration > 0){
 		sleep(plan->setup.duration);
 	}
 }
 
 void start_workload(){
 	//Start workload
-	if (!plan)
-		return;
-	if(plan->workload.pid == 0)
-		return;
-	printf("Started workload from execution plan with pid %d \n",plan->workload.pid);
-	kill(plan->workload.pid,SIGUSR1);
+		if (!plan)
+			return;
+		if(plan->workload.pid == 0)
+			return;
+		printf("Started workload from execution plan with pid %d \n",plan->workload.pid);
+		kill(plan->workload.pid,SIGUSR1);
 
-	if (deployment_tracer){
+		// if (deployment_tracer){
 
-	// 	struct timespec ts;
 
-	// 	long long timestamp = 0;
-  //   if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
-  //       timestamp = (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
-  //   } else {
-  //       // Fallback or error handling in case clock_gettime fails
-  //       perror("clock_gettime");
-  //       return -1;
-  //   }
+		// 	FILE *fptr;
 
-		FILE *fptr;
+		// 	fptr = fopen("/tmp/history.txt", "w");
 
-		fptr = fopen("/tmp/history.txt", "w");
+		// 	fprintf(fptr,"Node:any,Pid:0,Tid:0,event_type:experiment,event_name:Start,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n", timestamp);
 
-	// 	fprintf(fptr,"Node:any,Pid:0,Tid:0,event_type:experiment,event_name:Start,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0\n", timestamp);
-
-		fclose(fptr);
-	}
+		// 	fclose(fptr);
+		// }
 }
 
 
@@ -666,6 +637,8 @@ void collect_container_pids(){
 			if (nodes[i].container){
 				nodes[i].container_pid = get_container_pid(nodes[i].name);
 				if(nodes[i].container_pid){
+					nodes[i].pid = nodes[i].container_pid;
+					nodes[i].current_pid = nodes[i].container_pid;
 					node_count++;
 				}
 			}
@@ -709,18 +682,22 @@ void setup_node_scripts(){
 
 void collect_container_processes(){
 	for(int i = 0; i< NODE_COUNT; i++){
-		if (nodes[i].container){
+		printf("Looking for pid for node %d with pid %d \n",i,nodes[i].current_pid);
+		if (nodes[i].container && strlen(nodes[i].script) > 0 ){
 			int child_pid = get_children_pids(nodes[i].pid);
 
 			while(!child_pid){
+				sleep(1);
 				child_pid = get_children_pids(nodes[i].pid);
 			}
-
+			printf("Child pid is %d \n",child_pid);
 			int script_pid = get_children_pids(child_pid);
 
 			while(!script_pid){
+				sleep(1);
 				script_pid = get_children_pids(child_pid);
 			}
+			printf("Script pid is %d \n",script_pid);
 			nodes[i].pid = script_pid;
 			nodes[i].current_pid = script_pid;
 			send_signal(script_pid,SIGSTOP,nodes[i].name);
@@ -1480,15 +1457,15 @@ int setup_tc_progs(){
 
 void count_time(){
 
-	int maximum_time = 120000;
+	int maximum_time = 1000 * get_maximum_time();
+	printf("Maximum time is %d \n",maximum_time);
 	while(1){
 		sleep_for_ms(10);
 		constants.time += 10;
-		int time_sec = constants.time;
 
 		for (int i = 0; i< FAULT_COUNT;i++){
 			int fault_time = faults[i].initial.fault_type_conditions[TIME_FAULT];
-			if (fault_time >= time_sec){
+			if (constants.time >= fault_time){
 
 				struct simplified_fault fault;
 				int err_lookup;
@@ -1504,7 +1481,7 @@ void count_time(){
 				if (fault.initial.conditions_match[TIME_FAULT] > 0){
 					continue;
 				}
-				printf("Time value property is %d \n",fault.initial.conditions_match[TIME_FAULT]);
+				//printf("Time value property is %d \n",fault.initial.conditions_match[TIME_FAULT]);
 				printf("Changing time property to true in Fault:%d done:%d \n",fault.fault_nr,fault.done);
 				fault.initial.conditions_match[TIME_FAULT] = 1;
 				fault.run+=1;
@@ -1515,8 +1492,6 @@ void count_time(){
 			}
 		}
 		//Check if faults are done
-
-
 		int err_lookup;
 		int done_count = 0;
 		for (int i = 0; i< FAULT_COUNT;i++){
@@ -1530,14 +1505,14 @@ void count_time(){
 			}		
 		}
 		
-		if (done_count == FAULT_COUNT){
+		if (done_count != 0 && done_count == FAULT_COUNT){
 			printf("All faults are done \n");
 			exiting = true;
 			break;
 		}
 
 
-		if (maximum_time == time_sec){
+		if (maximum_time == constants.time){
 			printf("Experiments maximum time reached \n");
 			exiting = true;
 			break;

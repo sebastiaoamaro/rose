@@ -1,4 +1,6 @@
 execution_plan:
+  cleanup:
+    duration: 70
   tracer:
     tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
@@ -6,7 +8,7 @@ execution_plan:
 nodes:
   hdfs:
     container: false
-    script: /home/sebastiaoamaro/phd/rw/Anduril/experiment/hdfs-15032/run-original-test.sh
+    script: /home/sebastiaoamaro/phd/torefidevel/rw/Anduril/experiment/hdfs-15032/run-original-test.sh
 
 faults:
   syscall_fail:
@@ -16,6 +18,7 @@ faults:
       return_value: -111
     target: hdfs
     traced: hdfs
+    occurrences: 2
     begin_conditions:
     - condition1:
         type: syscall

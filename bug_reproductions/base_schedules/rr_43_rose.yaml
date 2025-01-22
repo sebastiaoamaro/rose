@@ -1,0 +1,46 @@
+execution_plan:
+  maximum_time: 60
+  setup:
+    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/startredisclusterb9ee410.sh
+    duration: 5
+  workload:
+    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
+  cleanup:
+    duration: 15
+  tracer:
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+    pipe_location: /tmp/containerpid
+    functions_file: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
+    binary_to_examine: /redisraft.so
+nodes:
+  redis1:
+    container: true
+    binary: /redisraft.so
+    leader_symbol: raft_become_leader
+    ip: 172.19.1.10
+    leader: true
+    script: ./startredis.sh 1 172.19.1.10
+  redis2:
+    container: true
+    binary: /redisraft.so
+    leader_symbol: raft_become_leader
+    ip: 172.19.1.11
+    script: ./startredis.sh 2 172.19.1.11
+  redis3:
+    container: true
+    binary: /redisraft.so
+    leader_symbol: raft_become_leader
+    ip: 172.19.1.12
+    script: ./startredis.sh 3 172.19.1.12
+  redis4:
+    container: true
+    binary: /redisraft.so
+    leader_symbol: raft_become_leader
+    ip: 172.19.1.13
+    script: ./startredis.sh 4 172.19.1.13
+  redis5:
+    container: true
+    binary: /redisraft.so
+    leader_symbol: raft_become_leader
+    ip: 172.19.1.14
+    script: ./startredis.sh 5 172.19.1.14

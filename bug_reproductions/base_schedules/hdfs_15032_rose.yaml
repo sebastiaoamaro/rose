@@ -1,0 +1,10 @@
+execution_plan:
+  tracer:
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+    pipe_location: /tmp/containerpid
+  cleanup:
+    duration: 60
+nodes:
+  hdfs:
+    container: false
+    script: /home/sebastiaoamaro/phd/torefidevel/rw//Anduril/experiment/hdfs-15032/run-original-test.sh

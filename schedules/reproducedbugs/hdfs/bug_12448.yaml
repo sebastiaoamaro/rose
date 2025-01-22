@@ -12,15 +12,15 @@ faults:
   syscall_fail:
     type: syscall
     details:
-      name: futex
+      name: read
       return_value: -4
-    occurrences: 20
-    repeatable: True
+    #occurrences: 100
+    #repeatable: True
     target: hdfs
     traced: hdfs
     begin_conditions:
     - condition1:
         type: file_syscall
-        syscall_name: openat
+        syscall_name: read
         file_name: fsimage_0000000000000000000
-        call_count: 22
+        call_count: 20

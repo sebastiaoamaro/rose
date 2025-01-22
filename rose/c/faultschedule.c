@@ -18,7 +18,7 @@
 
 #define NODE_COUNT 1
 #define FAULT_COUNT 1
-
+#define MAXIMUM_TIME 60
 
 char* get_veth_interface_name(const char* container_name);
 
@@ -38,7 +38,7 @@ void create_tracer(tracer* tracer,char* tracer_location, char* pipe_location, ch
     strcpy(tracer->binary_path,binary_path);
 
 }
-void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script,char* cleanup_script, int cleanup_time){
+void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script,char* cleanup_script, int cleanup_time, int wait_time){
     
     memset(exe_plan->setup.script,'\0',sizeof(setup_script));
     strcpy(exe_plan->setup.script,setup_script);
@@ -48,6 +48,7 @@ void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup
     memset(exe_plan->workload.script,'\0',sizeof(workload_script));
     strcpy(exe_plan->workload.script,workload_script);
     exe_plan->workload.pid = 0;
+    exe_plan->workload.wait_time = wait_time;
 
     memset(exe_plan->cleanup.script,'\0',sizeof(cleanup_script));
     strcpy(exe_plan->cleanup.script,cleanup_script);
@@ -101,6 +102,10 @@ int get_node_count(){
 
 int get_fault_count(){
     return FAULT_COUNT;
+}
+
+int get_maximum_time(){
+    return MAXIMUM_TIME;
 }
 
 
@@ -245,7 +250,7 @@ char* get_veth_interface_name(const char* container_name) {
 }
 execution_plan* build_execution_plan(){
     execution_plan* exe_plan = ( execution_plan*)malloc(1 * sizeof(execution_plan));
-    create_execution_plan(exe_plan,"",0,"","",0);
+    create_execution_plan(exe_plan,"",0,"","",30,0);
     return exe_plan;
 }
  tracer* build_tracer(){
@@ -255,7 +260,7 @@ execution_plan* build_execution_plan(){
 }
 node* build_nodes(){
     node* nodes = ( node*)malloc(NODE_COUNT * sizeof(node));
-    create_node(&nodes[0],"zookeeper",0,"","","/home/sebastiaoamaro/phd/rw/Anduril/ground_truth/zookeeper-3157/run-original-test.sh","",0,"","",0);
+    create_node(&nodes[0],"zookeeper",0,"","","/home/sebastiaoamaro/phd/torefidevel/rw/Anduril/ground_truth/zookeeper-2247/run-original-test.sh","",0,"","",0);
 
     return nodes;
 }
@@ -263,17 +268,16 @@ fault* build_faults_extra(){
     fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));
     fault_details fault_details0;
     syscall_operation syscall0;
-    syscall0.syscall = 3;
+    syscall0.syscall = 2;
     syscall0.success = 0;
-    syscall0.return_value = 0;
+    syscall0.return_value = -5;
     fault_details0.syscall = syscall0;
-    create_fault(&faults[0],"write_fail",0,0,3,2,fault_details0,0,0,0,1,0);
+    create_fault(&faults[0],"syscall1549",0,0,2,2,fault_details0,0,0,0,1,0);
 
     fault_condition fault_condition_0_0;
-    file_system_call file_syscall_0_0;
-    fault_condition_0_0.type = FILE_SYSCALL;
-    build_file_syscall(&file_syscall_0_0,READ_FILE,"","snapshot.0",1);
-    fault_condition_0_0.condition.file_system_call = file_syscall_0_0;
+    int time_0_0 = 1158;
+    fault_condition_0_0.type = TIME;
+    fault_condition_0_0.condition.time = time_0_0;
     add_begin_condition(&faults[0],fault_condition_0_0,0);
 
     return faults;

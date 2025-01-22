@@ -108,7 +108,7 @@ pub fn run_tracing(
 
     let mut skel = open_skel.load()?;
 
-    let _tracepoint_sys_enter = skel.progs.trace_sys_enter.attach_tracepoint("raw_syscalls", "sys_enter").expect("Failed to attach sys_exit");
+    //let _tracepoint_sys_enter = skel.progs.trace_sys_enter.attach_tracepoint("raw_syscalls", "sys_enter").expect("Failed to attach sys_exit");
 
     let _tracepoint_sys_exit = skel.progs.trace_sys_exit.attach_tracepoint("raw_syscalls", "sys_exit").expect("Failed to attach sys_exit");
     //let _connect_enter = skel.progs.trace_connect_entry.attach_tracepoint("syscalls", "sys_enter_connect").expect("Failed to attach connect");
@@ -185,11 +185,21 @@ pub fn run_tracing(
     }
 
     for tx in tx_handles{
-        tx.send(()).unwrap();
+        let send_res = tx.send(());
+
+        match send_res{
+            Ok(_) => println!("Sent successfully"),
+            Err(e) => println!("Error sending: {}", e),
+        }
     }
 
     for handle in join_handles{
-        handle.join().unwrap();
+       let result = handle.join();
+
+       match result{
+            Ok(_) => println!("Thread finished successfully"),
+            Err(e) => println!("Thread finished with an error"),
+        }
     }
 
     for pid in xdp_pids{
@@ -235,6 +245,8 @@ pub fn start_tracing(pid:i32,container_name:String,container_pid:i32,if_index:i3
     let container_location = auxiliary::get_overlay2_location(&container_name).unwrap();
 
     let binary_location = format!("{}{}", container_location, binary_path);
+
+    //println!("Binary location: {} and binary path:{}", binary_location, binary_path);
 
 
     for (index_function, function) in functions.clone().iter().enumerate(){

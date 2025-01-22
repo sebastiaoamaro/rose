@@ -1,4 +1,4 @@
-from conditions import build_file_syscall, build_syscall, build_user_function, get_cond_type_nr,build_fault_conditions,file_syscall
+from parser.conditions import build_file_syscall, build_syscall, build_user_function, get_cond_type_nr,build_fault_conditions,file_syscall,build_time
 
 class Fault:
     name = ""
@@ -17,6 +17,39 @@ class Fault:
     trigger_statement_begin = ""
     trigger_statement_end = ""
     exit = 0
+    start_time = 0
+
+    def to_yaml(self):
+        fault = {}
+        fault["type"] = self.type
+        fault["target"] = self.target
+        fault["traced"] = self.traced
+        fault["duration"] = self.duration
+        fault["begin_conditions"] = []
+        cond_count = 0
+        for condition in self.begin_conditions:
+            condition_nr = "condition_nr" + str(cond_count)
+            fault["begin_conditions"].append({condition_nr:condition.to_yaml()})
+            cond_count+=1
+
+        if self.type == "block_ips":
+            fault["ips_in"] = []
+            fault["ips_out"] = []
+
+            for ip in self.fault_specifics.nodes_in:
+                fault["ips_in"].append(ip)
+            for ip in self.fault_specifics.nodes_out:
+                fault["ips_out"].append(ip)
+        
+        if self.type == "syscall":
+            fault["details"] = {}
+            fault["details"]["name"] = self.fault_specifics.syscall_name
+            fault["details"]["return_value"] = int(self.fault_specifics.return_value)
+            fault["details"]["repeatable"] = self.repeatable
+        return fault
+
+    def __repr__(self):
+        return (f"Fault(type={self.type},target={self.target},traced={self.traced},start_time={self.start_time},duration={self.duration}\n")
 
 #Type of faults
 class file_system_operation:
@@ -57,7 +90,7 @@ def parse_faults(faults,nodes):
 def createFault(name,faultconfig,nodes_dict):
 
     fault = Fault()
-
+    #print(faultconfig)
     fault.name = name
 
     fault.type = faultconfig['type']
@@ -88,10 +121,10 @@ def createFault(name,faultconfig,nodes_dict):
         nodes_in = []
         nodes_out = []
         if "ips_in" in faultconfig:
-            for node in faultconfig['ips_in'].split():
+            for node in faultconfig['ips_in']:
                 nodes_in.append(node)
         if "ips_out" in faultconfig:
-            for node in faultconfig['ips_out'].split():
+            for node in faultconfig['ips_out']:
                 nodes_out.append(node)
 
 
@@ -115,12 +148,15 @@ def createFault(name,faultconfig,nodes_dict):
             if 'directory_name' in faultconfig['details']:
                 file_system_operation_fault.directory_name = faultconfig['details']['directory_name']
 
-            # success = faultconfig['details']['success']
-            
-            # if success == "True":
-            #     file_system_operation_fault.success = 1
-            # else:
-            #     file_system_operation_fault.success = 0
+            if 'sucess' in faultconfig['details']:
+
+                success = faultconfig['details']['success']
+                
+                if success:
+                    file_system_operation_fault.success = 1
+                else:
+                    file_system_operation_fault.success = 0
+
             file_system_operation_fault.return_value = faultconfig['details']['return_value']
 
             fault.fault_specifics = file_system_operation_fault
@@ -130,6 +166,15 @@ def createFault(name,faultconfig,nodes_dict):
         syscall_fault = syscall()
         syscall_fault.syscall_name = faultconfig['details']['name']
         syscall_fault.return_value = faultconfig['details']['return_value']
+
+        if 'success' in faultconfig['details']:
+
+            success = faultconfig['details']['success']
+
+            if success:
+                syscall_fault.success = 1
+            else:
+                syscall_fault.success = 0
 
         fault.fault_specifics = syscall_fault
 
@@ -154,16 +199,16 @@ def createFault(name,faultconfig,nodes_dict):
             fault.target_nr = -2
 
     if 'repeatable' in faultconfig:
-
         repeatable = faultconfig['repeatable']
-
-        if(repeatable == "True"):
+        #print(repeatable)
+        if(repeatable):
             fault.repeatable = 1
 
     if 'duration' in faultconfig:
         fault.duration = faultconfig['duration']
 
     if 'occurrences' in faultconfig:
+        #print(faultconfig['occurrences'])
         fault.occurrences = faultconfig['occurrences']
 
     if 'exit' in faultconfig:
@@ -176,29 +221,32 @@ def createFault(name,faultconfig,nodes_dict):
     fault.begin_conditions = []
 
     conditions_count = 0
-    for name,condition in begin_conditions.items():
-        if name == 'trigger_statement':
+    for condition in begin_conditions:
+        condition = next(iter(condition.values()))
+        type_cond = condition['type']
+        if type_cond == 'trigger_statement':
             continue
 
-        if name == 'user_function':
+        if type_cond == 'user_function':
             condition = build_user_function(condition)
             cond_nr = get_cond_type_nr(1,condition)
             # condition.cond_nr = cond_nr
             fault.begin_conditions.append(condition)
 
-        if name == 'file_syscall':
+        if type_cond == 'file_syscall':
             condition = build_file_syscall(condition)
             cond_nr = get_cond_type_nr(2,condition)
             condition.cond_nr = cond_nr
             fault.begin_conditions.append(condition)
         
-        if name == "syscall":
+        if type_cond == "syscall":
             condition = build_syscall(condition)
             cond_nr = get_cond_type_nr(3,condition)
             condition.cond_nr = cond_nr
             fault.begin_conditions.append(condition)
         
-        if name == "time":
+        if type_cond == "time":
+            condition = build_time(condition)
             fault.begin_conditions.append(condition)
 
     if 'end_conditions' in faultconfig:
@@ -214,6 +262,17 @@ def createFault(name,faultconfig,nodes_dict):
     return fault
 
 def build_faults_cfile(file,nodes,faults):
+    
+    if faults is None:
+        build_faults_begin = """\nfault* build_faults_extra(){\n"""
+        file.write(build_faults_begin)
+        build_faults_malloc = """    fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));\n"""
+        file.write(build_faults_malloc)
+        build_faults_end= """
+    return faults;
+    }"""
+        file.write(build_faults_end)
+        return
     
     build_faults_begin = """\nfault* build_faults_extra(){\n"""
     file.write(build_faults_begin)
@@ -476,37 +535,55 @@ def get_fault_type_nr(type,fault_specifics):
         case "process_restart":
             return 22
         case "syscall":
-            match fault_specifics.syscall_name:
-                #Needs success = 0
-                case "write":
-                    return 2
-                case "read":
-                    return 3
-                case "open":
-                    return 15
-                case "mkdir":
-                    return 23
-                case "newfstatat":
-                    return 17
-                case "openat":
-                    return 18
-                case "fdatasync":
-                    return "FDATASYNC_FAULT"
+            if fault_specifics.success == 0:
+                match fault_specifics.syscall_name:
+                    #Needs success = 0
+                    case "write":
+                        return 2
+                    case "read":
+                        return 3
+                    case "open":
+                        return 15
+                    case "mkdir":
+                        return 23
+                    case "newfstatat":
+                        return "NEWFSTATAT_FAULT"
+                    case "openat":
+                        return "OPENAT_FAULT"
+                    case "fdatasync":
+                        return "FDATASYNC_FAULT"
+                    case "pwrite64":
+                        return "PWRITE64_FAULT"
+                    case "accept":
+                        return "ACCEPT_FAULT"
+                    case "close":
+                        return "CLOSE_FAULT"
+                    case "futex":
+                        return "FUTEX_FAULT"
+                    case "connect":
+                        return "CONNECT_FAULT"
+                    
+            if fault_specifics.success == 1:
+                match fault_specifics.syscall_name:
+                    case "fdatasync":
+                        return "FDATASYNC_RET_FAULT"
         case "file_system_operation":
-            match fault_specifics.syscall_name:
-                case "write":
-                    return 8
-                case "read":
-                    return 9
-                case "mkdir":
-                    return 23
-                case "newfstatat":
-                    return 24
-                case "openat":
-                    return 25
-                case "open":
-                    return 20
-                case "fdatasync":
-                    return "FDATASYNCFILE_FAULT"
-    return 0
+            if fault_specifics.success == 0:
+                match fault_specifics.syscall_name:
+                    case "write":
+                        return 8
+                    case "read":
+                        return 9
+                    case "mkdir":
+                        return 23
+                    case "newfstatat":
+                        return 24
+                    case "openat":
+                        return "OPENAT_FILE"
+                    case "open":
+                        return 20
+                    case "fdatasync":
+                        return "FDATASYNCFILE_FAULT"
+                    case "fsync":
+                        return "FSYNC"
 

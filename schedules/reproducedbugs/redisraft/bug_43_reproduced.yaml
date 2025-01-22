@@ -1,17 +1,19 @@
 execution_plan:
+  maximum_time: 120
   setup:
-    script: "/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/startrediscluster.sh"
+    script: "/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/local/startredisclusterb9ee410.sh"
     duration: 5
   workload:
-    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
-  # cleanup:
-  #   script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/cleanup.sh
-  #   duration: 15
-  # tracer:
-  #   tracer_location: "/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer"
-  #   pipe_location: "/tmp/containerpid"
-  #   functions_file: "/home/sebastiaoamaro/phd/torefidevel/tracer/functions.txt"
-  #   binary_to_examine: "/redisraft.so"
+    wait_time: 15
+    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/local/runworkload.sh
+  cleanup:
+  #   script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/local/cleanup.sh
+    duration: 30
+  tracer:
+    tracer_location: "/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer"
+    pipe_location: "/tmp/containerpid"
+    functions_file: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
+    binary_to_examine: "/redisraft.so"
 
 nodes:
   redis1:
@@ -126,4 +128,4 @@ faults:
           call_count: 1
       - condition2:
           type: time
-          time: 20000
+          time: 10000

@@ -1,0 +1,6 @@
+reproduction:
+  schedule: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/base_schedules/rr_43_rose.yaml"
+  oracle: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/oracles/detect_bug_rr_43.sh"
+  result_folder: "/home/sebastiaoamaro/phd/torefidevel/tests/bugdetection/redisraft/current_run/"
+  trace_location: "/tmp/history.txt"
+  buggy_trace: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/traces/rr_43.txt"

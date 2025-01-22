@@ -1,7 +1,7 @@
 #!/bin/bash
 workload_size=5000000
 #workload_size=500000
-runs=5
+runs=1
 # maindirectory=/home/sebastiaoamaro/phd/torefidevel/rosetracer/
 # main=/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
 maindirectory=/vagrant/rosetracer/
@@ -21,7 +21,7 @@ sudo rm -r /redis/*
 
 ulimit -n 4096
 #rm results/*
-for topology in 3 6
+for topology in 3
 do
     for (( run=1; run<=$runs; run++ ))
     do
@@ -66,7 +66,7 @@ do
         sleep 30
 
         ./retrievecontainerinfo.sh $container_and_pid
-        sudo $main "production_tracer" $functions_file $binary_path $container_and_pid &
+        sudo $main "production_tracer" "container" $functions_file $binary_path $container_and_pid "none" &
 
         ebpf_PID=$!
         while [ ! -s "$file" ]; do

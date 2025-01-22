@@ -15,6 +15,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time;
 use std::process::{exit};
+use nix::ifaddrs::getifaddrs;
 
 #[repr(C)]
 pub struct pair{
@@ -296,10 +297,12 @@ pub fn monitor_pid(pid: i32,stop_signal: mpsc::Receiver<()>) -> Result<(), Box<d
                 thread::sleep(sleep_duration);
             }
             Err(e) => {
-                continue;
+                println!("Process with PID {} does not exist.", e);
+                break;
             }
         }
     }
+    println!("Monitoring process with PID finished {} has exited.", pid);
 
     for event in events_process_pause {
         let event_name = "process_state_change".to_string();
@@ -428,6 +431,24 @@ pub fn start_xdp_in_container(container_pid:i32,if_index:i32) -> u32{
 
     return child_pid;
     
+}
+
+pub fn get_device_index(device_name: &str) -> io::Result<u32> {
+    // Retrieve network interfaces and their attributes
+    for iface in getifaddrs().map_err(|e| io::Error::new(io::ErrorKind::Other, e))? {
+        if let name = iface.interface_name {
+            if name == device_name {
+                // Obtain the index of the network interface
+                if let Ok(index) = nix::net::if_::if_nametoindex(name.as_str()) {
+                    return Ok(index);
+                }
+            }
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!("Device '{}' not found", device_name),
+    ))
 }
 
 pub fn get_syscall_name(syscall_id: u64) -> String {

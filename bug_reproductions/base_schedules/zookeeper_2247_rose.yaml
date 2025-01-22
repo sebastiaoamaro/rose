@@ -1,0 +1,11 @@
+execution_plan:
+  tracer:
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+    pipe_location: /tmp/containerpid
+  cleanup:
+    duration: 30
+
+nodes:
+  zookeeper:
+    container: false
+    script: /home/sebastiaoamaro/phd/torefidevel/rw/Anduril/ground_truth/zookeeper-2247/run-original-test.sh

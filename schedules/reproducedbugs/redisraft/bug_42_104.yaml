@@ -1,16 +1,32 @@
 execution_plan:
+  # maximum_time: 120
+  # setup:
+  #   script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/local/startredisclusterb9ee410.sh
+  #   duration: 5
+  # workload:
+  #   wait_time: 15
+  #   script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/local/runworkload.sh
+  # cleanup:
+  #   duration: 15
+  # tracer:
+  #   tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+  #   pipe_location: /tmp/containerpid
+  #   functions_file: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
+  #   binary_to_examine: /redisraft.so
+execution_plan:
+  maximum_time: 120
   setup:
-    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/startrediscluster.sh
+    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/remote/startredisclusterb9ee410.sh
     duration: 5
   workload:
-    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
-  # cleanup:
-  #   script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/cleanup.sh
-  #   duration: 15
+    wait_time: 15
+    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/remote/runworkload.sh
+  cleanup:
+    duration: 15
   tracer:
-    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+    tracer_location: /vagrant/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
-    functions_file: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
+    functions_file: /vagrant/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
     binary_to_examine: /redisraft.so
 nodes:
   redis1:
@@ -57,81 +73,61 @@ faults:
           type: time
           time: 5000
 
-  block_ips_redis1:
+  block_ips_redis2:
     type: block_ips
-    target: redis1
-    traced: redis1
-    duration: 30000
+    target: redis2
+    traced: redis2
+    duration: 25000
     ips_in: 
-      - redis2
-      - redis3
-      - redis4
-      - redis5 
-    ips_out:
-      - redis2
-      - redis3
-      - redis4
-      - redis5
+      - redis1 
+    ips_out: 
+      - redis1 
     begin_conditions:
       - condition1:
           type: time
           time: 10000
 
-  # block_ips_redis2:
-  #   type: block_ips
-  #   target: redis2
-  #   traced: redis2
-  #   duration: 25000
-  #   ips_in: 
-  #     - redis1 
-  #   ips_out: 
-  #     - redis1 
-  #   begin_conditions:
-  #     - condition1:
-  #         type: time
-  #         time: 10000
+  block_ips_redis3:
+    type: block_ips
+    target: redis3
+    traced: redis3
+    duration: 25000
+    ips_in: 
+      - redis1 
+    ips_out: 
+      - redis1 
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 10000
 
-  # block_ips_redis3:
-  #   type: block_ips
-  #   target: redis3
-  #   traced: redis3
-  #   duration: 25000
-  #   ips_in: 
-  #     - redis1 
-  #   ips_out: 
-  #     - redis1 
-  #   begin_conditions:
-  #     - condition1:
-  #         type: time
-  #         time: 10000
+  block_ips_redis4:
+    type: block_ips
+    target: redis4
+    traced: redis4
+    duration: 25000
+    ips_in: 
+      - redis1 
+    ips_out: 
+      - redis1 
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 10000
 
-  # block_ips_redis4:
-  #   type: block_ips
-  #   target: redis4
-  #   traced: redis4
-  #   duration: 25000
-  #   ips_in: 
-  #     - redis1 
-  #   ips_out: 
-  #     - redis1 
-  #   begin_conditions:
-  #     - condition1:
-  #         type: time
-  #         time: 10000
-
-  # block_ips_redis5:
-  #   type: block_ips
-  #   target: redis5
-  #   traced: redis5
-  #   duration: 25000
-  #   ips_in: 
-  #     - redis1 
-  #   ips_out: 
-  #     - redis1 
-  #   begin_conditions:
-  #     - condition1:
-  #         type: time
-  #         time: 10000
+  block_ips_redis5:
+    type: block_ips
+    target: redis5
+    traced: redis5
+    duration: 25000
+    ips_in: 
+      - redis1 
+    ips_out: 
+      - redis1 
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 10000
       
   process_kill2:
     type: process_kill
@@ -155,15 +151,15 @@ faults:
   #   traced: redis3
   #   exit: true
   #   begin_conditions:
-  #     condition0:
-  #       type: time
-  #       time: 10000
-  #     condition1:
-  #       type: user_function
-  #       binary_location: "/redisraft.so"
-  #       symbol: handleLoadSnapshot
-  #       offset: 104
-  #       call_count: 1
+  #     - condition0:
+  #         type: time
+  #         time: 20000
+  #     - condition1:
+  #         type: user_function
+  #         binary_location: "/redisraft.so"
+  #         symbol: handleLoadSnapshot
+  #         offset: 104
+  #         call_count: 1
 
 
   # process_kill4:
@@ -172,15 +168,15 @@ faults:
   #   traced: redis4
   #   exit: true
   #   begin_conditions:
-  #     condition0:
-  #       type: time
-  #       time: 10000
-  #     condition1:
-  #       type: user_function
-  #       binary_location: "/redisraft.so"
-  #       symbol: handleLoadSnapshot
-  #       offset: 104
-  #       call_count: 1
+  #     - condition0:
+  #         type: time
+  #         time: 20000
+  #     - condition1:
+  #         type: user_function
+  #         binary_location: "/redisraft.so"
+  #         symbol: handleLoadSnapshot
+  #         offset: 104
+  #         call_count: 1
 
   # process_kill5:
   #   type: process_kill
@@ -188,12 +184,12 @@ faults:
   #   traced: redis5
   #   exit: true
   #   begin_conditions:
-  #     condition0:
-  #       type: time
-  #       time: 10000
-  #     condition1:
-  #       type: user_function
-  #       binary_location: "/redisraft.so"
-  #       symbol: handleLoadSnapshot
-  #       offset: 104
-  #       call_count: 1
+  #     - condition0:
+  #         type: time
+  #         time: 20000
+  #     - condition1:
+  #         type: user_function
+  #         binary_location: "/redisraft.so"
+  #         symbol: handleLoadSnapshot
+  #         offset: 104
+  #         call_count: 1

@@ -6,7 +6,7 @@ execution_plan:
 nodes:
   zookeeper:
     container: false
-    script: /home/sebastiaoamaro/phd/rw/Anduril/experiment/zookeeper-3006/run-original-test.sh
+    script: /home/sebastiaoamaro/phd/torefidevel/rw/Anduril/experiment/zookeeper-3006/run-original-test.sh
 
 faults:
   write_fail:

@@ -1,0 +1,6 @@
+reproduction:
+  schedule: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/base_schedules/zookeeper_3006_rose.yaml"
+  oracle: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/oracles/detect_bug_3006.sh"
+  result_folder: "/home/sebastiaoamaro/phd/torefidevel/tests/bugdetection/zookeeper/currentrun/"
+  trace_location: "/tmp/history.txt"
+  buggy_trace: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/traces/zookeeper_3006.txt"

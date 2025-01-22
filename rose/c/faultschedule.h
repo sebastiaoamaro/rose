@@ -35,6 +35,7 @@ typedef struct Setup{
 typedef struct Workload{
     char script[STRING_SIZE];
     int pid;
+    int wait_time;
 }workload;
 
 typedef struct Cleanup{
