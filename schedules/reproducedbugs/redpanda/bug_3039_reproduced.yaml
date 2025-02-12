@@ -1,14 +1,17 @@
 execution_plan:
   maximum_time: 600
   setup:
-    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redpanda/startcluster.sh
+    script: /vagrant/schedules/reproducedbugs/redpanda/scripts/startcluster.sh
     duration: 10
   workload:
     wait_time: 10
-    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redpanda/runworkload.sh
+    script: /vagrant/schedules/reproducedbugs/redpanda/scripts/runworkload.sh
   cleanup:
     duration: 30
-    
+  tracer:
+    tracer_location: /vagrant/rosetracer/target/release/rosetracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,container_controlled
 nodes:
   redpanda0:
     container: true
@@ -29,8 +32,8 @@ nodes:
 faults:
   process_pause:
     type: process_pause
-    target: redpanda1
-    traced: redpanda1
+    target: redpanda0
+    traced: redpanda0
     duration: 20000
     begin_conditions:
       # - condition1:

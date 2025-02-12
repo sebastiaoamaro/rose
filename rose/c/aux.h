@@ -8,8 +8,8 @@
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
 #define FUNCNAME_MAX 512
-#define MAX_FUNCTIONS 8
-#define FILENAME_MAX 64
+#define MAX_FUNCTIONS 16
+#define FILENAME_MAX_SIZE 64
 #define FAULTSSUPPORTED 26
 #define MAX_RELEVANT_FILES 256
 #define MAX_ARGS 16
@@ -20,6 +20,7 @@
 #define MAX_COMMAND_LEN 512
 #define MAX_RESPONSE_LEN 1024
 
+struct fault;
 
 struct tc_key{
     int index;
@@ -199,4 +200,5 @@ bool is_element_in_array(int arr[], int size, int element);
 void print_fault_schedule();
 int send_signal(int pid, int signal,char*);
 long get_children_pids(pid_t pid);
+void kill_child_processes(pid_t parent_pid);
 #endif /* __AUX_H */

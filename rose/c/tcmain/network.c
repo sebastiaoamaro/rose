@@ -8,7 +8,7 @@
 
 static volatile sig_atomic_t exiting = 0;
 
-static void sig_int(int signo)
+static void sig_int()
 {
 	exiting = 1;
 }
@@ -28,19 +28,19 @@ struct bpf_tc_opts* get_tc_opts(int position){
 void init_tc(int count){
 	tc_hook_handle = (struct bpf_tc_hook*)malloc(count*sizeof(struct bpf_tc_hook));
 	tc_opts_handle = (struct bpf_tc_opts*)malloc(count*sizeof(struct bpf_tc_opts));
-	
+
 }
 //int main (__u32 index,int pos,int handle,int faults,int direction)
-int main(int argc, char **argv)
-{	
-	
+int main(int,char **argv)
+{
+
 	int index = atoi(argv[1]);
 	int pos = atoi(argv[2]);
 	int handle = atoi(argv[3]);
 	int faults = atoi(argv[4]);
 	int direction = atoi(argv[5]);
 
-	printf("Index is %d, pos is %d, handle is %d, fault_count is %d, direction is %d \n",index,pos,handle,faults,direction);
+	//printf("Index is %d, pos is %d, handle is %d, fault_count is %d, direction is %d \n",index,pos,handle,faults,direction);
 
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, tc_hook,
 		.ifindex = index, .attach_point = direction);
@@ -96,8 +96,6 @@ int main(int argc, char **argv)
 		fprintf(stderr, "Can't set signal handler: %s\n", strerror(errno));
 	}
 
-	printf("Successfully started! Please run `sudo cat /sys/kernel/debug/tracing/trace_pipe` "
-	       "to see output of the BPF program.\n");
 
 	while (!exiting) {
 		//fprintf(stderr, ".");
@@ -115,9 +113,9 @@ cleanup:
 	if (hook_created)
 		bpf_tc_hook_destroy(&tc_hook);
 	tc_bpf__destroy(skel);
+
 	return -err;
-	
-	return 1;
+
 }
 
 char** get_device_names(int device_count){
@@ -132,54 +130,3 @@ char** get_device_names(int device_count){
 
 	return device_names;
 }
-
-// int delete_tc_hook(struct tc_bpf **tc_ebpf_progs,int fault_type,int tc_ebpf_progs_counter){
-// 	int err;
-
-// 	if (fault_type == NETWORK_ISOLATION){
-// 		//printf("Deleting prog %d with pointer %u \n",tc_ebpf_progs_counter,tc_ebpf_progs[tc_ebpf_progs_counter]);
-// 		err = bpf_tc_detach(get_tc_hook(tc_ebpf_progs_counter), get_tc_opts(tc_ebpf_progs_counter));
-// 		if (err) {
-// 			fprintf(stderr, "Failed to detach TC 0 faults %d: %d\n", tc_ebpf_progs_counter,err);
-// 		}
-
-// 		printf("Deleting hook %d \n",tc_ebpf_progs_counter);
-// 		bpf_tc_hook_destroy(get_tc_hook(tc_ebpf_progs_counter));
-
-// 		printf("Destroying prog %d \n",tc_ebpf_progs_counter);
-// 		tc_bpf__destroy(tc_ebpf_progs[tc_ebpf_progs_counter]);
-
-// 		tc_ebpf_progs_counter++;
-
-// 		printf("Deleting prog %d with pointer %u \n",tc_ebpf_progs_counter,tc_ebpf_progs[tc_ebpf_progs_counter]);
-// 		err = bpf_tc_detach(get_tc_hook(tc_ebpf_progs_counter), get_tc_opts(tc_ebpf_progs_counter));
-// 		if (err) {
-// 			fprintf(stderr, "Failed to detach TC 1 faults %d: %d\n", tc_ebpf_progs_counter,err);
-// 		}
-
-// 		printf("Deleting hook %d \n",tc_ebpf_progs_counter);
-// 		bpf_tc_hook_destroy(get_tc_hook(tc_ebpf_progs_counter));
-
-// 		printf("Destroying prog %d \n",tc_ebpf_progs_counter);
-// 		tc_bpf__destroy(tc_ebpf_progs[tc_ebpf_progs_counter]);
-
-// 		tc_ebpf_progs_counter++;
-
-// 	} if (fault_type == DROP_PACKETS || fault_type == BLOCK_IPS ){
-// 		//printf("Deleting prog %d with pointer %u \n",tc_ebpf_progs_counter,tc_ebpf_progs[tc_ebpf_progs_counter]);
-// 		err = bpf_tc_detach(get_tc_hook(tc_ebpf_progs_counter), get_tc_opts(tc_ebpf_progs_counter));
-// 		if (err) {
-// 			fprintf(stderr, "Failed to detach TC 1 faults %d: %d\n", tc_ebpf_progs_counter,err);
-// 		}
-
-// 		printf("Deleting hook %d \n",tc_ebpf_progs_counter);
-// 		bpf_tc_hook_destroy(get_tc_hook(tc_ebpf_progs_counter));
-
-// 		printf("Destroying prog %d \n",tc_ebpf_progs_counter);
-// 		tc_bpf__destroy(tc_ebpf_progs[tc_ebpf_progs_counter]);
-
-// 		tc_ebpf_progs_counter++;
-// 	}
-
-// 	return tc_ebpf_progs_counter;
-// }

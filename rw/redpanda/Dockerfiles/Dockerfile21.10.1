@@ -1,0 +1,15 @@
+FROM ubuntu:22.04
+
+RUN apt update && apt install -y \
+    wget unzip gcc software-properties-common curl iperf3 vim
+
+RUN mkdir /etc/redpanda
+COPY ./binaries/redpanda.yaml /etc/redpanda/
+COPY ./binaries/21.10.1/ /opt/
+COPY ./rpk /
+
+COPY ./startredpanda.sh /
+COPY ./rpksetup.sh /
+
+RUN chmod +x ./startredpanda.sh
+RUN chmod +x ./rpksetup.sh

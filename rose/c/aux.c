@@ -27,6 +27,7 @@
 #include <string.h>
 #include <errno.h>
 #include <bpf/bpf.h>
+#include <dirent.h>
 
 static struct env {
 	bool verbose;
@@ -603,4 +604,39 @@ long get_children_pids(pid_t pid) {
 
     fclose(file);
 	return child_pid;
+}
+
+void kill_child_processes(pid_t parent_pid) {
+    DIR *dir;
+    struct dirent *entry;
+    char path[256];
+    FILE *fp;
+    char cmdline[256];
+
+    // Open the /proc directory
+    if ((dir = opendir("/proc")) == NULL) {
+        perror("opendir");
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_DIR) {
+            pid_t pid = atoi(entry->d_name);
+            if (pid > 0) {
+                snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+                fp = fopen(path, "r");
+                if (fp) {
+                    pid_t ppid;
+                    fscanf(fp, "%*d %*s %*c %d", &ppid);
+                    fclose(fp);
+                    
+                    if (ppid == parent_pid) {
+          
+                        kill(pid, SIGKILL);
+                    }
+                }
+            }
+        }
+    }
+    closedir(dir);
 }

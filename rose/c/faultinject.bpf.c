@@ -107,11 +107,6 @@ const volatile int fault_count = 0;
 
 const volatile int time_only = 0;
 
-//static int process_fd_syscall(struct pt_regs *ctx,struct sys_info sys_info,struct bpf_map *relevant_state_info,struct bpf_map *faults_specification,struct bpf_map *faults,struct bpf_map *rb);
-
-// static void call_state_processor(struct sys_info sys_info,int pid){
-// 	process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes);
-// }
 
 /* Declare the external kfunc */
 extern int bpf_strstr(const char* str,const char* str2, int str_len) __ksym;
@@ -131,7 +126,6 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 		time_only
 	};
 
-	//process_fd_syscall(ctx,&sys_info,&relevant_state_info,&faults_specification,&faults,&rb,&files,&relevant_fd);
 
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
@@ -150,7 +144,6 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 				break;
 			__u64 relevant_fd = fdrelevant->fds[i];
 			if(relevant_fd == fd){
-				bpf_printk("Found relevant fd \n");
 				process_fd = 0;
 				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 				inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
@@ -200,14 +193,11 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 			}
 			//bpf_printk("Comparing %s and %s \n with offset %d",&(fi.filename[fi.offset]),file_open->filename,fi.size);
 			if(string_contains(file_open->filename,&(fi.filename[fi.offset]),fi.size)){
-
-				bpf_printk("Size %d found %s and %s \n",fi.size,&(fi.filename[fi.offset]),file_open->filename);
 				
 				struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);
 				if(fds){
 					u64 position = fds->size;
 					if(position < MAX_RELEVANT_FILES){
-						bpf_printk("Adding fd %d to pos %d \n",fd,fds->size);
 						fds->fds[position] = fd;
 						fds->size = fds->size + 1;
 					}
@@ -277,7 +267,6 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 			__u64 relevant_fd = fdrelevant->fds[i];
 			if(relevant_fd == fd){
 				process_fd = 0;
-				bpf_printk("Found relevant fd \n");
 				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
 					&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 				inject_override(pid,sys_info.file_specific_code,(struct pt_regs *) ctx,0,&faults_specification);
@@ -333,7 +322,6 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 				if(fds){
 					u64 position = fds->size;
 					if(position < MAX_RELEVANT_FILES){
-						bpf_printk("Adding fd %d to pos %d",fd,fds->size);
 						fds->fds[position] = fd;
 						fds->size = fds->size + 1;
 					}
@@ -448,7 +436,7 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 
 	if(file_open){
 		//bpf_printk("Filename is %s \n",file_open->filename);
-		bpf_printk("In open comparing %s and %s \n",path,file_open->filename);
+		//bpf_printk("In open comparing %s and %s \n",path,file_open->filename);
 
 		int string_equal = 0;
 		for (int i = 0; i < 4; i++){
@@ -456,7 +444,6 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
     		bpf_probe_read(&str1, sizeof(str1),path+i*64);
 			int result = bpf_strstr(file_open->filename,str1,file_open->size);
 			if (result){
-				bpf_printk("Found matching string in iteration %d \n",i);
 				string_equal = result;
 				break;
 			}
@@ -467,7 +454,6 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 			return 0;
 		}
 
-		bpf_printk("Found %s and %s \n",file_open->filename,path);
 		process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
 			&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 		inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
@@ -848,7 +834,6 @@ int BPF_KPROBE(__x64_sys_fdatasync,struct pt_regs *regs)
 				if(fds){
 					u64 position = fds->size;
 					if(position < MAX_RELEVANT_FILES){
-						bpf_printk("Adding fd %d to pos %d",fd,fds->size);
 						fds->fds[position] = fd;
 						fds->size = fds->size + 1;
 					}

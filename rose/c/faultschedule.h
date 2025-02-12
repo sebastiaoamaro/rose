@@ -23,6 +23,7 @@ typedef struct Tracer{
     char binary_path[STRING_SIZE];
     int pipe_write_end;
     int pid;
+    char tracing_type[STRING_SIZE];
 
 }tracer;
 
@@ -206,13 +207,11 @@ typedef struct fault {
 void create_node(node* node, char* name,int pid, char* veth, char* ip, char* script,char* env,int container,char* binary,char *leader_symbol,int leader);
 void add_ip_to_block(struct fault*,char *,int);
 
+int get_maximum_time();
 node* build_nodes();
 int get_node_count();
-
 fault* build_faults_extra();
 int get_fault_count();
-
 execution_plan* build_execution_plan();
-
 tracer* build_tracer();
 #endif /* __FAULTSCHEDULE_H */

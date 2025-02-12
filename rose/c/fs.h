@@ -3,9 +3,9 @@
 
 
 //TODO THIS MIGHT BE TO SMALL BUT INSTRUCTION LIMIT IS BEING HIT
-#define FILENAME_MAX		32
+#define FILENAME_MAX_SIZE		32
 #define MAX_JUMPS 			12
-#define MAX_FILE_OFFSET		(FILENAME_MAX>>1)
+#define MAX_FILE_OFFSET		(FILENAME_MAX_SIZE>>1)
 #define SUB_STR_MAX			512
 #define PATH_MAX	4096
 #define TASK_COMM_LEN	16
@@ -13,7 +13,7 @@
 
 struct file_info_simple {
 	int size;
-	char filename[FILENAME_MAX];
+	char filename[FILENAME_MAX_SIZE];
 };
 
 typedef struct file_fd_key_t {
@@ -36,7 +36,7 @@ typedef struct file_info_t {
 	uint16_t file_type;
 	uint32_t offset;
 	uint32_t size;
-	char filename[FILENAME_MAX];
+	char filename[FILENAME_MAX_SIZE];
 } FileInfo;
 
 struct file_id {

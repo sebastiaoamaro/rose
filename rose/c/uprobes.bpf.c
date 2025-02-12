@@ -158,28 +158,4 @@ int BPF_KPROBE(dummy_kprobe)
 	return 0;
 }
 
-
-SEC("kretprobe/dummy_kretprobe")
-int BPF_KRETPROBE(dummy_kretprobe)
-{
-	// if (primary_function){
-	// 	switch_leader(ctx);
-	// }else{
-	// 	entry(ctx);
-	// }
-	return 0;
-}
-
-SEC("fexit/dummy_fexit")
-int BPF_PROG(dummy_fexit)
-{
-	return 0;
-}
-
-SEC("fentry/dummy_fentry")
-int BPF_PROG(dummy_fentry)
-{
-	return 0;
-}
-
 char LICENSE[] SEC("license") = "GPL";

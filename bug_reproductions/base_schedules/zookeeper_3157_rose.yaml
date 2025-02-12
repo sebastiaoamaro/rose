@@ -2,6 +2,7 @@ execution_plan:
   tracer:
     tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
+    tracing_type: full_trace,process_controlled
 
 nodes:
   zookeeper:

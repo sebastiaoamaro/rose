@@ -1,0 +1,10 @@
+FROM ubuntu:20.04
+RUN apt-get -y update
+RUN apt install -y iputils-ping
+
+ADD redis_binaries/redis-server .
+ADD redis_binaries/redis-cli .
+ADD redisraftbinaries/redisraftb9ee410.so ./redisraft.so
+ADD startredis.sh .
+RUN chmod +x startredis.sh
+ADD ips.txt .

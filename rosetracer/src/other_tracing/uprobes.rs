@@ -2,10 +2,6 @@ use anyhow::Result;
 use libbpf_rs::Link;
 use libbpf_rs::UprobeOpts;
 use crate::auxiliary;
-use libloading::{Library, Symbol};
-use rand::Rng;
-use std::ffi::CString;
-use libbpf_rs::MapFlags;
 use libbpf_rs::skel::OpenSkel as _;
 use libbpf_rs::skel::SkelBuilder as _;
 use std::mem::MaybeUninit;
@@ -22,23 +18,23 @@ use uprobes::*;
 pub fn run_tracing(
     pids: Vec<i32>,
     pid_count: usize,
-    containers: Vec<String>,
-    functions: Vec<String>,
+    _containers: Vec<String>,
+    _functions: Vec<String>,
 ) -> Result<()>{ 
 
     //Build the BPF program
-    let mut skel_builder = UprobesSkelBuilder::default();
+    let skel_builder = UprobesSkelBuilder::default();
 
     //skel_builder.obj_builder.debug(true);
 
     auxiliary::bump_memlock_rlimit()?;
     let mut open_object = MaybeUninit::uninit();
-    let mut open_skel = skel_builder.open(&mut open_object)?;
+    let open_skel = skel_builder.open(&mut open_object)?;
 
     open_skel.maps.rodata_data.pid_counter = pid_count as i32;
     //open_skel.rodata().pid_counter = pid_count as i32;
 
-    let mut skel = open_skel.load()?;
+    let skel = open_skel.load()?;
 
     //let binary_path = "/home/sebastiaoamaro/phd/torefidevel/tests/traceroverhead/write".to_string().clone();
 
@@ -47,7 +43,7 @@ pub fn run_tracing(
 
     let mut uprobes:Vec<Link> = vec![];
 
-    for (index, pid) in pids.clone().iter().enumerate() {
+    for (_index, pid) in pids.clone().iter().enumerate() {
         let opts = UprobeOpts{ref_ctr_offset:0,cookie:0,retprobe:false,func_name:function_name.clone(),..Default::default()};
 
         let uprobe = skel.progs.handle_uprobe.attach_uprobe_with_opts(*pid as i32, binary_path.clone(), 0, opts).expect("failed to attach prog");

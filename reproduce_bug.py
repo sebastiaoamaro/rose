@@ -2,12 +2,13 @@ import random
 import yaml
 import sys
 import subprocess
-from processor.processor import History, compare_faults, write_new_schedule
+from processor.processor import History, choose_faults, compare_faults, write_new_schedule
+import shutil
 
 class BugReproduction:
     def __init__(self):
         self.schedule = ""
-        self.oracled = ""
+        self.oracle = ""
         self.result_folder = ""
         self.trace_location = ""
         self.buggy_trace = ""
@@ -23,7 +24,7 @@ def parse_bug_reproduction(filename):
     file = open(filename,"r")
 
     bug_reproduction_text = yaml.safe_load(file)
-    
+
     bug_reproduction_text = bug_reproduction_text["reproduction"]
 
     bug_reproduction = BugReproduction()
@@ -32,17 +33,17 @@ def parse_bug_reproduction(filename):
         bug_reproduction.schedule = bug_reproduction_text["schedule"]
     else:
         print("No schedule paramater found")
-    
+
     if "oracle" in bug_reproduction_text:
         bug_reproduction.oracle = bug_reproduction_text["oracle"]
     else:
         print("No oracle paramater found")
-    
+
     if "result_folder" in bug_reproduction_text:
         bug_reproduction.result_folder = bug_reproduction_text["result_folder"]
     else:
         print("No result_folder paramater found")
-    
+
     if "trace_location" in bug_reproduction_text:
         bug_reproduction.trace_location = bug_reproduction_text["trace_location"]
     else:
@@ -52,16 +53,16 @@ def parse_bug_reproduction(filename):
         bug_reproduction.buggy_trace = bug_reproduction_text["buggy_trace"]
     else:
         print("No buggy_trace paramater found")
-    
+
     if "cleanup" in bug_reproduction_text:
         bug_reproduction.cleanup = bug_reproduction_text["cleanup"]
     else:
-        print("No cleanup paramater found")    
+        print("No cleanup paramater found")
 
     if "runs" in bug_reproduction_text:
         bug_reproduction.runs = int(bug_reproduction_text["runs"])
     else:
-        print("No runs paramater found") 
+        print("No runs paramater found")
 
     return bug_reproduction
 
@@ -77,9 +78,9 @@ def run_reproduction(schedule):
             text=True,           # Decode output as text
             check=True           # Raise exception on non-zero exit code
         )
-        #print("Output from schedule:")
-        #print(result.stdout)  # Standard output
-        #print(result.stderr)
+        print("Output from schedule:")
+        print(result.stdout)  # Standard output
+        print(result.stderr)
     except subprocess.CalledProcessError as e:
         print("An error occurred:")
         print(e.stderr)  # Standard error
@@ -130,7 +131,7 @@ def collect_history(trace_location,result_folder,run):
 def run_cleanup(cleanup):
     if len(cleanup) == 0:
         return
-    
+
     command = ["sh",cleanup]
     try:
         # Start the process
@@ -144,14 +145,24 @@ def run_cleanup(cleanup):
         print(result.stdout)  # Standard output
     except subprocess.CalledProcessError as e:
         print("An error occurred:")
-        print(e.stderr)  # Standard error    
+        print(e.stderr)  # Standard error
+
+def move_file(source_path, destination_path):
+    try:
+        shutil.copy(source_path, destination_path)
+        print(f"File moved successfully from {source_path} to {destination_path}")
+    except FileNotFoundError:
+        print("Error: Source file not found.")
+    except PermissionError:
+        print("Error: Permission denied.")
+    except Exception as e:
+        print(f"Error: {e}")
 
 #TODO: create compile script and function so that we do not have to compile every time
 def main():
     filename = sys.argv[1]
 
     bug_reproduction = parse_bug_reproduction(filename)
-
 
     #Run faultless schedule
     print("Running faultless schedule")
@@ -175,26 +186,63 @@ def main():
     history_buggy.process_history(bug_reproduction.buggy_trace)
     faults_buggy = history_buggy.discover_faults()
 
-
-    faults = compare_faults(faults_buggy,faults_normal)
-    #faults_flattened = [item for sublist in faults.values() for item in sublist]
-    less_common_faults = min(faults, key=lambda k: len(faults[k]))
-
-
+    faults_detected = compare_faults(faults_buggy,faults_normal)
 
     buggy_runs = []
-    for i in range(0,30):
-        for fault in faults[less_common_faults]:
-            fault.start_time = fault.start_time + random.randint(-100, 100)
-        new_schedule_location = write_new_schedule(bug_reproduction.schedule,faults[less_common_faults])
-        print("In run: " + str(i))
-        run_reproduction(new_schedule_location)
-        buggy_run = check_oracle(bug_reproduction.oracle,str(i),bug_reproduction.result_folder)
-        if (buggy_run):
-            print("Buggy run found")
-            break
-        collect_history(bug_reproduction.trace_location,bug_reproduction.result_folder,str(i))
-        run_cleanup(bug_reproduction.cleanup)
+    buggy_schedules = []
+    reproduction_rate = 0
+    buggy_schedule = ""
+    #TODO: Think how to handle multiple faults when state_score is the same
+    fault_occurs = 1
+
+    faults_for_schedule = choose_faults(faults_detected)
+    new_schedule_location = write_new_schedule(bug_reproduction.schedule,faults_for_schedule)
+
+    # for fault in faults_detected:
+    #         if fault.type == "syscall":
+    #             if len(fault.begin_conditions) > 0:
+    #                 call_count = 1
+    #                 while fault_occurs == len([fault]) and reproduction_rate < 75:
+    #                     fault.begin_conditions[0].call_count = call_count
+    #                     new_schedule_location = write_new_schedule(bug_reproduction.schedule,[fault])
+    #                     run_reproduction(new_schedule_location)
+    #                     buggy_run = check_oracle(bug_reproduction.oracle,str(call_count),bug_reproduction.result_folder)
+    #                     run_cleanup(bug_reproduction.cleanup)
+
+    #                     if (buggy_run):
+    #                         buggy_runs.append(call_count)
+    #                         buggy_schedule = bug_reproduction.result_folder+"buggy_run"+str(call_count)+".yaml"
+    #                         move_file(new_schedule_location,buggy_schedule)
+    #                         buggy_schedules.append(buggy_schedule)
+
+    #                         buggy_runs_counter = 0
+    #                         for i in range(0,10):
+    #                             run_reproduction(new_schedule_location)
+    #                             buggy_run = check_oracle(bug_reproduction.oracle,str(call_count),bug_reproduction.result_folder)
+    #                             run_cleanup(bug_reproduction.cleanup)
+    #                             if(buggy_run):
+    #                                 buggy_runs_counter += 1
+
+    #                         reproduction_rate = (buggy_runs_counter*100)/10
+    #                         print("Reproduction rate: " + str(reproduction_rate))
+
+    #                     else:
+    #                         history_location = collect_history(bug_reproduction.trace_location,bug_reproduction.result_folder,str(call_count))
+
+    #                         history_buggy =  History()
+    #                         history_buggy.parse_schedule(new_schedule_location)
+    #                         history_buggy.process_history(history_location)
+
+    #                         fault_occurs = len(history_buggy.injected_faults)
+    #                         call_count+=1
+
+    #                 if reproduction_rate >= 75:
+    #                     print("Schedule at " + str(buggy_schedule) + " has reproduction rate of " + str(reproduction_rate))
+    #                 if fault_occurs != len([fault]):
+    #                     print("Fault does not occur anymore")
+    #                     print("Fault_occurs is " + str(fault_occurs) + " and " + "len(fault) is " + str(len([fault])))
+    #                 return
+            #if fault.type == "block_ips":
 
     print("Buggy runs: " + str(buggy_runs))
     #Test new_schedule
@@ -208,7 +256,7 @@ def main():
     #         buggy_runs.append(i)
     #     collect_history(bug_reproduction.trace_location,bug_reproduction.result_folder,str(i))
     #     run_cleanup(bug_reproduction.cleanup)
-    
+
     # print("Buggy runs: " + str(buggy_runs))
 
 

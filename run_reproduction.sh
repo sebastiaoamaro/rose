@@ -24,6 +24,6 @@ sudo insmod rose/kernelmodule/rose.ko
 python3 schedule_parser.py $schedule
 mv faultschedule.c rose/c/
 cd rose/c/
-make;
+make
 cp ./main/main currentrosetest
-sudo ./currentrosetest -v
+sudo ./currentrosetest

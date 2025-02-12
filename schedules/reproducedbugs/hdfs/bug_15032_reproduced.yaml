@@ -4,6 +4,7 @@ execution_plan:
   tracer:
     tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
 
 nodes:
   hdfs:
@@ -18,7 +19,7 @@ faults:
       return_value: -111
     target: hdfs
     traced: hdfs
-    occurrences: 2
+    occurrences: 1
     begin_conditions:
     - condition1:
         type: syscall

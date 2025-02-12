@@ -1,7 +1,7 @@
 #!/bin/bash
 workload_size=5000000
-#workload_size=500000
-runs=1
+#workload_size=100000
+runs=5
 # maindirectory=/home/sebastiaoamaro/phd/torefidevel/rosetracer/
 # main=/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
 maindirectory=/vagrant/rosetracer/
@@ -10,7 +10,7 @@ date=$(date +"%H:%M")
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 cd $maindirectory
-#bpftool btf dump file /sys/kernel/btf/vmlinux format c > src/bpf/vmlinux.h
+bpftool btf dump file /sys/kernel/btf/vmlinux format c > src/bpf/vmlinux.h
 cargo build --release
 cd $SCRIPT_DIR
 
@@ -21,7 +21,7 @@ sudo rm -r /redis/*
 
 ulimit -n 4096
 #rm results/*
-for topology in 3
+for topology in 3 6
 do
     for (( run=1; run<=$runs; run++ ))
     do
@@ -34,10 +34,7 @@ do
         sleep 30
 
         echo Starting Workload
-        #/usr/bin/time -ao stats/times$date.txt -f "$run:v:$topology:%e" ./ycsb.sh $workload_size topology$topology:$run
-        #sudo perf record -ag -o vanilla.perf &
-        #perf_pid=$!
-        ./ycsb.sh $workload_size topology$topology:$run
+        ./run_ycsb.sh $workload_size topology$topology:$run
         #sudo kill -2 $perf_pid
         docker compose -f configs/docker-compose$topology.yaml down
         sudo rm -r /redis/*
@@ -48,8 +45,7 @@ do
 ############################################################################################################
 
     #Tracing active
-    container_and_pid="container_and_pid.txt"
-    container_names="container_names.txt"
+    container_info="container_and_pid.txt"
     functions_file="../../tracertests/functions.txt"
     file="check.txt"
 
@@ -65,8 +61,8 @@ do
         redis-cli --cluster create $(cat configs/ips$topology.txt) --cluster-yes
         sleep 30
 
-        ./retrievecontainerinfo.sh $container_and_pid
-        sudo $main "production_tracer" "container" $functions_file $binary_path $container_and_pid "none" &
+        ./retrievecontainerinfo.sh $container_info
+        sudo $main "production_trace,container" $functions_file $binary_path $container_info "none" &
 
         ebpf_PID=$!
         while [ ! -s "$file" ]; do
@@ -76,11 +72,8 @@ do
 
         echo Starting Workload
 
-        #sudo perf record -ag -o tracing.perf &
-        #perf_pid=$!
-        ./runycsb.sh $workload_size tracerontopology$topology:$run
+        ./run_ycsb.sh $workload_size tracerontopology$topology:$run
 
-        #sudo kill -2 $perf_pid
 
         sudo kill -2 $ebpf_PID
         docker compose -f configs/docker-compose$topology.yaml down

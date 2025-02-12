@@ -1,0 +1,22 @@
+execution_plan:
+  maximum_time: 600
+  setup:
+    script: /vagrant/schedules/reproducedbugs/redpanda/startcluster.sh
+    duration: 10
+  workload:
+    wait_time: 10
+    script: /vagrant/schedules/reproducedbugs/redpanda/runworkload.sh
+  cleanup:
+    duration: 30
+
+nodes:
+  redpanda0:
+    container: true
+  redpanda1:
+    container: true
+  redpanda2:
+    container: true
+  redpanda3:
+    container: true
+  redpanda4:
+    container: true

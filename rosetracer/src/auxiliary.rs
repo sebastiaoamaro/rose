@@ -1,9 +1,12 @@
-use anyhow::{bail,Result};
+use anyhow::{bail, Result};
 use libbpf_rs::MapCore;
 use libbpf_rs::MapFlags;
+use pin_maps::PinMapsSkel;
+use procfs::process::ProcState::{Stopped, Waiting};
 use procfs::process::Process;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ffi::CStr;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::{self, BufRead, BufReader, Write};
@@ -14,34 +17,76 @@ use std::str;
 use std::sync::mpsc;
 use std::thread;
 use std::time;
-use std::process::{exit};
-use nix::ifaddrs::getifaddrs;
 
-#[repr(C)]
-pub struct pair{
-	pub src:u32,
-	pub dst:u32
-}
-#[repr(C)]
-pub struct network_info
-{
-	pub frequency:u32,
-    pub last_time_seen:u64
+pub mod pin_maps {
+    include!(concat!(env!("OUT_DIR"), "/pin_maps.skel.rs"));
 }
 
 #[repr(C)]
-pub struct event{
-    pub event_type:u64,
-    pub timestamp:u64,
-    pub id:u64,
-	pub pid:u32,
-    pub tid:u32,
-    pub ret:i32,
-    pub arg1:u32,
-    pub arg2:u32,
-    pub arg3:u32,
-    pub arg4:u32
+pub struct Pair {
+    pub src: u32,
+    pub dst: u32,
 }
+#[repr(C)]
+pub struct NetworkInfo {
+    pub frequency: u32,
+    pub last_time_seen: u64,
+}
+
+#[repr(C)]
+pub struct Event {
+    pub event_type: u64,
+    pub timestamp: u64,
+    pub id: u64,
+    pub pid: u32,
+    pub tid: u32,
+    pub arg1: u32,
+    pub arg2: u32,
+    pub arg3: u32,
+    pub arg4: u32,
+    pub ret: i32,
+}
+
+#[repr(C)]
+pub struct Processfd {
+    pub fd: i32,
+    pub pid: u32,
+    pub ts: u64,
+}
+#[derive(Hash, Eq, PartialEq, Debug)]
+pub struct FdData {
+    pub pid: u32,
+    pub fd: i32,
+}
+
+pub struct NameAtTimestamp {
+    pub name: String,
+    pub timestamp: u64,
+}
+
+static SYSCALLS_WITH_FD: [u64; 11] = [
+    0,  // read
+    1,  // write
+    3,  // close
+    32, // dup
+    33, // dup2
+    34, // pause (uses a signal file descriptor indirectly)
+    49, // bind
+    439, 257, 89, 51,
+];
+
+static _NETWORK_SYSCALLS_WITH_FD: [u64; 10] = [
+    40, // sendfile
+    41, // socket
+    42, // connect
+    43, // accept
+    44, // sendto
+    45, // recvfrom
+    46, // sendmsg
+    47, // recvmsg
+    48, // shutdown
+    49, // bind
+];
 
 pub fn bump_memlock_rlimit() -> Result<()> {
     let rlimit = libc::rlimit {
@@ -83,15 +128,15 @@ pub fn u32_to_u8_array_little_endian(value: i32) -> [u8; 4] {
     ]
 }
 
-
 pub fn vec_to_i32(bytes: Vec<u8>) -> i32 {
     // Ensure the Vec<u8> has exactly 4 bytes
-    let byte_array: [u8; 4] = bytes.try_into().expect("Vec<u8> must have exactly 4 elements");
+    let byte_array: [u8; 4] = bytes
+        .try_into()
+        .expect("Vec<u8> must have exactly 4 elements");
 
     // Convert the [u8; 4] array into an i32
     i32::from_le_bytes(byte_array) // Converts assuming little-endian byte order
 }
-
 
 pub fn write_to_file(filename: String, content: String) -> std::io::Result<()> {
     // Open a file in write mode, creating it if it doesn't exist
@@ -152,88 +197,265 @@ pub fn read_names_from_file(filename: &str) -> io::Result<Vec<String>> {
 
 pub fn remove_duplicates(vec: Vec<u64>) -> Vec<u64> {
     let mut seen = HashSet::new();
-    vec.into_iter()
-        .filter(|&x| seen.insert(x))
-        .collect()                   
+    vec.into_iter().filter(|&x| seen.insert(x)).collect()
 }
+pub fn collect_fd_map(
+    fd_to_name: &libbpf_rs::Map,
+    dup_map: &libbpf_rs::Map,
+) -> HashMap<FdData, Vec<NameAtTimestamp>> {
+    let mut filenames: HashMap<FdData, Vec<NameAtTimestamp>> = HashMap::new();
 
-pub fn collect_functions_called_array(called_functions: &libbpf_rs::Map,functions:Vec<String>,hashmap_pid_to_node:HashMap<i32,String>){
-    
-   let keys = called_functions.keys();
-   println!("Collecting events \n ");
-   //Use later
-   let mut history: Vec<&event> = vec![];
+    let keys = fd_to_name.keys();
 
-   for key in keys {
-       let result = called_functions.lookup(&key, MapFlags::ANY);
+    for key in keys {
+        let result = fd_to_name.lookup(&key, MapFlags::ANY);
 
-       match result {
-           Ok(result) => {
-               let event = result.unwrap().clone();
+        match result {
+            Ok(result) => {
+                let value = result.unwrap().clone();
 
-               unsafe {
-                    let event: *const event = event.as_ptr() as *const event;
-                    let event: &event = &*event;
+                unsafe {
+                    let process_fd: *const Processfd = key.as_ptr() as *const Processfd;
 
-                    if event.pid == 0{
+                    let process_fd: &Processfd = &*process_fd;
+
+                    if process_fd.pid == 0 {
+                        println!("Pid is 0");
                         continue;
                     }
-                    
+                    let c_str =
+                        CStr::from_bytes_until_nul(&value).expect("Failed to call from_bytes");
+                    let name = c_str
+                        .to_str()
+                        .expect("Failed to convert to rust_string")
+                        .to_owned();
+
+                    //println!("Pid is {} fd is {} at ts {} with name {}",process_fd.pid,process_fd.fd,process_fd.ts,rust_string);
+
+                    let pid = process_fd.pid;
+
+                    let fd = process_fd.fd;
+
+                    let timestamp = process_fd.ts;
+
+                    let fd_data = FdData { pid, fd };
+
+                    let name_at_ts = NameAtTimestamp { name, timestamp };
+
+                    let list_filenames = filenames.get_mut(&fd_data);
+
+                    match list_filenames {
+                        Some(list_filenames) => {
+                            list_filenames.push(name_at_ts);
+                        }
+                        None => {
+                            let mut list = vec![];
+                            list.push(name_at_ts);
+                            filenames.insert(fd_data, list);
+                        }
+                    };
+                }
+            }
+            Err(e) => {
+                println!("Err: {:?}", e);
+            }
+        }
+    }
+
+    let keys = dup_map.keys();
+
+    for key in keys {
+        let result = dup_map.lookup(&key, MapFlags::ANY);
+
+        match result {
+            Ok(result) => {
+                let value = result.unwrap().clone();
+
+                unsafe {
+                    let process_fd: *const Processfd = key.as_ptr() as *const Processfd;
+
+                    let process_fd: &Processfd = &*process_fd;
+
+                    if process_fd.pid == 0 {
+                        println!("Pid is 0");
+                        continue;
+                    }
+
+                    //println!("Pid is {} fd is {} at ts {} with name {}",process_fd.pid,process_fd.fd,process_fd.ts,rust_string);
+
+                    let pid = process_fd.pid;
+
+                    let old_fd = process_fd.fd;
+
+                    let dup_timestamp = process_fd.ts;
+
+                    let old_fd_data = FdData { pid, fd: old_fd };
+
+                    let list_filenames = filenames.get_mut(&old_fd_data);
+
+                    let mut name = "".to_string();
+                    let mut current_ts = 0;
+                    match list_filenames {
+                        Some(list_filenames) => {
+                            for filename_and_ts in list_filenames {
+                                if (dup_timestamp > filename_and_ts.timestamp)
+                                    && (current_ts < filename_and_ts.timestamp)
+                                {
+                                    name = filename_and_ts.name.to_string();
+                                    //println!("Found name {} at ts {} for fd {}",filename_and_ts.name,filename_and_ts.timestamp,old_fd);
+                                    current_ts = filename_and_ts.timestamp;
+                                }
+                            }
+                        }
+                        None => {
+                            println!("This is not supposed to happen");
+                        }
+                    };
+
+                    let byte_array: [u8; 4] = [value[0], value[1], value[2], value[3]];
+                    let fd = i32::from_le_bytes(byte_array);
+
+                    let fd_data = FdData { pid, fd };
+
+                    let name_at_ts = NameAtTimestamp {
+                        name,
+                        timestamp: dup_timestamp,
+                    };
+
+                    let list_filenames = filenames.get_mut(&fd_data);
+
+                    match list_filenames {
+                        Some(list_filenames) => {
+                            list_filenames.push(name_at_ts);
+                        }
+                        None => {
+                            let mut list = vec![];
+                            list.push(name_at_ts);
+                            filenames.insert(fd_data, list);
+                        }
+                    };
+                }
+            }
+            Err(e) => {
+                println!("Err: {:?}", e);
+            }
+        }
+    }
+
+    return filenames;
+}
+
+pub fn collect_events(
+    called_functions: &libbpf_rs::Map,
+    functions: Vec<String>,
+    hashmap_pid_to_node: HashMap<i32, String>,
+    filenames: &mut HashMap<FdData, Vec<NameAtTimestamp>>,
+) {
+    let keys = called_functions.keys();
+    //Use later
+    let mut history: Vec<&Event> = vec![];
+
+    for key in keys {
+        let result = called_functions.lookup(&key, MapFlags::ANY);
+
+        match result {
+            Ok(result) => {
+                let event = result.unwrap().clone();
+
+                unsafe {
+                    let event: *const Event = event.as_ptr() as *const Event;
+                    let event: &Event = &*event;
+
+                    if event.pid == 0 {
+                        continue;
+                    }
+
                     history.push(event);
 
-                    if event.event_type == 1{
+                    if event.event_type == 1 {
+                        let mut filename = "na".to_string();
+
+                        if SYSCALLS_WITH_FD.contains(&event.id) {
+                            filename = find_filename(event, filenames);
+                        }
                         //println!("Added sys_enter with ret {}",event.ret);
                         let pid = event.pid as i32;
                         let event_name = get_syscall_name(event.id);
-                        let node_name = hashmap_pid_to_node.get(&pid).expect(&format!("Failed to node-name for pid {}",event.pid));
-                        write_event_to_history(event, node_name.clone(),"sys_enter".to_string(), event_name);
+                        let node_name = hashmap_pid_to_node
+                            .get(&pid)
+                            .expect(&format!("Failed to node-name for pid {}", event.pid));
+                        write_event_to_history(
+                            event,
+                            node_name.clone(),
+                            "sys_enter".to_string(),
+                            event_name,
+                            filename,
+                        );
                     }
-                    if event.event_type == 2{
+                    if event.event_type == 2 {
                         //println!("Added sys_exit with ret {}",event.ret);
+                        let mut filename = "na".to_string();
+
+                        if SYSCALLS_WITH_FD.contains(&event.id) {
+                            filename = find_filename(event, filenames);
+                        }
+
                         let pid = event.pid as i32;
                         let event_name = get_syscall_name(event.id);
-                        let node_name = hashmap_pid_to_node.get(&pid).expect(&format!("Failed to node-name for pid {}",event.pid));
-                        write_event_to_history(event, node_name.clone(),"sys_exit".to_string(), event_name);
+                        let node_name = hashmap_pid_to_node
+                            .get(&pid)
+                            .expect(&format!("Failed to node-name for pid {}", event.pid));
+                        write_event_to_history(
+                            event,
+                            node_name.clone(),
+                            "sys_exit".to_string(),
+                            event_name,
+                            filename,
+                        );
                     }
-                    if event.event_type == 3{
+                    if event.event_type == 3 {
                         let pid = event.pid as i32;
-                        let node_name = hashmap_pid_to_node.get(&pid).expect(&format!("Failed to node-name for pid {}",event.pid));
-                        let event_name = functions.get(event.id as usize).expect(&format!("Failed to get function name for id {}",event.id));
-                        write_event_to_history(event, node_name.clone(),"function_call".to_string(),event_name.clone());
+                        let node_name = hashmap_pid_to_node
+                            .get(&pid)
+                            .expect(&format!("Failed to node-name for pid {}", event.pid));
+                        let event_name = functions
+                            .get(event.id as usize)
+                            .expect(&format!("Failed to get function name for id {}", event.id));
+                        write_event_to_history(
+                            event,
+                            node_name.clone(),
+                            "function_call".to_string(),
+                            event_name.clone(),
+                            "na".to_string(),
+                        );
                     }
-
-                    
-                   
-               }
-           }
-           Err(e) => {
-               println!("Err: {:?}", e);
-           }
-       }
-   }
+                }
+            }
+            Err(e) => {
+                println!("Err: {:?}", e);
+            }
+        }
+    }
 }
 
 //Used for stats and to remove useless probes
-pub fn process_uprobes_array_map(uprobes_array:&libbpf_rs::Map){
-
+pub fn process_uprobes_array_map(uprobes_array: &libbpf_rs::Map) {
     let keys = uprobes_array.keys();
 
-    let mut uprobes_counters:Vec<i32> = vec![0;512];
+    let mut uprobes_counters: Vec<i32> = vec![0; 512];
 
     for key in keys {
         let result = uprobes_array.lookup(&key, MapFlags::ANY);
 
         match result {
             Ok(result) => {
-
                 let cookie = vec_to_i32(key);
 
                 let value_vec = result.unwrap().clone();
 
                 let value = vec_to_i32(value_vec);
-            
-                uprobes_counters[cookie as usize] = value;
 
+                uprobes_counters[cookie as usize] = value;
             }
             Err(e) => {
                 println!("Err: {:?}", e);
@@ -244,23 +466,26 @@ pub fn process_uprobes_array_map(uprobes_array:&libbpf_rs::Map){
     File::create("/tmp/uprobe_stats.txt").expect("Failed to create file");
 
     for (index, value) in uprobes_counters.iter().enumerate() {
- 
-        if *value > 0{
-            write_to_file("/tmp/uprobe_stats.txt".to_string(), format!("{},{}\n",index,value)).expect("Failed to write to stats file");
+        if *value > 0 {
+            write_to_file(
+                "/tmp/uprobe_stats.txt".to_string(),
+                format!("{},{}\n", index, value),
+            )
+            .expect("Failed to write to stats file");
         }
     }
-
 }
 
-pub fn monitor_pid(pid: i32,stop_signal: mpsc::Receiver<()>) -> Result<(), Box<dyn std::error::Error>> {
-
+pub fn monitor_pid(
+    pid: i32,
+    stop_signal: mpsc::Receiver<()>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_duration = time::Duration::from_millis(1000);
     let mut events_process_pause = vec![];
     // Try to open the process with the specified PID
     let process = Process::new(pid)?;
-    let mut last_state = process.stat().unwrap().state().unwrap();
-    loop {
 
+    loop {
         if stop_signal.try_recv().is_ok() {
             println!("Stopping monitoring for PID {}", pid);
             break;
@@ -274,10 +499,13 @@ pub fn monitor_pid(pid: i32,stop_signal: mpsc::Receiver<()>) -> Result<(), Box<d
                 let state: procfs::process::ProcState = p_info.state().unwrap();
 
                 let pid = p_info.pid;
-                let timestamp = std::time::Duration::from(nix::time::clock_gettime(nix::time::ClockId::CLOCK_MONOTONIC)?).as_nanos();
+                let timestamp = std::time::Duration::from(nix::time::clock_gettime(
+                    nix::time::ClockId::CLOCK_MONOTONIC,
+                )?)
+                .as_nanos();
                 //
-                if state != last_state {
-                    let event = event{
+                if state == Waiting || state == Stopped {
+                    let event = Event {
                         event_type: 5,
                         id: 0,
                         pid: pid as u32,
@@ -291,13 +519,12 @@ pub fn monitor_pid(pid: i32,stop_signal: mpsc::Receiver<()>) -> Result<(), Box<d
                     };
 
                     events_process_pause.push(event);
-                    last_state = state;
                 }
 
                 thread::sleep(sleep_duration);
             }
             Err(e) => {
-                println!("Process with PID {} does not exist.", e);
+                //println!("Process with PID {} does not exist.", e);
                 break;
             }
         }
@@ -307,39 +534,49 @@ pub fn monitor_pid(pid: i32,stop_signal: mpsc::Receiver<()>) -> Result<(), Box<d
     for event in events_process_pause {
         let event_name = "process_state_change".to_string();
         let node_name = "any".to_string();
-        write_event_to_history(&event, node_name,event_name.to_string(), event_name);
+        write_event_to_history(
+            &event,
+            node_name,
+            event_name.to_string(),
+            event_name,
+            "na".to_string(),
+        );
     }
 
     Ok(())
 }
 
-
-pub fn collect_network_delays(network_delays:&libbpf_rs::Map){
-
+pub fn collect_network_delays(network_delays: &libbpf_rs::Map) {
     let keys = network_delays.keys();
 
-    let mut history: Vec<&event> = vec![];
+    let mut history: Vec<&Event> = vec![];
     let mut key_count = 0;
     for key in keys {
         let result = network_delays.lookup(&key, MapFlags::ANY);
 
         match result {
             Ok(result) => {
-                key_count+=1;
+                key_count += 1;
                 let event = result.unwrap().clone();
 
                 unsafe {
-                    let event: *const event = event.as_ptr() as *const event;
-                    let event: &event = &*event;
+                    let event: *const Event = event.as_ptr() as *const Event;
+                    let event: &Event = &*event;
 
-                    if event.pid == 0{
+                    if event.pid == 0 {
                         continue;
                     }
-                    
+
                     history.push(event);
 
-                    if event.event_type == 4{
-                        write_event_to_history(event, "any".to_string(),"network_event".to_string(), "network_delay".to_string());
+                    if event.event_type == 4 {
+                        write_event_to_history(
+                            event,
+                            "any".to_string(),
+                            "network_event".to_string(),
+                            "network_delay".to_string(),
+                            "na".to_string(),
+                        );
                     }
                     //println!("Found delay from {} to {} of {}",Ipv4Addr::from(event.arg1),Ipv4Addr::from(event.arg2),event.arg3);
                 }
@@ -349,37 +586,32 @@ pub fn collect_network_delays(network_delays:&libbpf_rs::Map){
             }
         }
     }
-    println!("key_count in delays: {}",key_count);
-
 }
-pub fn collect_network_info(network_info:&libbpf_rs::Map){
-    
+pub fn collect_network_info(network_info: &libbpf_rs::Map) {
     let keys = network_info.keys();
 
     let mut key_count = 0;
-    for key in keys{
+    for key in keys {
+        unsafe {
+            let net_pair = key.as_ptr() as *const Pair;
 
-        unsafe{
-            let net_pair = key.as_ptr() as *const pair;
-
-            let net_pair:&pair = &*net_pair;
+            let net_pair: &Pair = &*net_pair;
 
             let result = network_info.lookup(&key, MapFlags::ANY).unwrap();
 
-            match result{
-                Some(result)=> {
-                    let net_info_pair: *const network_info = result.as_ptr() as *const network_info;
-                    
-                    let net_info: &network_info = &*net_info_pair;
+            match result {
+                Some(result) => {
+                    let net_info_pair: *const NetworkInfo = result.as_ptr() as *const NetworkInfo;
 
-                    
+                    let net_info: &NetworkInfo = &*net_info_pair;
+
                     let src: u32 = net_pair.src;
                     let dst: u32 = net_pair.dst;
 
                     let frequency: u32 = net_info.frequency;
                     let last_time_seen: u64 = net_info.last_time_seen;
-                    
-                    let event = event{
+
+                    let event = Event {
                         event_type: 6,
                         id: 0,
                         pid: 0,
@@ -391,64 +623,163 @@ pub fn collect_network_info(network_info:&libbpf_rs::Map){
                         arg3: frequency,
                         arg4: 0,
                     };
-                    key_count+=1;
-                    write_event_to_history(&event, "any".to_string(), "network_information".to_string(), "network_information".to_string());
+                    key_count += 1;
+                    write_event_to_history(
+                        &event,
+                        "any".to_string(),
+                        "network_information".to_string(),
+                        "network_information".to_string(),
+                        "na".to_string(),
+                    );
                 }
                 None => {
                     println!("No value found for key: {:?}", key);
                     continue;
                 }
             }
-
         }
     }
-    println!("key_count in info: {}",key_count);
 }
 
-
-pub fn write_event_to_history(event:&event,node_name:String,event_type:String,event_name:String){
-
-    write_to_file("/tmp/history.txt".to_string(),format!("Node:{},Pid:{},Tid:{},event_type:{},event_name:{},ret:{},time:{},arg1:{},arg2:{},arg3:{},arg4:{}\n",
-    node_name,event.pid,event.tid,event_type,event_name,event.ret,event.timestamp,event.arg1,event.arg2,event.arg3,event.arg4)).expect("Failed to dump history");
+pub fn write_event_to_history(
+    event: &Event,
+    node_name: String,
+    event_type: String,
+    event_name: String,
+    filename: String,
+) {
+    write_to_file("/tmp/history.txt".to_string(),
+    format!("Node:{},Pid:{},Tid:{},event_type:{},event_name:{},ret:{},time:{},arg1:{},arg2:{},arg3:{},arg4:{},arg5:{}\n",
+    node_name,event.pid,event.tid,event_type,event_name,event.ret,event.timestamp,event.arg1,event.arg2,event.arg3,event.arg4,filename)).expect("Failed to dump history");
 }
 
-pub fn start_xdp_in_container(container_pid:i32,if_index:i32) -> u32{
-
+pub fn start_xdp_in_container(container_pid: i32, if_index: i32) -> u32 {
     // Create the `nsenter` command
-    println!("Starting XDP in container with PID: {} and if_index {}", container_pid,if_index);
+    //println!("Starting XDP in container with PID: {} and if_index {}", container_pid,if_index);
 
     let child = Command::new("nsenter")
-        .arg(format!("-t {}",container_pid)) // Specify the network namespace
+        .arg(format!("-t {}", container_pid)) // Specify the network namespace
         .arg("-n")
-        .arg("/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/xdp")
-        .arg(format!("{}",if_index)) // List network interfaces as an example
+        //.arg("/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/xdp")
+        .arg("/vagrant/rosetracer/target/release/xdp")
+        .arg(format!("{}", if_index)) // List network interfaces as an example
         .spawn()
         .expect("Failed to start XDP");
 
     let child_pid = child.id();
 
-    println!("Child process ID: {}", child_pid);
+    //println!("Child process ID: {}", child_pid);
 
     return child_pid;
-    
 }
 
-pub fn get_device_index(device_name: &str) -> io::Result<u32> {
-    // Retrieve network interfaces and their attributes
-    for iface in getifaddrs().map_err(|e| io::Error::new(io::ErrorKind::Other, e))? {
-        if let name = iface.interface_name {
-            if name == device_name {
-                // Obtain the index of the network interface
-                if let Ok(index) = nix::net::if_::if_nametoindex(name.as_str()) {
-                    return Ok(index);
+pub fn find_filename(
+    event: &Event,
+    filenames: &mut HashMap<FdData, Vec<NameAtTimestamp>>,
+) -> String {
+    let fd = event.arg1 as i32;
+    let pid = event.pid;
+
+    let event_ts = event.timestamp;
+
+    let fd_data = FdData { pid, fd };
+
+    let filename_list = filenames.get(&fd_data);
+
+    let mut filename = "na".to_string();
+
+    let mut current_ts = 0;
+
+    //Have to check ts of name events since we collect from an hashmap which is not ordered
+    match filename_list {
+        Some(filename_list) => {
+            for (i, name_ts) in filename_list.iter().enumerate() {
+                if (event_ts > name_ts.timestamp) && (current_ts < name_ts.timestamp) {
+                    filename = filename_list[i].name.to_string();
+                    current_ts = name_ts.timestamp;
                 }
             }
         }
+        None => {}
+    };
+    //println!("Filename: {} for fd {} and pid {}",filename,fd,pid);
+    return filename;
+}
+
+pub fn pin_maps(skel: &mut PinMapsSkel) {
+    let res = skel.maps.history.unpin("/sys/fs/bpf/history");
+
+    match res {
+        Ok(_) => {
+            //println!("Successfully unpinned map")
+        }
+        Err(e) => println!("Error unpinning map: {}", e),
     }
-    Err(io::Error::new(
-        io::ErrorKind::NotFound,
-        format!("Device '{}' not found", device_name),
-    ))
+    let res = skel
+        .maps
+        .uprobes_counters
+        .unpin("/sys/fs/bpf/uprobes_counters");
+
+    match res {
+        Ok(_) => {
+            //println!("Successfully unpinned map")
+        }
+        Err(e) => println!("Error unpinning map: {}", e),
+    }
+
+    let res = skel
+        .maps
+        .network_information
+        .unpin("/sys/fs/bpf/network_information");
+
+    match res {
+        Ok(_) => {
+            //println!("Successfully unpinned map")
+        }
+        Err(e) => println!("Error unpinning map: {}", e),
+    }
+
+    let res = skel.maps.history_delays.unpin("/sys/fs/bpf/history_delays");
+
+    match res {
+        Ok(_) => {
+            //println!("Successfully unpinned map")
+        }
+        Err(e) => println!("Error unpinning map: {}", e),
+    }
+
+    let res = skel
+        .maps
+        .event_counter_for_delays
+        .unpin("/sys/fs/bpf/event_counter_for_delays");
+
+    match res {
+        Ok(_) => {
+            //println!("Successfully unpinned map")
+        }
+        Err(e) => println!("Error unpinning map: {}", e),
+    }
+
+    skel.maps
+        .history
+        .pin("/sys/fs/bpf/history")
+        .expect("Failed to pin map");
+    skel.maps
+        .uprobes_counters
+        .pin("/sys/fs/bpf/uprobes_counters")
+        .expect("Failed to pin map");
+    skel.maps
+        .network_information
+        .pin("/sys/fs/bpf/network_information")
+        .expect("Failed to pin map");
+    skel.maps
+        .history_delays
+        .pin("/sys/fs/bpf/history_delays")
+        .expect("Failed to pin map");
+    skel.maps
+        .event_counter_for_delays
+        .pin("/sys/fs/bpf/event_counter_for_delays")
+        .expect("Failed to pin map");
 }
 
 pub fn get_syscall_name(syscall_id: u64) -> String {
@@ -800,7 +1131,7 @@ pub fn get_syscall_name(syscall_id: u64) -> String {
         344 => String::from("fsmount"),
         345 => String::from("fspick"),
         346 => String::from("pidfd_open"),
-        347 => String::from("clone3"),
+        435 => String::from("clone3"),
         348 => String::from("close_range"),
         349 => String::from("openat2"),
         350 => String::from("pidfd_getfd"),
@@ -816,6 +1147,7 @@ pub fn get_syscall_name(syscall_id: u64) -> String {
         360 => String::from("process_mrelease"),
         361 => String::from("futex_waitv"),
         362 => String::from("set_mempolicy_home_node"),
-        _ => format!("unknown_syscall_{}", syscall_id)
+        439 => String::from("faccessat2"),
+        _ => format!("unknown_syscall_{}", syscall_id),
     }
 }

@@ -176,5 +176,5 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 	syscall_counter_array++;
 	check_syscall_counters();
 
-    return 0;
+	return 0;
 }

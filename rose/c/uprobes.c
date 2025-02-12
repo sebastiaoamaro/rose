@@ -71,61 +71,61 @@ static const char *unit_str(void)
 	return "bad units";
 }
 
-static bool try_fentry(struct uprobes_bpf *obj)
-{
-	long err;
+// static bool try_fentry(struct uprobes_bpf *obj)
+// {
+// 	long err;
 
-	if (env.kprobes || !env.is_kernel_func ||
-	    !fentry_can_attach(env.funcname, NULL)) {
-		goto out_no_fentry;
-	}
+// 	if (env.kprobes || !env.is_kernel_func ||
+// 	    !fentry_can_attach(env.funcname, NULL)) {
+// 		goto out_no_fentry;
+// 	}
 
-	err = bpf_program__set_attach_target(obj->progs.dummy_fentry, 0,
-					     env.funcname);
-	if (err) {
-		warn("failed to set attach fentry: %s\n", strerror(-err));
-		goto out_no_fentry;
-	}
+// 	err = bpf_program__set_attach_target(obj->progs.dummy_fentry, 0,
+// 					     env.funcname);
+// 	if (err) {
+// 		warn("failed to set attach fentry: %s\n", strerror(-err));
+// 		goto out_no_fentry;
+// 	}
 
-	err = bpf_program__set_attach_target(obj->progs.dummy_fexit, 0,
-					     env.funcname);
-	if (err) {
-		warn("failed to set attach fexit: %s\n", strerror(-err));
-		goto out_no_fentry;
-	}
+// 	err = bpf_program__set_attach_target(obj->progs.dummy_fexit, 0,
+// 					     env.funcname);
+// 	if (err) {
+// 		warn("failed to set attach fexit: %s\n", strerror(-err));
+// 		goto out_no_fentry;
+// 	}
 
-	bpf_program__set_autoload(obj->progs.dummy_kprobe, false);
-	bpf_program__set_autoload(obj->progs.dummy_kretprobe, false);
+// 	bpf_program__set_autoload(obj->progs.dummy_kprobe, false);
+// 	bpf_program__set_autoload(obj->progs.dummy_kretprobe, false);
 
-	return true;
+// 	return true;
 
-out_no_fentry:
-	bpf_program__set_autoload(obj->progs.dummy_fentry, false);
-	bpf_program__set_autoload(obj->progs.dummy_fexit, false);
+// out_no_fentry:
+// 	bpf_program__set_autoload(obj->progs.dummy_fentry, false);
+// 	bpf_program__set_autoload(obj->progs.dummy_fexit, false);
 
-	return false;
-}
+// 	return false;
+// }
 
-static int attach_kprobes(struct uprobes_bpf *obj)
-{
-	obj->links.dummy_kprobe =
-		bpf_program__attach_kprobe(obj->progs.dummy_kprobe, false,
-					   env.funcname);
-	if (!obj->links.dummy_kprobe) {
-		warn("failed to attach kprobe: %d\n", -errno);
-		return -1;
-	}
+// static int attach_kprobes(struct uprobes_bpf *obj)
+// {
+// 	obj->links.dummy_kprobe =
+// 		bpf_program__attach_kprobe(obj->progs.dummy_kprobe, false,
+// 					   env.funcname);
+// 	if (!obj->links.dummy_kprobe) {
+// 		warn("failed to attach kprobe: %d\n", -errno);
+// 		return -1;
+// 	}
 
-	obj->links.dummy_kretprobe =
-		bpf_program__attach_kprobe(obj->progs.dummy_kretprobe, true,
-					   env.funcname);
-	if (!obj->links.dummy_kretprobe) {
-		warn("failed to attach kretprobe: %d\n", -errno);
-		return -1;
-	}
+// 	obj->links.dummy_kretprobe =
+// 		bpf_program__attach_kprobe(obj->progs.dummy_kretprobe, true,
+// 					   env.funcname);
+// 	if (!obj->links.dummy_kretprobe) {
+// 		warn("failed to attach kretprobe: %d\n", -errno);
+// 		return -1;
+// 	}
 
-	return 0;
-}
+// 	return 0;
+// }
 
 static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *function,int offset)
 {
@@ -147,7 +147,7 @@ static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *f
 	// *function = '\0';
 	// function++;
 
-	//printf("Binary location in uprobe is %s and pid %d \n",binary_location,env.pid);
+	//printf("Binary location in uprobe is %s and pid %d and the elvis operator result is %d \n",binary_location,env.pid,env.pid ?: -1);
 
 	if (binary_location)
 		strcpy(bin_path,binary_location);
@@ -163,21 +163,21 @@ static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *f
 	
 	obj->links.dummy_kprobe =
 		bpf_program__attach_uprobe(obj->progs.dummy_kprobe, false,
-					   env.pid ?: -1, bin_path, func_off+offset);
+					   env.pid, bin_path, func_off+offset);
 	if (!obj->links.dummy_kprobe) {
 		err = -errno;
 		warn("Failed to attach uprobe: %ld\n", err);
 		goto out_binary;
 	}
 
-	obj->links.dummy_kretprobe =
-		bpf_program__attach_uprobe(obj->progs.dummy_kretprobe, true,
-					   env.pid ?: -1, bin_path, func_off);
-	if (!obj->links.dummy_kretprobe) {
-		err = -errno;
-		warn("Failed to attach uretprobe: %ld\n", err);
-		goto out_binary;
-	}
+	// obj->links.dummy_kretprobe =
+	// 	bpf_program__attach_uprobe(obj->progs.dummy_kretprobe, true,
+	// 				   env.pid ?: -1, bin_path, func_off);
+	// if (!obj->links.dummy_kretprobe) {
+	// 	err = -errno;
+	// 	warn("Failed to attach uretprobe: %ld\n", err);
+	// 	goto out_binary;
+	// }
 
 	ret = 0;
 
@@ -190,8 +190,6 @@ out_binary:
 struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faultcount,int cond_pos,int timemode, int primary_function,int offset)
 {
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
-
-	printf("In uprobe for function %s in binary %s at offset %d with cond_pos %d\n",funcname,binary_location,offset,cond_pos);
 	
 	struct uprobes_bpf *obj;
 	int i, err;
@@ -201,8 +199,6 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 	int idx, cg_map_fd;
 	int cgfd = -1;
 	bool used_fentry = false;
-
-	env.is_kernel_func = 0;
 
 	err = ensure_core_btf(&open_opts);
 	if (err) {
@@ -219,13 +215,13 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 	obj->rodata->time_only = timemode;
 	obj->rodata->units = MSEC;
 	obj->rodata->targ_tgid = pid;
-	obj->rodata->filter_cg = 0;
 	obj->rodata->cond_pos = cond_pos;
 	obj->rodata->primary_function = primary_function;
 
 	env.pid = pid;
 
-	used_fentry = try_fentry(obj);
+	//used_fentry = try_fentry(obj);
+	
 
 	err = uprobes_bpf__load(obj);
 	if (err) {
@@ -233,36 +229,17 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 		return NULL;
 	}
 
-/* update cgroup path fd to map */
-	if (env.cg) {
-		idx = 0;
-		cg_map_fd = bpf_map__fd(obj->maps.cgroup_map);
-		cgfd = open(env.cgroupspath, O_RDONLY);
-		if (cgfd < 0) {
-			fprintf(stderr, "Failed opening Cgroup path: %s", env.cgroupspath);
-			return NULL;
-		}
-		if (bpf_map_update_elem(cg_map_fd, &idx, &cgfd, BPF_ANY)) {
-			fprintf(stderr, "Failed adding target cgroup to map");
-			return NULL;
-		}
-	}
-
 	if (!obj->bss) {
 		warn("Memory-mapping BPF maps is supported starting from Linux 5.7, please upgrade.\n");
 		return NULL;
 	}
-	if (!used_fentry) {
-		if (env.is_kernel_func)
-			err = attach_kprobes(obj);
-		else
-			err = attach_uprobes(obj,binary_location,funcname,offset);
+
+		err = attach_uprobes(obj,binary_location,funcname,offset);
 		if (err){
 			printf("Error is %d \n",err);
 			return NULL;
 		}
 
-	}	
 	err = uprobes_bpf__attach(obj);
 	if (err) {
 		fprintf(stderr, "failed to attach BPF programs: %s\n",

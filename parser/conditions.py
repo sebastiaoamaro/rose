@@ -9,20 +9,24 @@ class user_function_condition:
     def to_yaml(self):
         return {"type":"user_function","binary_location":str(self.binary_location),"symbol":str(self.symbol),"offset":str(self.offset),"call_count":str(self.call_count)}
 
-class file_syscall:
+class file_syscall_condition:
     syscall_name = ""
     cond_nr = 0
     directory_name = ""
     file_name = ""
     call_count = 0
     cond_nr = 0
+    def to_yaml(self):
+        return {"type":"file_syscall","syscall_name":str(self.syscall_name),"file_name":str(self.file_name),"call_count":str(self.call_count)}
 
 class syscall_condition:
     syscall_name = ""
     cond_nr = 0
     call_count = 0
     cond_nr = 0
-
+    def to_yaml(self):
+        return {"type":"syscall","syscall_name":str(self.syscall_name),"call_count":str(self.call_count)}
+    
 class time_cond:
     time = 0
 
@@ -57,7 +61,7 @@ def build_user_function(user_function_config):
 
 
 def build_file_syscall(file_system_call_config):
-    file_system_call = file_syscall()
+    file_system_call = file_syscall_condition()
 
     file_system_call.syscall_name = file_system_call_config['syscall_name']
 
@@ -96,7 +100,7 @@ def build_fault_conditions(file,fault_nr,begin_conditions):
             fault_condition = fault_condition.replace("#condnr",str(condition_counter))
             file.write(fault_condition)
 
-        if isinstance(condition,file_syscall):
+        if isinstance(condition,file_syscall_condition):
             fault_condition = """    fault_condition fault_condition_#faultnr_#condnr;\n"""
             fault_condition += """    file_system_call file_syscall_#faultnr_#condnr;\n"""
             fault_condition += """    fault_condition_#faultnr_#condnr.type = FILE_SYSCALL;\n"""

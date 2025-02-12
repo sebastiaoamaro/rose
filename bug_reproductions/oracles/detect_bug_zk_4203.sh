@@ -1,10 +1,10 @@
 #!/bin/bash
 runnumber=$1
-keyword=$2
-folder=$3
+folder=$2
+name="logs_run:"
 #Save logs
-cat /home/sebastiaoamaro/phd/rw/Anduril/ground_truth/zookeeper-4203/output.log >> $folder/$runnumber.txt
+cat /vagrant/rw/Anduril/ground_truth/zookeeper-4203/output.log > $folder$name$runnumber.txt
 
-result=$(cat $folder/$runnumber.txt | grep "FAILURES")
+result=$(cat $folder$name$runnumber.txt | grep FAILURES)
 
 echo $result

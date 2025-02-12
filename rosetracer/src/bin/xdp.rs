@@ -14,7 +14,6 @@ mod xdp {
   include!(concat!(env!("OUT_DIR"), "/xdp.skel.rs"));
 }
 fn main() -> Result<()> {
-    let args: Vec<String> = env::args().collect();
 
   let args: Vec<String> = env::args().collect();
 
@@ -25,7 +24,7 @@ fn main() -> Result<()> {
   let mut open_object_tracer = MaybeUninit::uninit();
   let open_skel = skel_builder.open(&mut open_object_tracer)?;
 
-  let mut skel = open_skel.load()?;
+  let skel = open_skel.load()?;
   let xdp_prog = skel.progs.xdp_pass.attach_xdp(if_index-1).expect("Failed to attach xdp");
   
   let running = Arc::new(AtomicBool::new(true));

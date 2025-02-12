@@ -5,7 +5,7 @@ use libbpf_rs::{MapCore, MapFlags};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
-use libbpf_rs::skel::{OpenSkel as _, Skel};
+use libbpf_rs::skel::OpenSkel as _;
 use libbpf_rs::skel::SkelBuilder as _;
 
 use crate::auxiliary;
@@ -18,22 +18,22 @@ use count_syscalls::*;
 pub fn run_tracing(
     pids: Vec<i32>,
     pid_count: usize,
-    containers: Vec<String>,
-    functions: Vec<String>,
+    _containers: Vec<String>,
+    _functions: Vec<String>,
 ) -> Result<()> {
     //Build the BPF program
-    let mut skel_builder = CountSyscallsSkelBuilder::default();
+    let skel_builder = CountSyscallsSkelBuilder::default();
 
     //skel_builder.obj_builder.debug(true);
     let mut open_object = MaybeUninit::uninit();
     auxiliary::bump_memlock_rlimit()?;
-    let mut open_skel = skel_builder.open(&mut open_object)?;
+    let open_skel = skel_builder.open(&mut open_object)?;
 
 
     open_skel.maps.rodata_data.pid_counter = pid_count as i32;
 
     //open_skel.rodata().pid_counter = pid_count as i32;
-    let mut skel = open_skel.load()?;
+    let skel = open_skel.load()?;
 
 
     let _tracepoint_sys_enter = skel
@@ -46,7 +46,7 @@ pub fn run_tracing(
         .trace_sys_exit
         .attach_tracepoint("raw_syscalls", "sys_exit")?;
 
-    for (index, pid) in pids.iter().enumerate() {
+    for (_index, pid) in pids.iter().enumerate() {
         let pid_vec = auxiliary::u32_to_u8_array_little_endian(*pid);
         
         skel.maps

@@ -1,6 +1,7 @@
 #!/bin/bash
 sudo apt-get update
-sudo apt-get -y install clang libelf1 libelf-dev zlib1g-dev libc6-dev-i386 autoconf make python3-pip pcp gnuplot gcc pkg-config gcc-14 cmake llvm
+sudo apt-get -y install clang libelf1 libelf-dev zlib1g-dev libc6-dev-i386 autoconf make python3-pip pcp gnuplot gcc pkg-config gcc-14 cmake llvm jq
+sudo apt-get upgrade
 
 #Docker
 sudo apt-get install ca-certificates curl gnupg
@@ -29,7 +30,8 @@ sudo apt install git
 
 #Kernel module
 cd rose/kernelmodule
-sudo apt-get install -y libdw1 dwarves libelf-utils elfutils libdw-dev pahole libdwarf-dev
+sudo apt-get install -y libdw1 dwarves elfutils libdw-dev pahole libdwarf-dev
+cp /sys/kernel/btf/vmlinux /usr/lib/modules/`uname -r`/build/
 git clone https://github.com/acmel/dwarves.git
 cd dwarves
 git submodule update --init --recursive

@@ -1,19 +1,20 @@
 execution_plan:
   maximum_time: 120
   setup:
-    script: "/home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/local/startredisclusterb9ee410.sh"
+    script: "/vagrant/schedules/reproducedbugs/redisraft/scripts/startredisclusterb9ee410.sh"
     duration: 5
   workload:
     wait_time: 15
-    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/local/runworkload.sh
+    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
   cleanup:
-  #   script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/local/cleanup.sh
+  #   script: /vagrant/schedules/reproducedbugs/redisraft/scripts/cleanup.sh
     duration: 30
   tracer:
-    tracer_location: "/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer"
+    tracer_location: "/vagrant/rosetracer/target/release/rosetracer"
     pipe_location: "/tmp/containerpid"
-    functions_file: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
+    functions_file: /vagrant/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
     binary_to_examine: "/redisraft.so"
+    tracing_type: production_trace,container_controlled
 
 nodes:
   redis1:
@@ -57,6 +58,26 @@ faults:
       - condition1:
           type: time
           time: 5000
+
+  block_ips_redis1:
+    type: block_ips
+    target: redis1
+    traced: redis2
+    duration: 25000
+    ips_in: 
+      - redis2
+      - redis3
+      - redis4
+      - redis5
+    ips_out:
+      - redis2
+      - redis3
+      - redis4
+      - redis5 
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 10000
 
   block_ips_redis2:
     type: block_ips

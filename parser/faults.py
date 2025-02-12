@@ -1,4 +1,4 @@
-from parser.conditions import build_file_syscall, build_syscall, build_user_function, get_cond_type_nr,build_fault_conditions,file_syscall,build_time
+from parser.conditions import build_file_syscall, build_syscall, build_user_function, get_cond_type_nr,build_fault_conditions,file_syscall_condition,build_time
 
 class Fault:
     name = ""
@@ -18,6 +18,7 @@ class Fault:
     trigger_statement_end = ""
     exit = 0
     start_time = 0
+    state_score = 0
 
     def to_yaml(self):
         fault = {}
@@ -40,7 +41,7 @@ class Fault:
                 fault["ips_in"].append(ip)
             for ip in self.fault_specifics.nodes_out:
                 fault["ips_out"].append(ip)
-        
+
         if self.type == "syscall":
             fault["details"] = {}
             fault["details"]["name"] = self.fault_specifics.syscall_name
@@ -49,7 +50,14 @@ class Fault:
         return fault
 
     def __repr__(self):
-        return (f"Fault(type={self.type},target={self.target},traced={self.traced},start_time={self.start_time},duration={self.duration}\n")
+        if self.type == "syscall":
+            details = self.fault_specifics.syscall_name
+            details = details + " " + str(self.fault_specifics.return_value)
+            if self.begin_conditions[0]is file_syscall_condition:
+                details = details + " " + self.self.begin_conditions[0].file_name
+        else:
+            details = self.type
+        return (f"Fault(type={self.type},details={details},target={self.target},traced={self.traced},start_time={self.start_time},duration={self.duration}\n")
 
 #Type of faults
 class file_system_operation:
@@ -151,7 +159,7 @@ def createFault(name,faultconfig,nodes_dict):
             if 'sucess' in faultconfig['details']:
 
                 success = faultconfig['details']['success']
-                
+
                 if success:
                     file_system_operation_fault.success = 1
                 else:
@@ -217,7 +225,7 @@ def createFault(name,faultconfig,nodes_dict):
     #fault.trigger_statement_begin = faultconfig['begin_conditions']['trigger_statement']
 
     begin_conditions = faultconfig['begin_conditions']
-    
+
     fault.begin_conditions = []
 
     conditions_count = 0
@@ -238,13 +246,13 @@ def createFault(name,faultconfig,nodes_dict):
             cond_nr = get_cond_type_nr(2,condition)
             condition.cond_nr = cond_nr
             fault.begin_conditions.append(condition)
-        
+
         if type_cond == "syscall":
             condition = build_syscall(condition)
             cond_nr = get_cond_type_nr(3,condition)
             condition.cond_nr = cond_nr
             fault.begin_conditions.append(condition)
-        
+
         if type_cond == "time":
             condition = build_time(condition)
             fault.begin_conditions.append(condition)
@@ -262,7 +270,7 @@ def createFault(name,faultconfig,nodes_dict):
     return fault
 
 def build_faults_cfile(file,nodes,faults):
-    
+
     if faults is None:
         build_faults_begin = """\nfault* build_faults_extra(){\n"""
         file.write(build_faults_begin)
@@ -273,7 +281,7 @@ def build_faults_cfile(file,nodes,faults):
     }"""
         file.write(build_faults_end)
         return
-    
+
     build_faults_begin = """\nfault* build_faults_extra(){\n"""
     file.write(build_faults_begin)
 
@@ -326,7 +334,7 @@ def build_faults_cfile(file,nodes,faults):
                 file.write(create_fault_detail_var)
 
                 fault_type_nr = str(5)
-    
+
                 fault_details = build_fault_details(fault.type,fault_type_nr,fault_count,fault.fault_specifics,nodes,node)
 
                 file.write(fault_details)
@@ -351,7 +359,7 @@ def build_faults_cfile(file,nodes,faults):
 
                 file.write(build_fault)
                 build_fault_conditions(file,fault_count,fault.begin_conditions)
-                
+
                 fault_count+=1
             comment_network_partition = """    //network partition ends\n"""
             file.write(comment_network_partition)
@@ -399,10 +407,10 @@ def build_fault_details(fault_type,fault_type_nr,fault_nr,fault_specifics,nodes,
             assign_line = assign_line.replace("#ip_count_out",str(ip_count_out))
 
             assign_line = assign_line.replace("#nr",str(fault_nr))
-            
+
             block_ips_definition+= assign_line
             return block_ips_definition
-        
+
         case "drop_packets":
             return ""
         case "network_partition":
@@ -469,7 +477,7 @@ def build_fault_details(fault_type,fault_type_nr,fault_nr,fault_specifics,nodes,
             process_restart_definition += """  fault_details#nr.process_fault = process_restart#nr;\n"""
             process_restart_definition = process_restart_definition.replace("#nr",str(fault_nr))
             return process_restart_definition
-        
+
         case "syscall":
             syscall_definition = """    syscall_operation syscall#nr;\n"""
             syscall_definition += """    syscall#nr.syscall = #fault_type_nr;\n"""
@@ -487,7 +495,7 @@ def build_fault_details(fault_type,fault_type_nr,fault_nr,fault_specifics,nodes,
             file_sys_op = file_sys_op.replace("#fault_type_nr",str(fault_type_nr))
             file_sys_op += """    file_syscall#nr.syscall_condition = #condition_nr;\n"""
             #Need to know which cond this is, because one thing is fault and the other is cond
-            temporary_condition = file_syscall()
+            temporary_condition = file_syscall_condition()
             temporary_condition.syscall_name = fault_specifics.syscall_name
             file_sys_op = file_sys_op.replace("#condition_nr",str(get_cond_type_nr(2,temporary_condition)))
 
@@ -505,7 +513,7 @@ def build_fault_details(fault_type,fault_type_nr,fault_nr,fault_specifics,nodes,
                 #file_sys_op = file_sys_op.replace("#string_size",str(len(fault_specifics.file_name)))
             else:
                 file_sys_op += """    strcpy(file_syscall#nr.file_name,"#file_name");\n"""
-                file_sys_op = file_sys_op.replace("#file_name","") 
+                file_sys_op = file_sys_op.replace("#file_name","")
                 #file_sys_op = file_sys_op.replace("#string_size","1")
 
 
@@ -517,7 +525,7 @@ def build_fault_details(fault_type,fault_type_nr,fault_nr,fault_specifics,nodes,
             file_sys_op = file_sys_op.replace("#nr",str(fault_nr))
 
             return file_sys_op
-        
+
 
 def get_fault_type_nr(type,fault_specifics):
 
@@ -562,7 +570,7 @@ def get_fault_type_nr(type,fault_specifics):
                         return "FUTEX_FAULT"
                     case "connect":
                         return "CONNECT_FAULT"
-                    
+
             if fault_specifics.success == 1:
                 match fault_specifics.syscall_name:
                     case "fdatasync":
@@ -586,4 +594,3 @@ def get_fault_type_nr(type,fault_specifics):
                         return "FDATASYNCFILE_FAULT"
                     case "fsync":
                         return "FSYNC"
-

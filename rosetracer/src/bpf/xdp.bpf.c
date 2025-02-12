@@ -51,12 +51,13 @@ struct event {
 	u64 id;
 	u32 pid;
 	u32 tid;
-	int ret;
 	u32 arg1;
 	u32 arg2;
 	u32 arg3;
 	u32 arg4;
+	int ret;
 };
+
 
 enum type {NETWORK_DELAY = 4 };
 volatile int event_counter = 0;
@@ -153,11 +154,11 @@ int xdp_pass(struct xdp_md *ctx)
 						0,
 						NETWORK_DELAY,
 						0,
-						0,
 						src_ip,
 						dst_ip,
 						(delay/1000000),
-						net_info->frequency
+						net_info->frequency,
+						0
 					};
 					//bpf_printk("Found a delay of %llu from %pI4 to %pI4",delay,&src_ip,&dst_ip);
 					bpf_map_update_elem(&history_delays,&event_counter,&event,BPF_ANY);

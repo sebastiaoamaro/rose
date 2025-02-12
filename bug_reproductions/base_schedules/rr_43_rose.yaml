@@ -1,17 +1,20 @@
 execution_plan:
-  maximum_time: 60
+  maximum_time: 120
   setup:
-    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/startredisclusterb9ee410.sh
+    script: "/vagrant/schedules/reproducedbugs/redisraft/scripts/startredisclusterb9ee410.sh"
     duration: 5
   workload:
-    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
+    wait_time: 15
+    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
   cleanup:
-    duration: 15
+    duration: 30
   tracer:
-    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
-    pipe_location: /tmp/containerpid
-    functions_file: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
-    binary_to_examine: /redisraft.so
+    tracer_location: "/vagrant/rosetracer/target/release/rosetracer"
+    pipe_location: "/tmp/containerpid"
+    functions_file: /vagrant/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
+    binary_to_examine: "/redisraft.so"
+    tracing_type: full_trace,container_controlled
+
 nodes:
   redis1:
     container: true

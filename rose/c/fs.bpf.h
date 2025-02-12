@@ -133,7 +133,7 @@ static inline int get_file_path(struct path *path, struct event_path_t *event_pa
         }
         // Add a slash character
         last_position--;
-        bpf_probe_read_kernel(&(fi->filename[last_position & (FILENAME_MAX-1)]), 1, &slashchar);
+        bpf_probe_read_kernel(&(fi->filename[last_position & (FILENAME_MAX_SIZE-1)]), 1, &slashchar);
         last_position = offset;
         // get parent dentry name
         dentry = parent;
@@ -145,20 +145,19 @@ static inline int get_file_path(struct path *path, struct event_path_t *event_pa
 }
 
 static inline bool string_contains(char *str1,char *str2,int size) {
-    const char comparand[FILENAME_MAX];
-    const char comparand2[FILENAME_MAX];
+    const char comparand[FILENAME_MAX_SIZE];
+    const char comparand2[FILENAME_MAX_SIZE];
     bpf_probe_read(&comparand, sizeof(comparand), str1);
     bpf_probe_read(&comparand2, sizeof(comparand2), str2);
 
     int str_len = size;
     int count = 0;
     #pragma unroll
-    for (int i = 0; i < FILENAME_MAX; ++i){
+    for (int i = 0; i < FILENAME_MAX_SIZE; ++i){
         if (comparand[count] == comparand2[i] ){
             // bpf_printk("%c and %c \n",comparand[count],comparand2[i]);
             count++;
             if(str_len == count){
-                bpf_printk("They are equal str_len is %d \n",str_len);
                 return true; 
             }
             continue;

@@ -21,10 +21,10 @@ VMLINUX := ../../vmlinux/$(ARCH)/vmlinux.h
 # libbpf to avoid dependency on system-wide headers, which could be missing or
 # outdated
 INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
-CFLAGS := -g -w
+CFLAGS := -g -Wall -Wextra
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
-APPS = process tc aux fs block uprobes popen faultschedule faultinject
+APPS = tc aux fs uprobes popen faultschedule faultinject
 MAIN = main
 TCMAIN = network
 
@@ -35,7 +35,7 @@ else
 BZS_APPS :=
 APPS += $(BZS_APPS)
 # Required by libblazesym
-ALL_LDFLAGS += -lrt -ldl -lpthread -lm -Wall -w
+ALL_LDFLAGS += -lrt -ldl -lpthread -lm -Wall
 endif
 
 COMMON_OBJ = \
@@ -124,7 +124,7 @@ $(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) *.h $(wildcard %.h) $(wildcard.%.%.h)$(
 	$(call msg,BPF,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH)		      \
 		     $(INCLUDES) $(CLANG_BPF_SYS_INCLUDES)		      \
-		     -c -w $(filter %.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
+		     -c $(filter %.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 
 # Generate BPF skeletons
@@ -149,7 +149,7 @@ $(BZS_APPS): $(LIBBLAZESYM_OBJ)
 $(APPS): %: $(OUTPUT)/%.o $(COMMON_OBJ) $(LIBBPF_OBJ) | $(OUTPUT)
 	$(call msg,APP,$@)
 	$(call msg,APP,$^)
-	$(Q)$(CC) -c $^ $(ALL_LDFLAGS) -w -lelf -lz -o $@
+	$(Q)$(CC) -c $^ $(ALL_LDFLAGS) -lelf -lz -o $@
 
 OFILES=$(patsubst %,$(OUTPUT)/%.o,$(APPS))
 

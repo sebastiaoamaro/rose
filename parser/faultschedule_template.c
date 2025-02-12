@@ -23,10 +23,13 @@
 char* get_veth_interface_name(const char* container_name);
 
 
-void create_tracer(tracer* tracer,char* tracer_location, char* pipe_location, char* functions_file,char* binary_path){
+void create_tracer(tracer* tracer,char* tracer_location, char* pipe_location, char* functions_file,char* binary_path,char* tracing_type){
 
     memset(tracer->tracer_location,'\0',sizeof(tracer_location));
     strcpy(tracer->tracer_location,tracer_location);
+
+    memset(tracer->tracing_type,'\0',sizeof(tracing_type));
+    strcpy(tracer->tracing_type,tracing_type);
 
     memset(tracer->pipe_location,'\0',sizeof(pipe_location));
     strcpy(tracer->pipe_location,pipe_location);

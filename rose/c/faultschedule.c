@@ -16,17 +16,20 @@
 #include "faultschedule.h"
 #include "aux.h"
 
-#define NODE_COUNT 1
+#define NODE_COUNT 5
 #define FAULT_COUNT 1
-#define MAXIMUM_TIME 60
+#define MAXIMUM_TIME 600
 
 char* get_veth_interface_name(const char* container_name);
 
 
-void create_tracer(tracer* tracer,char* tracer_location, char* pipe_location, char* functions_file,char* binary_path){
+void create_tracer(tracer* tracer,char* tracer_location, char* pipe_location, char* functions_file,char* binary_path,char* tracing_type){
 
     memset(tracer->tracer_location,'\0',sizeof(tracer_location));
     strcpy(tracer->tracer_location,tracer_location);
+
+    memset(tracer->tracing_type,'\0',sizeof(tracing_type));
+    strcpy(tracer->tracing_type,tracing_type);
 
     memset(tracer->pipe_location,'\0',sizeof(pipe_location));
     strcpy(tracer->pipe_location,pipe_location);
@@ -250,32 +253,35 @@ char* get_veth_interface_name(const char* container_name) {
 }
 execution_plan* build_execution_plan(){
     execution_plan* exe_plan = ( execution_plan*)malloc(1 * sizeof(execution_plan));
-    create_execution_plan(exe_plan,"",0,"","",30,0);
+    create_execution_plan(exe_plan,"/vagrant/schedules/reproducedbugs/redpanda/scripts/startcluster.sh",10,"/vagrant/schedules/reproducedbugs/redpanda/scripts/runworkload.sh","",30,10);
     return exe_plan;
 }
  tracer* build_tracer(){
     tracer* deployment_tracer = (tracer*)malloc(1 * sizeof(tracer));
-    create_tracer(deployment_tracer,"/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer","/tmp/containerpid","","");
+    create_tracer(deployment_tracer,"/vagrant/rosetracer/target/release/rosetracer","/tmp/containerpid","","","production_trace,container_controlled");
+
     return deployment_tracer;
 }
 node* build_nodes(){
     node* nodes = ( node*)malloc(NODE_COUNT * sizeof(node));
-    create_node(&nodes[0],"zookeeper",0,"","","/home/sebastiaoamaro/phd/torefidevel/rw/Anduril/ground_truth/zookeeper-2247/run-original-test.sh","",0,"","",0);
+    create_node(&nodes[0],"redpanda0",0,"","","","",1,"","",0);
+    create_node(&nodes[1],"redpanda1",0,"","","","",1,"","",0);
+    create_node(&nodes[2],"redpanda2",0,"","","","",1,"","",0);
+    create_node(&nodes[3],"redpanda3",0,"","","","",1,"","",0);
+    create_node(&nodes[4],"redpanda4",0,"","","","",1,"","",0);
 
     return nodes;
 }
 fault* build_faults_extra(){
     fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));
     fault_details fault_details0;
-    syscall_operation syscall0;
-    syscall0.syscall = 2;
-    syscall0.success = 0;
-    syscall0.return_value = -5;
-    fault_details0.syscall = syscall0;
-    create_fault(&faults[0],"syscall1549",0,0,2,2,fault_details0,0,0,0,1,0);
+    process_fault process_pause0;
+    process_pause0.type = 14;
+    fault_details0.process_fault = process_pause0;
+    create_fault(&faults[0],"process_pause",0,0,14,1,fault_details0,0,0,20000,1,0);
 
     fault_condition fault_condition_0_0;
-    int time_0_0 = 1158;
+    int time_0_0 = 10000;
     fault_condition_0_0.type = TIME;
     fault_condition_0_0.condition.time = time_0_0;
     add_begin_condition(&faults[0],fault_condition_0_0,0);

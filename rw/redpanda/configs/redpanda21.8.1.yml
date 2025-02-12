@@ -1,0 +1,110 @@
+version: "3.7"
+services:
+  redpanda0:
+    image: redpanda21.8.1
+    container_name: redpanda0
+    #command: ./startredpanda.sh redpanda0 0
+    command: rpk redpanda start --node-id 0 --kafka-addr internal://0.0.0.0:9092 --advertise-kafka-addr internal://redpanda0:9092 --rpc-addr 0.0.0.0:33145 --advertise-rpc-addr redpanda0:33145 
+    privileged: true
+    expose:
+      - "8081"
+      - "8082"
+      - "9092"
+      - "9644"
+      
+    networks:
+      db:
+        ipv4_address: 172.19.1.10
+    tty: true
+  redpanda1:
+    image: redpanda21.8.1
+    container_name: redpanda1
+    command: ./startredpanda.sh redpanda1 redpanda0 1
+    privileged: true
+    expose:
+      - "8081"
+      - "8082"
+      - "9092"
+      - "9644"
+      
+    networks:
+      db:
+        ipv4_address: 172.19.1.11
+
+    tty: true
+
+  redpanda2:
+    image: redpanda21.8.1
+    container_name: redpanda2
+    command: ./startredpanda.sh redpanda2 redpanda0 2
+    privileged: true
+    expose:
+      - "8081"
+      - "8082"
+      - "9092"
+      - "9644"
+      
+    networks:
+      db:
+        ipv4_address: 172.19.1.12
+
+    tty: true
+
+  redpanda3:
+    image: redpanda21.8.1
+    container_name: redpanda3
+    command: ./startredpanda.sh redpanda3 redpanda0 3
+    privileged: true
+    expose:
+      - "8081"
+      - "8082"
+      - "9092"
+      - "9644"
+      
+    networks:
+      db:
+        ipv4_address: 172.19.1.13
+
+    tty: true
+
+  redpanda4:
+    image: redpanda21.8.1
+    container_name: redpanda4
+    command: ./startredpanda.sh redpanda4 redpanda0 4
+    privileged: true
+    expose:
+      - "8081"
+      - "8082"
+      - "9092"
+      - "9644"
+      
+    networks:
+      db:
+        ipv4_address: 172.19.1.14
+
+    tty: true
+
+  client:
+    image: client
+    container_name: client
+    privileged: true
+    networks:
+      db:
+        ipv4_address: 172.19.1.15
+    tty: true
+  # consumer:
+  #   image: consumer
+  #   container_name: consumer
+  #   privileged: true
+  #   networks:
+  #     db:
+  #       ipv4_address: 172.19.1.16
+  #   tty: true
+
+networks:
+  db:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.19.1.0/24

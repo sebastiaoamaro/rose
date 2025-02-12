@@ -1,6 +1,5 @@
 use std::env;
 use std::ffi::OsStr;
-use std::path::Path;
 use std::path::PathBuf;
 
 use libbpf_cargo::SkeletonBuilder;
@@ -13,6 +12,7 @@ fn main() {
     build_bpf_file("save_io", "src/bpf/save_io.bpf.c");
     build_bpf_file("uprobes", "src/bpf/uprobes.bpf.c");
     build_bpf_file("tracer", "src/bpf/tracer.bpf.c");
+    build_bpf_file("production_tracer", "src/bpf/production_tracer.bpf.c");
     build_bpf_file("pin_maps", "src/bpf/pin_maps.bpf.c");
     build_bpf_file("xdp", "src/bpf/xdp.bpf.c");
 }

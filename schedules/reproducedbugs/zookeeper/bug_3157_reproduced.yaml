@@ -1,7 +1,10 @@
 execution_plan:
+  cleanup:
+    duration: 70
   tracer:
     tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
 
 nodes:
   zookeeper:
@@ -13,7 +16,7 @@ faults:
     type: syscall
     details:
       name: read
-      return_value: 11
+      return_value: 100
     target: zookeeper
     traced: zookeeper
     begin_conditions:
