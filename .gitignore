@@ -50,3 +50,16 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+tests/redis/ycsb-0.17.0/
+tests/cometbft/cometbftconfig/*
+rosetracer/target/
+rose/c/.cache/
+.vscode/
+tests/bugdetection/*
+parser/__pycache__/*
+tests/uprobetest/target/
+schedules/generatedschedules/*
+*/__pycache__/*
+bug_reproductions/traces/*
+.vagrant/*
+rw/
