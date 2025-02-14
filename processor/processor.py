@@ -94,7 +94,7 @@ class History:
         self.network_history = {}
         self.ip_to_node = {}
         self.experiment_time = 0
-        self.injected_faults = []
+        self.faults_injected = []
         self.function_calls_by_node = {}
 
 
@@ -168,7 +168,7 @@ class History:
                 self.events.append(event)
 
                 if event.type == "Fault":
-                    self.injected_faults.append(event)
+                    self.faults_injected.append(event)
 
                 if event.type == "function_call":
                     if event.name not in self.function_calls_by_node[node_id]:
@@ -335,12 +335,11 @@ class History:
                     #cond.time = event.relative_time/1000000
                     cond.syscall_name = event.name
                     cond.file_name = get_name_from_path(event.arg5)
-                    cond.call_count = 0
+                    cond.call_count = 1
                     fault.begin_conditions.append(cond)
 
                     fault_nr += 1
                     fault.state_score = 2
-                    self.faults.append(fault)
                 #If it does not try to leverage the counter only
                 elif len(self.event_counter[event.name]) < 100:
                     cond = syscall_condition()
@@ -350,16 +349,57 @@ class History:
 
                     fault_nr += 1
                     fault.state_score = 1
-                    self.faults.append(fault)
 
-                #TODO: Maybe iterate through other syscall errors to find a filename and go from there?
-                #else:
-                    #get_syscalls_before()
+                #TODO: look for syscalls before which have context
+                else:
+                    cond = file_syscall_condition()
+                    last_syscall_event = self.get_context_syscall_before(event.node,event.id)
+                    cond.syscall_name = last_syscall_event.name
+                    cond.file_name = get_name_from_path(event.arg5)
+                    cond.call_count = 1
+                    fault.begin_conditions.append(cond)
+
+                    fault_nr += 1
+                    fault.state_score = 1
+
+                self.faults.append(fault)
 
             #Find process pauses/waits
             if event.type == "process_state_change":
-                continue;
-                #TODO: Need to think of a way
+                print("Found process pause creating fault")
+                fault = Fault()
+                fault.name = "process_pause" + str(fault_nr)
+                fault.fault_category = 0
+                fault.type = "process_pause"
+                fault.state_score = 3
+
+                fault.target = event.node
+                fault.traced = event.node
+                fault.duration = int(event.arg2)*1000
+
+                fault.begin_conditions = []
+
+                #TODO: Move this block of code to function: find_state_of_fault
+                functions_before = self.get_functions_before(event.node,event.id)
+
+                for function_call,counter in functions_before.items():
+                    cond = user_function_condition()
+                    cond.binary_location = self.nodes[event.node].binary
+                    cond.symbol = function_call
+                    cond.call_count = counter
+                    fault.begin_conditions.append(cond)
+                    fault.state_score += len(fault.begin_conditions)
+
+
+                if len(fault.begin_conditions) == 0:
+                    cond = time_cond()
+                    cond.time = int((event.relative_time)/1000000)
+                    cond.time = math.floor(cond.time / 10000) * 10000
+                    fault.start_time = cond.time
+                    fault.begin_conditions.append(cond)
+
+                fault_nr += 1
+                self.faults.append(fault)
 
 
         #Find network faults
@@ -381,6 +421,7 @@ class History:
 
                     #Blocking both ways for simplicity now
                     fault_specifics = block_ips()
+                    print("Dest node is " + dest_node)
                     fault_specifics.nodes_in = [dest_node]
                     fault_specifics.nodes_out = [dest_node]
                     fault.fault_specifics = fault_specifics
@@ -395,22 +436,18 @@ class History:
 
                     for function_call,counter in functions_before.items():
                         cond = user_function_condition()
-
                         cond.binary_location = self.nodes[node].binary
                         cond.symbol = function_call
                         cond.call_count = counter
-
                         fault.begin_conditions.append(cond)
-
-
-                    cond = time_cond()
-                    cond.time = int((event[2]-self.start_time)/1000000)
-                    cond.time = math.floor(cond.time / 10000) * 10000
-                    fault.start_time = cond.time
+                        fault.state_score += len(fault.begin_conditions)
 
                     if len(fault.begin_conditions) == 0:
+                        cond = time_cond()
+                        cond.time = int((event[2]-self.start_time)/1000000)
+                        cond.time = math.floor(cond.time / 10000) * 10000
+                        fault.start_time = cond.time
                         fault.begin_conditions.append(cond)
-                    fault.state_score += len(fault.begin_conditions)
                     fault_nr += 1
                     self.faults.append(fault)
 
@@ -442,16 +479,14 @@ class History:
                         cond.call_count = counter
 
                         fault.begin_conditions.append(cond)
+                        fault.state_score += len(fault.begin_conditions)
 
-                        cond = time_cond()
-                        cond.time = int((last_event_before_crash.time - self.start_time)/1000000)
-                        cond.time = math.floor(cond.time / 10000) * 10000
-                        fault.start_time = cond.time
-
-                        if len(fault.begin_conditions) == 0:
+                    if len(fault.begin_conditions) == 0:
+                            cond = time_cond()
+                            cond.time = int((last_event_before_crash.time - self.start_time)/1000000)
+                            cond.time = math.floor(cond.time / 10000) * 10000
+                            fault.start_time = cond.time
                             fault.begin_conditions.append(cond)
-
-                    fault.state_score += len(fault.begin_conditions)
 
                     fault_nr += 1
                     self.faults.append(fault)
@@ -485,6 +520,13 @@ class History:
 
         #print(function_calls_counter)
         return function_calls_counter
+
+    def get_context_syscall_before(self,node_name,event_id):
+        event_list = self.events_by_node[node_name]
+
+        for event in reversed(event_list):
+            if event.type  == "syscall_exit" and event.id < event_id and len(event.arg5) > 0:
+                return event
 
     def find_event_before_id(self,node_name,event_id):
         for event in reversed(self.events_by_node[node_name]):
@@ -550,12 +592,16 @@ def group_faults(fault_list):
                 faults[fault.type] = [fault]
 
         if fault.type == "block_ips":
-
             if fault.type in faults:
                 faults[fault.type + fault.target + fault.fault_specifics.nodes_in[0] + str(fault.start_time)].append(fault)
             else:
                 faults[fault.type + fault.target + fault.fault_specifics.nodes_in[0] + str(fault.start_time)] = [fault]
 
+        if fault.type == "process_pause":
+            if fault.type in faults:
+                faults[fault.type + str(fault.target) + str(fault.duration)].append(fault)
+            else:
+                faults[fault.type + str(fault.target) + str(fault.duration)] = [fault]
     return faults
 
 def get_name_from_path(path):
@@ -577,11 +623,12 @@ def choose_faults(faults):
             faults_choosen.append(fault)
         if fault.type == "syscall":
             faults_choosen.append(fault)
+        if fault.type =="process_pause":
+            faults_choosen.append(fault)
 
     for partition in partitions:
         faults_choosen.append(partitions[partition][0])
 
     faults_choosen.sort(key = lambda x: (x.state_score,-x.start_time),reverse=True)
-    print(faults_choosen)
 
     return faults_choosen[:10]

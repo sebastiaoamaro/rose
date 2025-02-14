@@ -1,202 +1,26 @@
 execution_plan:
   cleanup:
-    duration: 60
-  maximum_time: 120
-  setup:
-    duration: 5
-    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/startrediscluster2d1cf30.sh
+    duration: 30
   tracer:
-    binary_to_examine: /redisraft.so
-    functions_file: /vagrant/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
     pipe_location: /tmp/containerpid
     tracer_location: /vagrant/rosetracer/target/release/rosetracer
-    tracing_type: full_trace,container_controlled
-  workload:
-    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
-    wait_time: 15
+    tracing_type: full_trace,process_controlled
 nodes:
-  redis1:
-    binary: /redisraft.so
-    container: true
-    ip: 172.19.1.10
-    leader: true
-    leader_symbol: raft_become_leader
-    script: ./startredis.sh 1 172.19.1.10
-  redis2:
-    binary: /redisraft.so
-    container: true
-    ip: 172.19.1.11
-    leader_symbol: raft_become_leader
-    script: ./startredis.sh 2 172.19.1.11
-  redis3:
-    binary: /redisraft.so
-    container: true
-    ip: 172.19.1.12
-    leader_symbol: raft_become_leader
-    script: ./startredis.sh 3 172.19.1.12
-  redis4:
-    binary: /redisraft.so
-    container: true
-    ip: 172.19.1.13
-    leader_symbol: raft_become_leader
-    script: ./startredis.sh 4 172.19.1.13
-  redis5:
-    binary: /redisraft.so
-    container: true
-    ip: 172.19.1.14
-    leader_symbol: raft_become_leader
-    script: ./startredis.sh 5 172.19.1.14
+  tendermint:
+    container: false
+    script: /vagrant/schedules/reproducedbugs/tendermint/tendermint.sh
 faults:
-  networkfault821425:
+  syscall33:
     begin_conditions:
     - condition_nr0:
-        time: 80000
-        type: time
-    duration: 5733
-    ips_in:
-    - redis4
-    - redis3
-    - redis5
-    - redis2
-    ips_out:
-    - redis4
-    - redis3
-    - redis5
-    - redis2
-    target: redis1
-    traced: redis1
-    type: block_ips
-  networkfault821427:
-    begin_conditions:
-    - condition_nr0:
-        time: 20000
-        type: time
-    duration: 25251
-    ips_in:
-    - redis1
-    ips_out:
-    - redis1
-    target: redis2
-    traced: redis2
-    type: block_ips
-  networkfault821428:
-    begin_conditions:
-    - condition_nr0:
-        time: 80000
-        type: time
-    duration: 5736
-    ips_in:
-    - redis1
-    - redis5
-    ips_out:
-    - redis1
-    - redis5
-    target: redis2
-    traced: redis2
-    type: block_ips
-  networkfault821430:
-    begin_conditions:
-    - condition_nr0:
-        time: 20000
-        type: time
-    duration: 25277
-    ips_in:
-    - redis1
-    ips_out:
-    - redis1
-    target: redis3
-    traced: redis3
-    type: block_ips
-  networkfault821431:
-    begin_conditions:
-    - condition_nr0:
-        time: 80000
-        type: time
-    duration: 5645
-    ips_in:
-    - redis1
-    - redis5
-    ips_out:
-    - redis1
-    - redis5
-    target: redis3
-    traced: redis3
-    type: block_ips
-  networkfault821433:
-    begin_conditions:
-    - condition_nr0:
-        time: 20000
-        type: time
-    duration: 25103
-    ips_in:
-    - redis1
-    ips_out:
-    - redis1
-    target: redis4
-    traced: redis4
-    type: block_ips
-  networkfault821434:
-    begin_conditions:
-    - condition_nr0:
-        time: 80000
-        type: time
-    duration: 5733
-    ips_in:
-    - redis1
-    - redis5
-    ips_out:
-    - redis1
-    - redis5
-    target: redis4
-    traced: redis4
-    type: block_ips
-  networkfault821436:
-    begin_conditions:
-    - condition_nr0:
-        time: 20000
-        type: time
-    duration: 25058
-    ips_in:
-    - redis1
-    ips_out:
-    - redis1
-    target: redis5
-    traced: redis5
-    type: block_ips
-  networkfault821440:
-    begin_conditions:
-    - condition_nr0:
-        time: 80000
-        type: time
-    duration: 5644
-    ips_in:
-    - redis4
-    - redis3
-    - redis1
-    - redis2
-    ips_out:
-    - redis4
-    - redis3
-    - redis1
-    - redis2
-    target: redis5
-    traced: redis5
-    type: block_ips
-  process_kill821442:
-    begin_conditions:
-    - condition_nr0:
-        binary_location: /redisraft.so
-        call_count: '1'
-        offset: '0'
-        symbol: storeSnapshotData
-        type: user_function
-    - condition_nr1:
-        binary_location: /redisraft.so
-        call_count: '1'
-        offset: '0'
-        symbol: handleLoadSnapshot
-        type: user_function
+        call_count: '2'
+        syscall_name: newfstatat
+        type: syscall
+    details:
+      name: newfstatat
+      repeatable: 0
+      return_value: -1
     duration: 0
-    target: redis1
-    traced: redis1
-    type: process_kill
+    target: tendermint
+    traced: tendermint
+    type: syscall

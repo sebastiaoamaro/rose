@@ -42,7 +42,7 @@ void create_tracer(tracer* tracer,char* tracer_location, char* pipe_location, ch
 
 }
 void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script,char* cleanup_script, int cleanup_time, int wait_time){
-    
+
     memset(exe_plan->setup.script,'\0',sizeof(setup_script));
     strcpy(exe_plan->setup.script,setup_script);
     exe_plan->setup.duration = setup_duration;
@@ -113,7 +113,7 @@ int get_maximum_time(){
 
 
 void create_fault(struct fault* fault,char* name,int target,int traced, int faulttype,int fault_category,fault_details fault_details,int repeat,int occurrences,int duration,int condition_count,int exit){
-    
+
     memset(fault->name,'\0',sizeof(name));
     strcpy(fault->name,name);
     fault->target = target;
@@ -168,6 +168,7 @@ void build_syscall(systemcall* syscall,int syscall_nr,int call_count){
 
     syscall->syscall = syscall_nr;
     syscall->call_count = call_count;
+
 }
 
 
@@ -176,7 +177,7 @@ void add_ip_to_block_extra(struct block_ips* fault,char *string_ip,int pos,int d
 		struct sockaddr_in sa;
 
 		inet_pton(AF_INET,string_ip,&(sa.sin_addr));
-        
+
         if(direction == 2)
 		    fault->nodes_out[pos] = sa.sin_addr.s_addr;
         if(direction == 1)

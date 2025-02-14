@@ -1,5 +1,5 @@
 execution_plan:
-  maximum_time: 600
+  maximum_time: 50000
   setup:
     script: /vagrant/schedules/reproducedbugs/redpanda/scripts/startcluster.sh
     duration: 10
@@ -15,19 +15,14 @@ execution_plan:
 nodes:
   redpanda0:
     container: true
-    #script: ./startredpanda.sh redpanda0 0
   redpanda1:
     container: true
-    #script: ./startredpanda.sh redpanda1 redpanda0 1
   redpanda2:
     container: true
-    #script: ./startredpanda.sh redpanda2 redpanda0 2
   redpanda3:
     container: true
-    #script: ./startredpanda.sh redpanda3 redpanda0 3
   redpanda4:
     container: true
-    #script: ./startredpanda.sh redpanda4 redpanda0 4
 
 faults:
   process_pause:
@@ -43,4 +38,4 @@ faults:
       #     call_count: 1
       - condition0:
           type: time
-          time: 10000
+          time: 20000

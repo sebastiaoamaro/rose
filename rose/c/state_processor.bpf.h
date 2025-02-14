@@ -54,7 +54,7 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 	// if (state_key >=26)
 	// 	bpf_printk("Got here from condition %d \n",state_key);
 	//Get traced_pid from map
-	
+
 	int *old_pid = bpf_map_lookup_elem(nodes_translator,&current_pid);
 
 	int pid_to_use = 0;
@@ -74,7 +74,7 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 		pid_to_use,
 		state_key
 	};
-	
+
 	struct info_state *current_state;
 
 	current_state = bpf_map_lookup_elem(relevant_state_info,&information_pid);
@@ -112,7 +112,7 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 	}
 
 	int *node_status = bpf_map_lookup_elem(nodes_status,&current_pid);
-	
+
 	//node_status value 2 means there is a fault to inject on this node
 	if (node_status){
 		if (*node_status == 2){
@@ -255,28 +255,24 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 			bpf_printk("FAULT: %d, RUN: %d, RC: %d\n",fault->fault_nr,run,relevant_conditions);
 				//TODO: implement this only works for process faults
 			if (fault->target == -1){
-				bpf_printk("Calling fault on leader \n");
 				//TODO: inject fault on leader
 			}
 			//TODO: implement this only works for process faults
 			else if (fault->target == -2){
-				//bpf_printk("There is a fault on a majority to inject \n");
-
-
 				int pos_zero = 0;
 				int *leader_pid_pointer = bpf_map_lookup_elem(data->maps->auxiliary_info,&pos_zero);
 
 				int leader_pid = 0;
 				if(leader_pid_pointer)
 					leader_pid = *leader_pid_pointer;
-				
+
 				//10 IS TEMP it is basically MAX_NODES
 				//Iterate through nodes and mark them as targets for faults
 				for(int i = 0; i < 10 ;i++){
 
 					int node_pos = i + 2;
 					int *node_pid = bpf_map_lookup_elem(data->maps->auxiliary_info,&node_pos);
-					
+
 					if (node_pid ){
 						//If it is leader skip
 						if (*node_pid == leader_pid)
@@ -306,28 +302,6 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 	return 0;
 }
 
-
-// static inline __u64 inject_fault_majority(struct bpf_map *map, int *key,int *node_status,struct majority_ctx *data){
-	
-// 	if(node_status){
-// 		int status = *node_status;
-// 		if(!status && *key !=0){
-// 			if(data->fault->faults_done < data->fault->quorum_size){
-// 				bpf_printk("Trying to call fault on a node \n");
-// 				inject_fault(data->fault->faulttype,*key,data->fault,*key,data->maps);
-// 			}
-// 			else{
-// 				return 1;
-// 			}
-// 			return 0;
-// 		}
-		
-// 	}
-// 	return 0;
-
-// }
-
-//TODO: remove pos useless
 static inline int inject_fault(int fault_type,int pid,struct simplified_fault *fault,int pos,struct maps_ebpf *maps){
 
 	int pid_to_target = pid;
@@ -370,11 +344,9 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 		if(fault_type == PROCESS_KILL || fault_type == PROCESS_STOP){
 
 			if(running_pid != pid_to_target){
-
 				if (fault->faults_injected_counter >= fault->quorum_size){
 					return 0;
 				}
-				//bpf_printk("Running pid is %d and pid_to_target is %d \n",running_pid,pid_to_target);
 				int fault_code = 2;
 				int error = bpf_map_update_elem(maps->nodes_status,&pid_to_target,&fault_code,BPF_ANY);
 				if (error)
@@ -384,8 +356,6 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 			}
 			//Do this as early as possible for contention
 			fault->done++;
-			//bpf_printk("Incremented fault done it is %d \n",fault->done);
-
 			if (fault_type == PROCESS_KILL){
 				bpf_printk("KILLING PID: %d\n", pid_to_target);
 				__u64 time = bpf_ktime_get_ns();
@@ -400,6 +370,7 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 				__u64 time_ms = time / 1000000;
 				fault->start_time = time_ms;
 				fault->timestamp = time;
+				//TODO: Change and confirm this works
 				//bpf_send_signal(19);
 			}
 
@@ -438,16 +409,15 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 			__u64 time_ms = time / 1000000;
 			fault->start_time = time_ms;
 			fault->timestamp = time;
-
+			bpf_printk("Changed timestamp to %llu\n",fault->timestamp);
 			int error = bpf_map_update_elem(maps->faults_specification,&fault_to_inject,&description_of_fault,BPF_ANY);
 			if (error)
 				bpf_printk("Error of update is %d, faulttype->%d / value-> %d\n",error,fault_type,1);
-			
+
 			fault->run = 0;
 
 			if (!fault->duration)
 				fault->done++;
-			//bpf_printk("Incremented fault done it is %d \n",fault->done);
 		}
 
 		if (fault->repeat){
@@ -488,7 +458,7 @@ static inline void inject_override(int pid,int fault,struct pt_regs* ctx,int sys
 				}
 				else if(description_of_fault->occurences == 0){
 					//u64 ts = bpf_ktime_get_ns();
-					bpf_printk("IINJECTED FAULT: %d, RETURN VALUE %d\n",fault,description_of_fault->return_value);
+					bpf_printk("INJECTED FAULT: %d, RETURN VALUE %d\n",fault,description_of_fault->return_value);
 					description_of_fault->on = 0;
 					bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
 

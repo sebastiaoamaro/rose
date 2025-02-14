@@ -1,11 +1,12 @@
 execution_plan:
   tracer:
-    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+    tracer_location: /vagrant/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
+    tracing_type: full_trace,process_controlled
   cleanup:
     duration: 30
 
 nodes:
   tendermint:
     container: false
-    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/tendermint/tendermint.sh
+    script: /vagrant/schedules/reproducedbugs/tendermint/tendermint.sh

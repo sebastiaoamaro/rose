@@ -10,7 +10,7 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 #define HISTORY_SIZE 1048576
 #define MAP_FAILED	((void *) -1)
 
-#define TAIL_LEN 416 
+#define TAIL_LEN 416
 
 
 struct {
@@ -57,7 +57,6 @@ struct {
 	__uint(max_entries, 512);
 } pid_tgid_fd SEC(".maps");
 
-
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, int);
@@ -93,7 +92,7 @@ struct event {
 	u32 arg2;
 	u32 arg3;
 	u32 arg4;
-	int ret;
+	long int ret;
 };
 
 struct connect_data_t {
@@ -102,7 +101,7 @@ struct connect_data_t {
 };
 
 
-enum type { SYSCALL_ENTER = 1,SYSCALL_EXIT = 2, UPROBE = 3};
+enum type { SYSCALL_ENTER = 1,SYSCALL_EXIT = 2, UPROBE = 3, OPEN = 5};
 
 const volatile int pid_counter = 0;
 volatile int event_counter = 0;
@@ -147,14 +146,14 @@ static inline int update_event_counter(){
 
 //     struct connect_data_t data = {};
 //     struct sockaddr_in *addr_in;
-    
+
 //     // Get address struct and length from syscall arguments
 //     struct sockaddr *uservaddr = (struct sockaddr *)ctx->args[1];
 //     int addrlen = (int)ctx->args[2];
-    
+
 //     // Check family and extract address information
 //     bpf_probe_read_user(&data.family, sizeof(data.family), &uservaddr->sa_family);
-    
+
 // 		addr_in = (struct sockaddr_in *)uservaddr;
 // 		bpf_probe_read_user(&data.saddr, sizeof(data.saddr), &addr_in->sin_addr.s_addr);
 
@@ -168,83 +167,20 @@ static inline int update_event_counter(){
 SEC("tp/syscalls/sys_enter")
 int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 
-	
-		long id = ctx->id;
-		u64 pid_tgid = bpf_get_current_pid_tgid(); 
 
-		if (id == 0 || id == 1 || id == 3 || id == 32 || id == 33 || id == 292){
+	long id = ctx->id;
+	u64 pid_tgid = bpf_get_current_pid_tgid();
 
-				int pid_relevant = check_pid_prog(pid_tgid);
-
-				if (!pid_relevant)
-					return 0;
-
-				int fd = (int)ctx->args[0];
-
-				bpf_map_update_elem(&pid_tgid_fd, &pid_tgid, &fd, BPF_ANY);
-
-				u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
-				u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
-
-				u64 timestamp = bpf_ktime_get_ns();
-
-				struct event key = {
-					SYSCALL_ENTER,
-					timestamp,
-					id,
-					pid,
-					tid,
-					fd,
-					0,
-					0,
-					0,
-					0
-				};
-
-				bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
-				update_event_counter();
-
-				return 0;
-				
-		}
-		else if(id == 2){
-				int pid_relevant = check_pid_prog(pid_tgid);
-
-				if (!pid_relevant)
-					return 0;
-				
-				const char *filename = (const char *)ctx->args[0];
-				char path[TAIL_LEN + 1] = {};
-				int len = bpf_probe_read_user_str(path, sizeof(path), filename);
-
-				bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
-
-		}
-
-		else if(id == 257){
-				int pid_relevant = check_pid_prog(pid_tgid);
-
-				if (!pid_relevant)
-					return 0;
-				
-				const char *filename = (const char *)ctx->args[1];
-				char path[TAIL_LEN + 1] = {};
-				int len = bpf_probe_read_user_str(path, sizeof(path), filename);
-
-				bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
-      
-		}		
-
-
-		if (id == 82 || id == 232 || id == 233 || id == 281 || id == 202 || id ==237 || id == 39 || id == 8 || id == 74){
-			return 0;
-		}
-
+	if (id == 0 || id == 1 || id == 3 || id == 32 || id == 33 || id == 292){
 
 		int pid_relevant = check_pid_prog(pid_tgid);
 
 		if (!pid_relevant)
 			return 0;
+
+		int fd = (int)ctx->args[0];
+
+		bpf_map_update_elem(&pid_tgid_fd, &pid_tgid, &fd, BPF_ANY);
 
 		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
 		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
@@ -257,7 +193,7 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 			id,
 			pid,
 			tid,
-			0,
+			fd,
 			0,
 			0,
 			0,
@@ -267,42 +203,126 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 		bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
 		update_event_counter();
 
+		return 0;
+
+	}
+	else if(id == 2 || id == 85){
+			int pid_relevant = check_pid_prog(pid_tgid);
+
+			if (!pid_relevant)
+				return 0;
+
+			const char *filename = (const char *)ctx->args[0];
+			char path[TAIL_LEN + 1] = {};
+			int len = bpf_probe_read_user_str(path, sizeof(path), filename);
+
+			bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
+	}
+
+	else if(id == 257){
+			int pid_relevant = check_pid_prog(pid_tgid);
+
+			if (!pid_relevant)
+				return 0;
+
+			const char *filename = (const char *)ctx->args[1];
+			char path[TAIL_LEN + 1] = {};
+			int len = bpf_probe_read_user_str(path, sizeof(path), filename);
+
+			bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
+
+	}
+
+
+	if (id == 82 || id == 232 || id == 233 || id == 281 || id == 202 || id ==237 || id == 39 || id == 8 || id == 74){
+		return 0;
+	}
+
+
+	int pid_relevant = check_pid_prog(pid_tgid);
+
+	if (!pid_relevant)
+		return 0;
+
+	u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
+	u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
+
+	u64 timestamp = bpf_ktime_get_ns();
+
+	struct event key = {
+		SYSCALL_ENTER,
+		timestamp,
+		id,
+		pid,
+		tid,
+		0,
+		0,
+		0,
+		0,
+		0
+	};
+
+	bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
+	update_event_counter();
+
     return 0;
 }
 
 SEC("tp/syscalls/sys_exit")
 int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 
-	
-		long id = ctx->id;
 
-		if (id < 0){
-			return 0;
+	long id = ctx->id;
+
+	if (id < 0){
+		return 0;
+	}
+
+	if (id == 233 || id == 202 || id == 39 || id == 82){
+		return 0;
+	}
+
+	u64 pid_tgid = bpf_get_current_pid_tgid();
+	int pid_relevant = check_pid_prog(pid_tgid);
+
+	if (!pid_relevant)
+		return 0;
+
+	long int ret = ctx->ret;
+
+	if (id !=9 && id != 12){
+		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
+		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
+
+		int fd = 0;
+		//bpf_printk("Looking at pid_tgid %d ",pid_tgid);
+		int *fd_in_map = bpf_map_lookup_elem(&pid_tgid_fd,&pid_tgid);
+
+		if (fd_in_map){
+			fd = *fd_in_map;
 		}
 
-		if (id == 233 || id == 202 || id == 39 || id == 82){
-			return 0;
-		}
+		u64 timestamp = bpf_ktime_get_ns();
+		struct event key = {
+			SYSCALL_EXIT,
+			timestamp,
+			id,
+			pid,
+			tid,
+			fd,
+			0,
+			0,
+			0,
+			ret
+		};
+		bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
 
-		u64 pid_tgid = bpf_get_current_pid_tgid();
-		int pid_relevant = check_pid_prog(pid_tgid);
-
-		if (!pid_relevant)
-			return 0;
-
-		int ret = ctx->ret;
-
-		if (ret<0 && id !=9 && id != 12){
+		update_event_counter();
+	}
+	if (id == 9 || id == 12){
+		if (ret == MAP_FAILED){
 			u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
 			u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
-
-			int fd = 0;
-			//bpf_printk("Looking at pid_tgid %d ",pid_tgid);
-			int *fd_in_map = bpf_map_lookup_elem(&pid_tgid_fd,&pid_tgid);
-
-			if (fd_in_map){
-				fd = *fd_in_map;
-			}
 
 			u64 timestamp = bpf_ktime_get_ns();
 			struct event key = {
@@ -311,92 +331,68 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 				id,
 				pid,
 				tid,
-				fd,
 				0,
 				0,
 				0,
-				ret
+				0,
+				-1
 			};
-				bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
-		
-				update_event_counter();
+			bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
+
+			update_event_counter();
 		}
-		else if (id == 9 || id == 12){
-				if (ret == MAP_FAILED){
-					u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
-					u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
+	}
 
-					u64 timestamp = bpf_ktime_get_ns();
-					struct event key = {
-						SYSCALL_EXIT,
-						timestamp,
-						id,
-						pid,
-						tid,
-						0,
-						0,
-						0,
-						0,
-						-1
-					};
-						bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
-				
-						update_event_counter();
-				}
-		}
+	if (id == 2 || id == 257 || id == 85){
 
-		else if (id == 2 || id == 257 || id == 85){
+		char path[TAIL_LEN + 1] = {};
 
-			char path[TAIL_LEN + 1] = {};
+		char *path_pointer = bpf_map_lookup_elem(&pid_to_open_name,&pid_relevant);
 
-			char *path_pointer = bpf_map_lookup_elem(&pid_to_open_name,&pid_relevant);
+		if (path_pointer){
+			int len = bpf_probe_read_str(path, TAIL_LEN+1, path_pointer);
 
-			if (path_pointer){
-
-				int len = bpf_probe_read_str(path, TAIL_LEN+1, path_pointer);
-
-				if (len>0 && len<TAIL_LEN+1){
-					path[len-1] = '\0';
-				}
-				else{
-					return 0;
-				}
-
-				u64 timestamp = bpf_ktime_get_ns();
-				struct process_fd fd_info = {
-					ret,
-					pid_relevant,
-					timestamp
-
-				};
-
-				//TODO: Should be an event but good enough for testing
-				bpf_map_update_elem(&fd_to_name,&fd_info, &path, BPF_ANY);
-				//bpf_printk("Added pid %d, fd %d, ts %llu, path %s",pid_relevant,ret,timestamp,path);
-
+			if (len>0 && len<TAIL_LEN+1){
+				path[len-1] = '\0';
 			}
-		
+			else{
+				return 0;
+			}
+
+			u64 timestamp = bpf_ktime_get_ns();
+			struct process_fd fd_info = {
+				ret,
+				pid_relevant,
+				timestamp
+
+			};
+
+			//TODO: Should be an event but good enough for testing
+			bpf_map_update_elem(&fd_to_name,&fd_info, &path, BPF_ANY);
+			//bpf_printk("Added fd %d, ts %llu, path %s",ret,timestamp,path);
 		}
-			else if (id ==32 || id == 33 || id == 292){
 
-				int fd = 0;
-				//bpf_printk("Looking at pid_tgid %d ",pid_tgid);
-				int *fd_in_map = bpf_map_lookup_elem(&pid_tgid_fd,&pid_tgid);
+	}
+	if (id ==32 || id == 33 || id == 292){
 
-				if (fd_in_map){
-					fd = *fd_in_map;
-				}
-				u64 timestamp = bpf_ktime_get_ns();
+		int fd = 0;
+		//bpf_printk("Looking at pid_tgid %d ",pid_tgid);
+		int *fd_in_map = bpf_map_lookup_elem(&pid_tgid_fd,&pid_tgid);
 
-				struct process_fd fd_info = {
-					fd,
-					pid_relevant,
-					timestamp
-
-				};
-				bpf_map_update_elem(&dup_map,&fd_info,&ret, BPF_ANY);
-
+		if (fd_in_map){
+			fd = *fd_in_map;
 		}
+		u64 timestamp = bpf_ktime_get_ns();
+
+		struct process_fd fd_info = {
+			fd,
+			pid_relevant,
+			timestamp
+
+		};
+		bpf_map_update_elem(&dup_map,&fd_info,&ret, BPF_ANY);
+
+	}
 
     return 0;
 }
@@ -406,7 +402,7 @@ SEC("uprobe")
 int handle_uprobe(struct pt_regs *ctx) {
 
 		u64 pid_tgid = bpf_get_current_pid_tgid();
-		
+
 		int pid_relevant = check_pid_prog(pid_tgid);
 
 		if (!pid_relevant)
@@ -429,7 +425,7 @@ int handle_uprobe(struct pt_regs *ctx) {
 			int zero = 0;
 			bpf_map_update_elem(&uprobes_counters,&cookie,&zero,BPF_ANY);
 		}
-		
+
 		if (cookie == 257){
 			bpf_printk("cookie with id %d", cookie);
 		}
@@ -508,9 +504,9 @@ int handle_uprobe(struct pt_regs *ctx) {
 // 					};
 // 					//bpf_printk("Found a delay of %llu",delay);
 // 					bpf_map_update_elem(&history,&event_counter,&event,BPF_ANY);
-		
+
 // 					update_event_counter();
-// 			}	
+// 			}
 // 		}else{
 // 			struct network_info net_info = {
 // 				1,
@@ -524,4 +520,3 @@ int handle_uprobe(struct pt_regs *ctx) {
 
 //     return XDP_PASS;
 // }
-

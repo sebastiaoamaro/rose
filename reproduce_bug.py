@@ -190,13 +190,61 @@ def main():
 
     buggy_runs = []
     buggy_schedules = []
-    reproduction_rate = 0
     buggy_schedule = ""
-    #TODO: Think how to handle multiple faults when state_score is the same
-    fault_occurs = 1
 
+    #Run the first schedule and see what occurs
     faults_for_schedule = choose_faults(faults_detected)
+
+    print(faults_for_schedule)
+
     new_schedule_location = write_new_schedule(bug_reproduction.schedule,faults_for_schedule)
+    run_reproduction(new_schedule_location)
+    buggy_run = check_oracle(bug_reproduction.oracle,str(0),bug_reproduction.result_folder)
+    run_cleanup(bug_reproduction.cleanup)
+
+    if (buggy_run):
+        buggy_schedule = bug_reproduction.result_folder+"buggy_run:"+"first_guess"+".yaml"
+        move_file(new_schedule_location,buggy_schedule)
+        buggy_schedules.append(buggy_schedule)
+        reproduction_rate = check_reproduction_rate(new_schedule_location,bug_reproduction)
+
+        if reproduction_rate >= 75:
+            print("Reproduction rate: " + str(reproduction_rate),"Schedule: " + buggy_schedule)
+            return
+
+    fault_counter = 0
+    for fault in faults_for_schedule:
+        if fault.type == "syscall":
+            call_count = 1
+            reproduction_rate = 0
+            fault_occuring = True
+            while reproduction_rate < 75 and fault_occuring:
+                call_count+=1
+                fault.begin_conditions[0].call_count = call_count
+                new_schedule_location = write_new_schedule(bug_reproduction.schedule,[fault])
+                run_reproduction(new_schedule_location)
+                buggy_run = check_oracle(bug_reproduction.oracle,str(call_count),bug_reproduction.result_folder)
+                run_cleanup(bug_reproduction.cleanup)
+
+                if buggy_run:
+                    reproduction_rate = check_reproduction_rate(new_schedule_location,bug_reproduction)
+                    if reproduction_rate >= 75:
+                        break
+                else:
+                    #If it is not a buggy_run we need to check if the fault we are changing occurred
+                    history_location = collect_history(bug_reproduction.trace_location,bug_reproduction.result_folder,str(call_count))
+                    history = History()
+                    history.parse_schedule(new_schedule_location)
+                    history.process_history(history_location)
+
+                    for fault_injected_event in history.faults_injected:
+                        if fault_counter == fault_injected_event.id:
+                            fault_ocurring = True
+                            break
+                        fault_ocurring = False
+
+            print("Reproduction rate: " + str(reproduction_rate),"Schedule: " + buggy_schedule)
+            return
 
     # for fault in faults_detected:
     #         if fault.type == "syscall":
@@ -208,23 +256,6 @@ def main():
     #                     run_reproduction(new_schedule_location)
     #                     buggy_run = check_oracle(bug_reproduction.oracle,str(call_count),bug_reproduction.result_folder)
     #                     run_cleanup(bug_reproduction.cleanup)
-
-    #                     if (buggy_run):
-    #                         buggy_runs.append(call_count)
-    #                         buggy_schedule = bug_reproduction.result_folder+"buggy_run"+str(call_count)+".yaml"
-    #                         move_file(new_schedule_location,buggy_schedule)
-    #                         buggy_schedules.append(buggy_schedule)
-
-    #                         buggy_runs_counter = 0
-    #                         for i in range(0,10):
-    #                             run_reproduction(new_schedule_location)
-    #                             buggy_run = check_oracle(bug_reproduction.oracle,str(call_count),bug_reproduction.result_folder)
-    #                             run_cleanup(bug_reproduction.cleanup)
-    #                             if(buggy_run):
-    #                                 buggy_runs_counter += 1
-
-    #                         reproduction_rate = (buggy_runs_counter*100)/10
-    #                         print("Reproduction rate: " + str(reproduction_rate))
 
     #                     else:
     #                         history_location = collect_history(bug_reproduction.trace_location,bug_reproduction.result_folder,str(call_count))
@@ -259,7 +290,17 @@ def main():
 
     # print("Buggy runs: " + str(buggy_runs))
 
+def check_reproduction_rate(schedule,bug_reproduction):
+    buggy_runs_counter = 0
+    for i in range(0,10):
+        run_reproduction(schedule)
+        buggy_run = check_oracle(bug_reproduction.oracle,str(0),bug_reproduction.result_folder)
+        run_cleanup(bug_reproduction.cleanup)
+        if(buggy_run):
+            buggy_runs_counter += 1
 
+    reproduction_rate = (buggy_runs_counter*100)/10
+    return reproduction_rate
 
 if __name__ == "__main__":
     main()

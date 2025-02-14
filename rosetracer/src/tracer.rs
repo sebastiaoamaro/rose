@@ -1,4 +1,14 @@
+use crate::auxiliary;
+use crate::auxiliary::collect_events;
+use crate::auxiliary::collect_fd_map;
+use crate::auxiliary::collect_network_delays;
+use crate::auxiliary::collect_network_info;
+use crate::auxiliary::monitor_pid;
+use crate::auxiliary::pin_maps;
+use crate::auxiliary::start_xdp_in_container;
 use anyhow::Result;
+use libbpf_rs::skel::OpenSkel as _;
+use libbpf_rs::skel::SkelBuilder as _;
 use libbpf_rs::Link;
 use libbpf_rs::MapCore;
 use libbpf_rs::MapFlags;
@@ -7,16 +17,6 @@ use nix::sys::signal::kill;
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use pin_maps::PinMapsSkelBuilder;
-use crate::auxiliary;
-use crate::auxiliary::collect_events;
-use crate::auxiliary::collect_fd_map;
-use crate::auxiliary::collect_network_delays;
-use crate::auxiliary::collect_network_info;
-use crate::auxiliary::monitor_pid;
-use crate::auxiliary::start_xdp_in_container;
-use crate::auxiliary::pin_maps;
-use libbpf_rs::skel::OpenSkel as _;
-use libbpf_rs::skel::SkelBuilder as _;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
@@ -35,12 +35,11 @@ use tracer::*;
 
 pub fn run_tracing(
     functions: Vec<String>,
-    binary_path:String,
-    collect_process_info_pipe:String
-) -> Result<()>{
+    binary_path: String,
+    collect_process_info_pipe: String,
+) -> Result<()> {
+    auxiliary::bump_memlock_rlimit()?;
 
-    auxiliary::bump_memlock_rlimit()?; 
-    
     //Init maps
 
     let skel_builder_maps = PinMapsSkelBuilder::default();
@@ -52,17 +51,11 @@ pub fn run_tracing(
 
     pin_maps(&mut skel_maps);
 
-    skel_maps.maps.history.pin("/sys/fs/bpf/history").expect("Failed to pin map");
-    skel_maps.maps.uprobes_counters.pin("/sys/fs/bpf/uprobes_counters").expect("Failed to pin map");
-    skel_maps.maps.network_information.pin("/sys/fs/bpf/network_information").expect("Failed to pin map");
-    skel_maps.maps.history_delays.pin("/sys/fs/bpf/history_delays").expect("Failed to pin map");
-    skel_maps.maps.event_counter_for_delays.pin("/sys/fs/bpf/event_counter_for_delays").expect("Failed to pin map");
-
     //Init variables for tracing
 
-    let mut hashmap_links:HashMap<i32,Vec<Link>> = HashMap::new();
-    let mut hashmap_pid_to_node:HashMap<i32,String> = HashMap::new();
-    let mut hashmap_node_to_pid:HashMap<String,i32> = HashMap::new();
+    let mut hashmap_links: HashMap<i32, Vec<Link>> = HashMap::new();
+    let mut hashmap_pid_to_node: HashMap<i32, String> = HashMap::new();
+    let mut hashmap_node_to_pid: HashMap<String, i32> = HashMap::new();
 
     //Build the BPF program
     let skel_builder = TracerSkelBuilder::default();
@@ -70,27 +63,34 @@ pub fn run_tracing(
     //skel_builder.obj_builder.debug(true);
 
     let mut open_object_tracer = MaybeUninit::uninit();
-    
+
     let open_skel = skel_builder.open(&mut open_object_tracer)?;
 
     let mut skel = open_skel.load()?;
 
-    let _tracepoint_sys_enter = skel.progs.trace_sys_enter.attach_tracepoint("raw_syscalls", "sys_enter").expect("Failed to attach sys_exit");
+    let _tracepoint_sys_enter = skel
+        .progs
+        .trace_sys_enter
+        .attach_tracepoint("raw_syscalls", "sys_enter")
+        .expect("Failed to attach sys_exit");
 
-    let _tracepoint_sys_exit = skel.progs.trace_sys_exit.attach_tracepoint("raw_syscalls", "sys_exit").expect("Failed to attach sys_exit");
+    let _tracepoint_sys_exit = skel
+        .progs
+        .trace_sys_exit
+        .attach_tracepoint("raw_syscalls", "sys_exit")
+        .expect("Failed to attach sys_exit");
     //let _connect_enter = skel.progs.trace_connect_entry.attach_tracepoint("syscalls", "sys_enter_connect").expect("Failed to attach connect");
-
 
     //Create history file
     let res = File::create_new("/tmp/history.txt");
 
-    if res.is_err(){
-         println!("File already exists");
+    if res.is_err() {
+        println!("File already exists");
     }
 
     let mut join_handles = vec![];
 
-    let mut tx_handles = vec![];   
+    let mut tx_handles = vec![];
 
     let mut xdp_pids = vec![];
 
@@ -107,8 +107,8 @@ pub fn run_tracing(
         // Step 2: Read lines from the FIFO and print them
         for line in reader.lines() {
             let line = line?;
-            
-            if line == "finished"{
+
+            if line == "finished" {
                 break;
             }
 
@@ -116,78 +116,98 @@ pub fn run_tracing(
 
             let node_name = parts[0].to_string();
 
-            let container_pid:i32 = parts[1].parse().unwrap();
+            let container_pid: i32 = parts[1].parse().unwrap();
 
-            let pid:i32 = parts[2].parse().unwrap();
+            let pid: i32 = parts[2].parse().unwrap();
 
-            let if_index:i32 = parts[3].parse().unwrap();
+            let if_index: i32 = parts[3].parse().unwrap();
 
             let pid_vec = auxiliary::u32_to_u8_array_little_endian(pid);
 
-            skel.maps
-            .pids
-            .update(&pid_vec, &pid_vec, MapFlags::ANY)?;
+            skel.maps.pids.update(&pid_vec, &pid_vec, MapFlags::ANY)?;
 
             let node_already_traced = hashmap_node_to_pid.get(&node_name.clone()).is_some();
-            
-                hashmap_pid_to_node.insert(pid, node_name.clone());
-                hashmap_node_to_pid.insert(node_name.clone(), pid);
-                let (tx, rx) = mpsc::channel();
-                tx_handles.push(tx);
-                start_tracing(pid, node_name.clone(),&mut hashmap_links, functions.clone(), binary_path.clone(), &mut skel,rx,&mut join_handles);                
-            
-            if !node_already_traced{
+
+            hashmap_pid_to_node.insert(pid, node_name.clone());
+            hashmap_node_to_pid.insert(node_name.clone(), pid);
+            let (tx, rx) = mpsc::channel();
+            tx_handles.push(tx);
+            start_tracing(
+                pid,
+                node_name.clone(),
+                &mut hashmap_links,
+                functions.clone(),
+                binary_path.clone(),
+                &mut skel,
+                rx,
+                &mut join_handles,
+            );
+
+            if !node_already_traced {
                 if if_index != 0 {
                     let pid = start_xdp_in_container(container_pid, if_index);
                     xdp_pids.push(pid);
                 }
             }
-
         }
     } else {
         println!("FIFO does not exist.");
     }
 
-    
-    let mut filenames = collect_fd_map(&skel.maps.fd_to_name,&skel.maps.dup_map);
-    
+    let mut filenames = collect_fd_map(&skel.maps.fd_to_name, &skel.maps.dup_map);
+
     collect_network_info(&skel_maps.maps.network_information);
 
     collect_network_delays(&skel_maps.maps.history_delays);
 
-    collect_events(&skel.maps.history,functions.clone(),hashmap_pid_to_node,&mut filenames);
+    collect_events(
+        &skel.maps.history,
+        functions.clone(),
+        hashmap_pid_to_node,
+        &mut filenames,
+    );
 
-    for tx in tx_handles{
+    for tx in tx_handles {
         let send_res = tx.send(());
 
-        match send_res{
+        match send_res {
             Ok(_) => println!("Sent successfully"),
             Err(e) => println!("Error sending: {}", e),
         }
     }
 
-    for handle in join_handles{
-       let result = handle.join();
+    for handle in join_handles {
+        let result = handle.join();
 
-       match result{
+        match result {
             Ok(_) => println!("Thread finished successfully"),
             Err(_e) => println!("Thread finished with an error"),
         }
     }
 
-    for pid in xdp_pids{
+    for pid in xdp_pids {
         let pid = Pid::from_raw(pid as i32); // Convert the PID to a Pid type
         println!("Killing xdp_pid: {}", pid);
-        kill(pid, Signal::SIGKILL).expect("Failed to kill xdp_pid"); 
+        kill(pid, Signal::SIGKILL).expect("Failed to kill xdp_pid");
     }
 
     Ok(())
 }
 
-pub fn start_tracing(pid:i32,container_name:String,hashmap_links:&mut HashMap<i32,Vec<Link>>,
-    functions: Vec<String>,binary_path:String,skel:& mut TracerSkel, rx:Receiver<()>,join_handles: &mut Vec<JoinHandle<()>>) {
-
-    println!("Started tracing for pid {} with node_name {}",pid,container_name);
+pub fn start_tracing(
+    pid: i32,
+    container_name: String,
+    hashmap_links: &mut HashMap<i32, Vec<Link>>,
+    functions: Vec<String>,
+    binary_path: String,
+    skel: &mut TracerSkel,
+    rx: Receiver<()>,
+    join_handles: &mut Vec<JoinHandle<()>>,
+) {
+    println!(
+        "Started tracing for pid {} with node_name {}",
+        pid, container_name
+    );
     hashmap_links.insert(pid, vec![]);
 
     let handle = thread::spawn(move || {
@@ -205,23 +225,30 @@ pub fn start_tracing(pid:i32,container_name:String,hashmap_links:&mut HashMap<i3
 
     //println!("Binary location: {} and binary path:{}", binary_location, binary_path);
 
+    for (index_function, function) in functions.clone().iter().enumerate() {
+        let opts = UprobeOpts {
+            cookie: index_function as u64,
+            retprobe: false,
+            func_name: function.clone(),
+            ..Default::default()
+        };
 
-    for (index_function, function) in functions.clone().iter().enumerate(){
-        let opts = UprobeOpts{cookie:index_function as u64,retprobe:false,func_name:function.clone(),..Default::default()};
+        let uprobe = skel.progs.handle_uprobe.attach_uprobe_with_opts(
+            pid as i32,
+            binary_location.clone(),
+            0,
+            opts,
+        );
 
-        let uprobe = skel.progs.handle_uprobe.attach_uprobe_with_opts(pid as i32, binary_location.clone(), 0, opts);
-
-        match uprobe{
+        match uprobe {
             Ok(uprobe_injected) => {
                 hashmap_links.get_mut(&pid).unwrap().push(uprobe_injected);
                 //println!("Injected in pos {} in pid {}",index_function,pid);
             }
             Err(e) => {
-                println!("Failed:{} with err {}",function.clone(),e);
+                println!("Failed:{} with err {}", function.clone(), e);
                 continue;
             }
         }
     }
-
-    
 }

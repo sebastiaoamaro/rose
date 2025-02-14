@@ -153,7 +153,8 @@ enum stateinfo{
     ACCEPT_STATE = 30,
     CLOSE_STATE = 31,
     FUTEX_STATE = 32,
-    CONNECT_STATE = 33
+    CONNECT_STATE = 33,
+    NO_STATE = 999
 };
 
 

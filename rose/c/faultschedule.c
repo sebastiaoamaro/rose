@@ -16,9 +16,9 @@
 #include "faultschedule.h"
 #include "aux.h"
 
-#define NODE_COUNT 5
+#define NODE_COUNT 1
 #define FAULT_COUNT 1
-#define MAXIMUM_TIME 600
+#define MAXIMUM_TIME 60
 
 char* get_veth_interface_name(const char* container_name);
 
@@ -42,7 +42,7 @@ void create_tracer(tracer* tracer,char* tracer_location, char* pipe_location, ch
 
 }
 void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script,char* cleanup_script, int cleanup_time, int wait_time){
-    
+
     memset(exe_plan->setup.script,'\0',sizeof(setup_script));
     strcpy(exe_plan->setup.script,setup_script);
     exe_plan->setup.duration = setup_duration;
@@ -113,7 +113,7 @@ int get_maximum_time(){
 
 
 void create_fault(struct fault* fault,char* name,int target,int traced, int faulttype,int fault_category,fault_details fault_details,int repeat,int occurrences,int duration,int condition_count,int exit){
-    
+
     memset(fault->name,'\0',sizeof(name));
     strcpy(fault->name,name);
     fault->target = target;
@@ -168,6 +168,7 @@ void build_syscall(systemcall* syscall,int syscall_nr,int call_count){
 
     syscall->syscall = syscall_nr;
     syscall->call_count = call_count;
+
 }
 
 
@@ -176,7 +177,7 @@ void add_ip_to_block_extra(struct block_ips* fault,char *string_ip,int pos,int d
 		struct sockaddr_in sa;
 
 		inet_pton(AF_INET,string_ip,&(sa.sin_addr));
-        
+
         if(direction == 2)
 		    fault->nodes_out[pos] = sa.sin_addr.s_addr;
         if(direction == 1)
@@ -251,39 +252,39 @@ char* get_veth_interface_name(const char* container_name) {
     pclose(pipe);
     return NULL;
 }
+
 execution_plan* build_execution_plan(){
     execution_plan* exe_plan = ( execution_plan*)malloc(1 * sizeof(execution_plan));
-    create_execution_plan(exe_plan,"/vagrant/schedules/reproducedbugs/redpanda/scripts/startcluster.sh",10,"/vagrant/schedules/reproducedbugs/redpanda/scripts/runworkload.sh","",30,10);
+    create_execution_plan(exe_plan,"",0,"","",30,0);
     return exe_plan;
 }
  tracer* build_tracer(){
     tracer* deployment_tracer = (tracer*)malloc(1 * sizeof(tracer));
-    create_tracer(deployment_tracer,"/vagrant/rosetracer/target/release/rosetracer","/tmp/containerpid","","","production_trace,container_controlled");
+    create_tracer(deployment_tracer,"/vagrant/rosetracer/target/release/rosetracer","/tmp/containerpid","","","full_trace,process_controlled");
 
     return deployment_tracer;
 }
 node* build_nodes(){
     node* nodes = ( node*)malloc(NODE_COUNT * sizeof(node));
-    create_node(&nodes[0],"redpanda0",0,"","","","",1,"","",0);
-    create_node(&nodes[1],"redpanda1",0,"","","","",1,"","",0);
-    create_node(&nodes[2],"redpanda2",0,"","","","",1,"","",0);
-    create_node(&nodes[3],"redpanda3",0,"","","","",1,"","",0);
-    create_node(&nodes[4],"redpanda4",0,"","","","",1,"","",0);
+    create_node(&nodes[0],"tendermint",0,"","","/vagrant/schedules/reproducedbugs/tendermint/tendermint.sh","",0,"","",0);
 
     return nodes;
 }
 fault* build_faults_extra(){
     fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));
     fault_details fault_details0;
-    process_fault process_pause0;
-    process_pause0.type = 14;
-    fault_details0.process_fault = process_pause0;
-    create_fault(&faults[0],"process_pause",0,0,14,1,fault_details0,0,0,20000,1,0);
+    syscall_operation syscall0;
+    syscall0.syscall = NEWFSTATAT_FAULT;
+    syscall0.success = 0;
+    syscall0.return_value = -1;
+    fault_details0.syscall = syscall0;
+    create_fault(&faults[0],"syscall33",0,0,NEWFSTATAT_FAULT,2,fault_details0,0,0,0,1,0);
 
     fault_condition fault_condition_0_0;
-    int time_0_0 = 10000;
-    fault_condition_0_0.type = TIME;
-    fault_condition_0_0.condition.time = time_0_0;
+    systemcall syscall_0_0;
+    fault_condition_0_0.type = SYSCALL;
+    build_syscall(&syscall_0_0,NEWFSTATAT_STATE,2);
+    fault_condition_0_0.condition.syscall = syscall_0_0;
     add_begin_condition(&faults[0],fault_condition_0_0,0);
 
     return faults;

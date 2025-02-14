@@ -1,14 +1,15 @@
 execution_plan:
   tracer:
-    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+    tracer_location: /vagrant/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
   cleanup:
     duration: 30
-
 nodes:
   tendermint:
     container: false
-    script: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/tendermint/tendermint.sh
+    script: /vagrant/schedules/reproducedbugs/tendermint/tendermint.sh
+
 faults:
   change_fstat_result:
     type: syscall
@@ -22,7 +23,7 @@ faults:
     begin_conditions:
       - condition1:
           type: user_function
-          binary_location: "/home/sebastiaoamaro/phd/torefidevel/rw/tendermint/build/tendermint"
+          binary_location: "/vagrant/rw/tendermint/build/tendermint"
           symbol: github.com/tendermint/tendermint/libs/os.EnsureDir
           call_count: 1
       - condition2:
@@ -30,7 +31,7 @@ faults:
           syscall_name: newfstatat
           file_name: /.tendermint/data
           call_count: 1
-          
+
   # change_open_result:
   #   type: syscall
   #   details:
@@ -38,11 +39,11 @@ faults:
   #     return_value: -1
   #     success: False
   #   target: tendermint
-    
+
   #   begin_conditions:
   #     - condition1:
   #         type: user_function
-  #         binary_location: "/home/sebastiaoamaro/phd/torefidevel/rw/tendermint/build/tendermint"
+  #         binary_location: "/vagrant/rw/tendermint/build/tendermint"
   #         symbol: github.com/tendermint/tendermint/libs/os.EnsureDir
   #         call_count: 3
   #     - condition2:
@@ -50,4 +51,3 @@ faults:
   #         syscall_name: openat
   #         file_name: /.tendermint/data/priv
   #         call_count: 1
-

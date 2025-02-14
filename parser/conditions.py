@@ -26,7 +26,7 @@ class syscall_condition:
     cond_nr = 0
     def to_yaml(self):
         return {"type":"syscall","syscall_name":str(self.syscall_name),"call_count":str(self.call_count)}
-    
+
 class time_cond:
     time = 0
 
@@ -127,14 +127,14 @@ def build_fault_conditions(file,fault_nr,begin_conditions):
             fault_condition = fault_condition.replace("#faultnr",str(fault_nr))
             fault_condition = fault_condition.replace("#condnr",str(condition_counter))
             fault_condition = fault_condition.replace("#offset",str(condition.offset))
-            
+
             file.write(fault_condition)
         if isinstance(condition,time_cond):
             fault_condition = """    fault_condition fault_condition_#faultnr_#condnr;\n"""
             fault_condition += """    int time_#faultnr_#condnr = #time;\n"""
             fault_condition = fault_condition.replace("#time",str(condition.time))
             fault_condition += """    fault_condition_#faultnr_#condnr.type = TIME;\n"""
-            fault_condition += """    fault_condition_#faultnr_#condnr.condition.time = time_#faultnr_#condnr;\n"""        
+            fault_condition += """    fault_condition_#faultnr_#condnr.condition.time = time_#faultnr_#condnr;\n"""
             fault_condition += """    add_begin_condition(&faults[#faultnr],fault_condition_#faultnr_#condnr,#condnr);\n"""
 
             fault_condition = fault_condition.replace("#faultnr",str(fault_nr))
@@ -198,5 +198,7 @@ def get_cond_type_nr(type,condition):
                     return "FUTEX_STATE"
                 case "connect":
                     return "CONNECT_STATE"
+                case _:
+                    return "NO_STATE"
         case 4:
             return 21

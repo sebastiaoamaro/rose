@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use libbpf_rs::MapCore;
 use libbpf_rs::MapFlags;
 use pin_maps::PinMapsSkel;
-use procfs::process::ProcState::{Stopped, Waiting};
+use procfs::process::ProcState::{Running, Stopped, Waiting};
 use procfs::process::Process;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -10,7 +10,6 @@ use std::ffi::CStr;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::{self, BufRead, BufReader, Write};
-use std::net::Ipv4Addr;
 use std::path::Path;
 use std::process::Command;
 use std::str;
@@ -44,7 +43,7 @@ pub struct Event {
     pub arg2: u32,
     pub arg3: u32,
     pub arg4: u32,
-    pub ret: i32,
+    pub ret: i64,
 }
 
 #[repr(C)]
@@ -230,7 +229,10 @@ pub fn collect_fd_map(
                         .expect("Failed to convert to rust_string")
                         .to_owned();
 
-                    //println!("Pid is {} fd is {} at ts {} with name {}",process_fd.pid,process_fd.fd,process_fd.ts,rust_string);
+                    // println!(
+                    //     "Pid is {} fd is {} at ts {} with name {}",
+                    //     process_fd.pid, process_fd.fd, process_fd.ts, name
+                    // );
 
                     let pid = process_fd.pid;
 
@@ -482,9 +484,9 @@ pub fn monitor_pid(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_duration = time::Duration::from_millis(1000);
     let mut events_process_pause = vec![];
-    // Try to open the process with the specified PID
     let process = Process::new(pid)?;
-
+    let mut duration = 0;
+    //Default process is Running
     loop {
         if stop_signal.try_recv().is_ok() {
             println!("Stopping monitoring for PID {}", pid);
@@ -503,8 +505,11 @@ pub fn monitor_pid(
                     nix::time::ClockId::CLOCK_MONOTONIC,
                 )?)
                 .as_nanos();
-                //
                 if state == Waiting || state == Stopped {
+                    duration += 1;
+                }
+                //If the process was waiting/stopped for more than 3 seconds we generate an event and clear the variables
+                else if duration > 3 {
                     let event = Event {
                         event_type: 5,
                         id: 0,
@@ -513,12 +518,14 @@ pub fn monitor_pid(
                         timestamp: timestamp as u64,
                         ret: 0,
                         arg1: state as u32,
-                        arg2: 0,
+                        arg2: duration,
                         arg3: 0,
                         arg4: 0,
                     };
-
                     events_process_pause.push(event);
+                    duration = 0;
+                } else if state != Waiting && state != Stopped {
+                    duration = 0;
                 }
 
                 thread::sleep(sleep_duration);

@@ -1,3 +1,4 @@
+import re
 from parser.conditions import build_file_syscall, build_syscall, build_user_function, get_cond_type_nr,build_fault_conditions,file_syscall_condition,build_time
 
 class Fault:
@@ -570,7 +571,8 @@ def get_fault_type_nr(type,fault_specifics):
                         return "FUTEX_FAULT"
                     case "connect":
                         return "CONNECT_FAULT"
-
+                    case _:
+                        return "TEMP_EMPTY"
             if fault_specifics.success == 1:
                 match fault_specifics.syscall_name:
                     case "fdatasync":

@@ -308,24 +308,44 @@ int main()
 		fptr = fopen("/tmp/history.txt", "a");
 
 		//Add faults to the trace
-		while (!bpf_map_get_next_key(constants.bpf_map_fault_fd, &key, &next_key)) {
-
-			if (!bpf_map_lookup_elem(constants.bpf_map_fault_fd, &key, &value)) {
-
-				if (value.timestamp > 0){
-					int fault_nr = value.fault_nr;
-					int target = value.target;
-
-					if (target == -2)
-						fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0,arg5:na\n","majority",value.faulttype,value.timestamp);
-					if (target == -1)
-						fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0,arg5:na\n","leader",value.faulttype,value.timestamp);
-					if (target >= 0)
-						fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0,arg5:na\n",nodes[target].name,value.faulttype,value.timestamp);
-				}
+		printf("ROSE: ADDING FAULTS TO TRACE\n");
+		// while (!bpf_map_get_next_key(constants.bpf_map_fault_fd, &key, &next_key)) {
+		// 	if (!bpf_map_lookup_elem(constants.bpf_map_fault_fd, &key, &value)) {
+		// 	    printf("Fault found in EBPF map has nr %d and ts %llu\n",value.fault_nr,value.timestamp);
+		// 		if (value.timestamp > 0){
+		// 		    printf("Wrote Fault to history\n");
+		// 			int fault_nr = value.fault_nr;
+		// 			int target = value.target;
+		// 			if (target == -2)
+		// 				fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0,arg5:na\n","majority",value.faulttype,value.timestamp);
+		// 			if (target == -1)
+		// 				fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0,arg5:na\n","leader",value.faulttype,value.timestamp);
+		// 			if (target >= 0)
+		// 				fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0,arg5:na\n",nodes[target].name,value.fault_nr,value.timestamp);
+		// 		}
+		// 	}
+		// 	key = next_key;
+		// }
+		//
+		for (int i = 0; i< FAULT_COUNT;i++){
+			struct simplified_fault fault;
+			int err_lookup;
+			err_lookup = bpf_map_lookup_elem(constants.bpf_map_fault_fd, &i,&fault);
+			if (err_lookup){
+				printf("Did not find elem in count_time errno is %d \n",errno);
 			}
-			key = next_key;
-	}
+			if (fault.timestamp > 0){
+			    printf("Wrote Fault to history\n");
+				int fault_nr = fault.fault_nr;
+				int target = fault.target;
+				if (target == -2)
+					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n","majority",fault.fault_nr,fault.timestamp);
+				if (target == -1)
+					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n","leader",fault.fault_nr,fault.timestamp);
+				if (target >= 0)
+					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n",nodes[target].name,fault.fault_nr,fault.timestamp);
+			}
+		}
 		fclose(fptr);
 		char message[] = "finished\n";
 
@@ -626,7 +646,7 @@ void send_node_and_pid_to_tracer(int container_pid,int pid, char* node_name,int 
         exit(EXIT_FAILURE);
     }
 
-    printf("Message written to tracer:%s\n", message);
+    printf("ROSE->TRACER: %s\n", message);
 }
 
 void start_nodes_scripts(){
@@ -637,7 +657,7 @@ void start_nodes_scripts(){
 	}
 }
 void start_container_nodes_scripts(){
-	print_block("Starting container scripts");
+	print_block("CONTAINER SCRIPTS: STARTED");
 	for(int i=0;i<NODE_COUNT;i++){
 		if (nodes[i].container){
 			kill(nodes[i].pid,SIGCONT);
@@ -873,6 +893,10 @@ void setup_begin_conditions(){
 
 				int syscall_nr = syscall.syscall;
 
+				if (syscall_nr == NO_STATE){
+				    continue;
+				}
+
 				insert_relevant_condition_in_ebpf(i,pid,syscall_nr,syscall.call_count);
 			}
 			if (type == FILE_SYSCALL){
@@ -892,6 +916,10 @@ void setup_begin_conditions(){
 				}
 
 				int syscall_nr = syscall.syscall;
+
+				if (syscall_nr == NO_STATE){
+				    continue;
+				}
 
 				struct info_key info_key = {
 					pid,
@@ -1038,7 +1066,7 @@ void add_faults_to_bpf(){
 	print_block("Adding Faults to eBPF Maps");
 
 	for (int i = 0; i < FAULT_COUNT; i++){
-		printf("Adding fault with type %d \n",faults[i].faulttype);
+		printf("ROSE: ADDING FAULT TO BPF NR: %d, TYPE:%D \n",i,faults[i].faulttype);
 		struct simplified_fault new_fault;
 		new_fault.run = 0;
 		new_fault.duration = faults[i].duration;
@@ -1065,12 +1093,20 @@ void add_faults_to_bpf(){
 			if(type == SYSCALL){
 				systemcall syscall = faults[i].fault_conditions_begin[j].condition.syscall;
 				int cond_nr = syscall.syscall;
+				if (cond_nr == NO_STATE){
+				    printf("ROSE: SKIPPED NO_STATE COND\n");
+				    continue;
+				}
 				new_fault.initial.fault_type_conditions[cond_nr] = syscall.call_count;
 				printf("Fault %d has condition system call %d with call_count %d \n",i,cond_nr,syscall.call_count);
 			}
 			if (type == FILE_SYSCALL){
 				file_system_call syscall = faults[i].fault_conditions_begin[j].condition.file_system_call;
 				int cond_nr = syscall.syscall;
+				if (cond_nr == NO_STATE){
+				    printf("ROSE: SKIPPED NO_STATE COND\n");
+				    continue;
+				}
 				new_fault.initial.fault_type_conditions[cond_nr] = syscall.call_count;
 				printf("Fault %d has condition file_system_call %d with call_count %d \n",i,cond_nr,syscall.call_count);
 			}
@@ -1316,7 +1352,6 @@ void count_time(){
 				}
 
 				if (fault.done){
-					//printf("SKIPPED fault nr%d  with done %d\n",i,fault.done);
 					continue;
 				}
 				if (fault.initial.conditions_match[TIME_FAULT] > 0){
@@ -1337,7 +1372,7 @@ void count_time(){
 		int done_count = 0;
 		for (int i = 0; i< FAULT_COUNT;i++){
 			struct simplified_fault fault;
-			err_lookup = bpf_map_lookup_elem(constants.bpf_map_fault_fd, &i,&fault);
+     			err_lookup = bpf_map_lookup_elem(constants.bpf_map_fault_fd, &i,&fault);
 			if(err_lookup){
 				printf("DID NOT FIND FAULT IN EBPF MAP, ERROR: %d \n",errno);
 			}
@@ -1348,14 +1383,14 @@ void count_time(){
 		}
 
 		if (done_count != 0 && done_count == FAULT_COUNT){
-			printf("All faults are done \n");
+			printf("ROSE: FAULTS DONE \n");
 			exiting = true;
 			break;
 		}
 
 
 		if (constants.time >= maximum_time){
-			printf("Experiments maximum time reached \n");
+			printf("ROSE: MAXIMUM TIME REACHED \n");
 			exiting = true;
 			break;
 		}
