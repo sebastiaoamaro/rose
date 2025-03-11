@@ -25,4 +25,4 @@ python3 schedule_parser.py $schedule
 mv faultschedule.c rose/c/
 cd rose/c/
 make -j$(nproc)
-sudo ./main/main
+sudo -E ./main/main

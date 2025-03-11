@@ -202,4 +202,5 @@ void print_fault_schedule();
 int send_signal(int pid, int signal,char*);
 long get_children_pids(pid_t pid);
 void kill_child_processes(pid_t parent_pid);
+int get_jvmso_path(char *path,int pid);
 #endif /* __AUX_H */

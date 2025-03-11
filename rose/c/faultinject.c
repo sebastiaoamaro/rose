@@ -62,6 +62,21 @@ struct faultinject_bpf* fault_inject(int faults,int timemode)
 		fprintf(stderr, "Failed to attach BPF skeleton\n");
 		return NULL;
 	}
+	char binary_path[] = "/usr/lib/jvm/java-11-openjdk-amd64/lib/server/libjvm.so";
+	// err = get_jvmso_path(binary_path,pid);
+	// 	if (err){
+	// 	    printf("Failed to get JVM path\n");
+	// 		return NULL;
+	// 	}
+	printf("Binary path: %s\n", binary_path);
+
+	skel->links.entry_probe = bpf_program__attach_usdt(skel->progs.entry_probe, -1,binary_path, "hotspot", "method__entry", NULL);
+
+	if (!skel->links.entry_probe) {
+		err = errno;
+		printf("attach usdt method__entry failed: %s\n", strerror(err));
+		return NULL;
+	}
 
 	return skel;
 }

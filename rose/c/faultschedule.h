@@ -124,7 +124,6 @@ enum fault_categories{
 typedef struct user_function{
     char binary_location[STRING_SIZE];
     char symbol[FUNCNAME_MAX];
-    //TODO arguments
     int call_count;
     int cond_nr;
     int offset;

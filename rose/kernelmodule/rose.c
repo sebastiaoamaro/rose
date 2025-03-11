@@ -9,13 +9,15 @@
 /* Declare the kfunc prototype */
 __bpf_kfunc int bpf_strstr(const char* str1,const char* str2,int str_len);
 
+__bpf_kfunc int bpf_compare_str(const char* str1,const char* str2,int str_len);
+
 /* Begin kfunc definitions */
 __bpf_kfunc_start_defs();
 
 /* Define the bpf_strstr kfunc */
 __bpf_kfunc int bpf_strstr(const char* str1,const char* str2,int str_len)
 {
-    //printk(KERN_INFO "In Function! string is %s \n", str2);
+    //printk(KERN_INFO "Comparing %s and %s \n", str1, str2);
 
     //size_t count = 0;
     int found_end = 0;
@@ -33,7 +35,7 @@ __bpf_kfunc int bpf_strstr(const char* str1,const char* str2,int str_len)
             count++;
             if(str_len == count){
                 printk(KERN_INFO "They are equal str_len is %d \n",str_len);
-                return 1; 
+                return 1;
             }
             continue;
         }else{
@@ -41,7 +43,35 @@ __bpf_kfunc int bpf_strstr(const char* str1,const char* str2,int str_len)
         }
         // if(str_len == count){
         //     bpf_printk("They are equal str_len is %d \n",str_len);
-        //     return true; 
+        //     return true;
+        // }
+    }
+
+
+    // Return -1 if the substring is not found
+    return 0;
+}
+
+__bpf_kfunc int bpf_compare_str(const char* str1,const char* str2,int str_len)
+{
+    //printk(KERN_INFO "In Function! string is %s \n", str2);
+
+    int count = 0;
+    for (int i = 0; i < str_len; ++i){
+        if (str1[count] == str2[i] ){
+            // bpf_printk("%c and %c \n",comparand[count],comparand2[i]);
+            count++;
+            if(str_len == count){
+                printk(KERN_INFO "They are equal str_len is %d \n",str_len);
+                return 1;
+            }
+            continue;
+        }else{
+            count = 0;
+        }
+        // if(str_len == count){
+        //     bpf_printk("They are equal str_len is %d \n",str_len);
+        //     return true;
         // }
     }
 
@@ -56,6 +86,7 @@ __bpf_kfunc_end_defs();
 /* Define the BTF kfuncs ID set */
 BTF_KFUNCS_START(bpf_kfunc_example_ids_set)
 BTF_ID_FLAGS(func, bpf_strstr)
+BTF_ID_FLAGS(func, bpf_compare_str)
 BTF_KFUNCS_END(bpf_kfunc_example_ids_set)
 
 /* Register the kfunc ID set */

@@ -150,24 +150,23 @@ static inline bool string_contains(char *str1,char *str2,int size) {
     bpf_probe_read(&comparand, sizeof(comparand), str1);
     bpf_probe_read(&comparand2, sizeof(comparand2), str2);
 
-    int str_len = size;
+    //-1 because of the null terminator
+    int str_len = size-1;
     int count = 0;
     #pragma unroll
     for (int i = 0; i < FILENAME_MAX_SIZE; ++i){
+        //bpf_printk("%c and %c \n",comparand[count],comparand2[i]);
         if (comparand[count] == comparand2[i] ){
-            // bpf_printk("%c and %c \n",comparand[count],comparand2[i]);
             count++;
+            //bpf_printk("Count is %d and strlen %d\n", count, str_len);
             if(str_len == count){
-                return true; 
+                return true;
             }
             continue;
         }else{
             count = 0;
         }
-        // if(str_len == count){
-        //     bpf_printk("They are equal str_len is %d \n",str_len);
-        //     return true; 
-        // }
+
     }
     return false;
 }

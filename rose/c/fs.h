@@ -1,10 +1,8 @@
 #ifndef __FS_H
 #define __FS_H
 
-
-//TODO THIS MIGHT BE TO SMALL BUT INSTRUCTION LIMIT IS BEING HIT
-#define FILENAME_MAX_SIZE		32
-#define MAX_JUMPS 			12
+#define FILENAME_MAX_SIZE 32
+#define MAX_JUMPS 			30
 #define MAX_FILE_OFFSET		(FILENAME_MAX_SIZE>>1)
 #define SUB_STR_MAX			512
 #define PATH_MAX	4096
@@ -14,7 +12,7 @@
 struct file_info_simple {
 	int size;
 	char filename[FILENAME_MAX_SIZE];
-};
+}__attribute__((packed));
 
 typedef struct file_fd_key_t {
 	uint32_t dev;
@@ -54,4 +52,4 @@ struct file_stat {
 };
 
 
-#endif 
+#endif

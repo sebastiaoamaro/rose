@@ -1,5 +1,5 @@
 execution_plan:
-  maximum_time: 60
+  maximum_time: 120
   setup:
     script: /vagrant/schedules/reproducedbugs/redpanda/scripts/startcluster.sh
     duration: 10

@@ -44,6 +44,7 @@ pub struct Event {
     pub arg3: u32,
     pub arg4: u32,
     pub ret: i64,
+    pub extra: [u8; 256],
 }
 
 #[repr(C)]
@@ -400,6 +401,9 @@ pub fn collect_events(
 
                         if SYSCALLS_WITH_FD.contains(&event.id) {
                             filename = find_filename(event, filenames);
+                        } else if event.id == 262 {
+                            let c_string = event.extra.split(|&c| c == 0).next().unwrap_or(&[]);
+                            filename = String::from_utf8_lossy(c_string).to_string()
                         }
 
                         let pid = event.pid as i32;
@@ -521,6 +525,7 @@ pub fn monitor_pid(
                         arg2: duration,
                         arg3: 0,
                         arg4: 0,
+                        extra: [0; 256],
                     };
                     events_process_pause.push(event);
                     duration = 0;
@@ -629,6 +634,7 @@ pub fn collect_network_info(network_info: &libbpf_rs::Map) {
                         arg2: dst,
                         arg3: frequency,
                         arg4: 0,
+                        extra: [0; 256],
                     };
                     key_count += 1;
                     write_event_to_history(

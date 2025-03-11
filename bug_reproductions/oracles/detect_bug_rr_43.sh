@@ -4,7 +4,5 @@ folder=$2
 name="logs_run:"
 #Save logs
 /vagrant/rw/redis_raft_bugs/checklogs.sh > $folder$name$runnumber.txt
-
-result=$(cat $folder$runnumber.txt | grep "Assertion")
-
+result=$(cat $folder$name$runnumber.txt | grep "Log initial index")
 echo $result

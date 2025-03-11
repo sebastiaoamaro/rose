@@ -15,13 +15,8 @@ sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 sudo apt-get update
 sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 sudo docker run hello-world
-
-sudo groupadd docker
-sudo usermod -aG docker $USER
-newgrp docker
-
 #RUST
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 . "$HOME/.cargo/env"
 
 #Github
@@ -29,6 +24,7 @@ sudo apt install git
 
 
 #Kernel module
+cd ..
 cd rose/kernelmodule
 sudo apt-get install -y libdw1 dwarves elfutils libdw-dev pahole libdwarf-dev
 cp /sys/kernel/btf/vmlinux /usr/lib/modules/`uname -r`/build/
@@ -38,17 +34,18 @@ git submodule update --init --recursive
 mkdir build
 cd build
 cmake ..
-make install
-cd ../../
+sudo make install
+cd ../../../../
 
 #bpftool
 
 cd bpftool
 git pull
 
-cd libbbpf
+cd libbpf
 git checkout master
 git pull
+cd src
 make
 cd ..
 cd src
@@ -67,4 +64,4 @@ cd ../..
 #Build vmlinux.h
 
 cd rosetracer/src/bpf
-bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
+sudo bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h

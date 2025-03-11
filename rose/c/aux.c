@@ -390,7 +390,7 @@ void pause_process(void* args){
 	int duration = ((struct process_fault_args*)args)->duration;
 	char *name = ((struct process_fault_args*)args)->name;
 
-	send_signal(pid,SIGSTOP,name);
+	//send_signal(pid,SIGSTOP,name);
 	printf("Sleeping for %d before sending SIGCONT\n",duration);
 	sleep_for_ms(duration);
 	send_signal(pid,SIGCONT,name);
@@ -629,9 +629,9 @@ void kill_child_processes(pid_t parent_pid) {
                     pid_t ppid;
                     fscanf(fp, "%*d %*s %*c %d", &ppid);
                     fclose(fp);
-                    
+
                     if (ppid == parent_pid) {
-          
+
                         kill(pid, SIGKILL);
                     }
                 }
@@ -639,4 +639,46 @@ void kill_child_processes(pid_t parent_pid) {
         }
     }
     closedir(dir);
+}
+
+int get_jvmso_path(char *path,int pid)
+{
+	char mode[16], line[128], buf[64];
+	size_t seg_start, seg_end, seg_off;
+	FILE *f;
+	int i = 0;
+	bool found = false;
+
+	if (pid == -1) {
+		fprintf(stderr, "not specify pid, see --pid.\n");
+		return -1;
+	}
+
+	sprintf(buf, "/proc/%d/maps", pid);
+	f = fopen(buf, "r");
+	if (!f) {
+		fprintf(stderr, "open %s failed: %m\n", buf);
+		return -1;
+	}
+
+	while (fscanf(f, "%zx-%zx %s %zx %*s %*d%[^\n]\n",
+			&seg_start, &seg_end, mode, &seg_off, line) == 5) {
+		i = 0;
+		while (isblank(line[i]))
+			i++;
+		if (strstr(line + i, "libjvm.so")) {
+			found = true;
+			strcpy(path, line + i);
+			break;
+		}
+	}
+
+	fclose(f);
+
+	if (!found) {
+		fprintf(stderr, "Not found libjvm.so.\n");
+		return -ENOENT;
+	}
+
+	return 0;
 }

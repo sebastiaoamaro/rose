@@ -339,11 +339,11 @@ int main()
 				int fault_nr = fault.fault_nr;
 				int target = fault.target;
 				if (target == -2)
-					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n","majority",fault.fault_nr,fault.timestamp);
+					fprintf(fptr,"Node:any,Pid:0,Tid:0,event_type:Fault,event_name:Fault,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n","majority",fault.timestamp,fault.fault_nr);
 				if (target == -1)
-					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n","leader",fault.fault_nr,fault.timestamp);
+					fprintf(fptr,"Node:any,Pid:0,Tid:0,event_type:Fault,event_name:Fault,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n","leader",fault.timestamp,fault.fault_nr);
 				if (target >= 0)
-					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n",nodes[target].name,fault.fault_nr,fault.timestamp);
+					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n",nodes[target].name,fault.timestamp,fault.fault_nr);
 			}
 		}
 		fclose(fptr);
@@ -543,9 +543,8 @@ void start_workload(){
 }
 
 
-//TODO: Reorganize this code
+//TODO: Collect container pids, waits until they start
 void collect_container_pids(){
-
 	int node_count = 0;
 	while (node_count != NODE_COUNT){
 		node_count = 0;
@@ -905,13 +904,14 @@ void setup_begin_conditions(){
 
 				struct file_info_simple file_info = {};
 				if (strlen(syscall.file_name)){
-					strncpy(file_info.filename,syscall.file_name,strlen(syscall.file_name));
-					file_info.size = strlen(file_info.filename);
+					strncpy(file_info.filename,syscall.file_name,sizeof(file_info.filename));
+					file_info.size = strlen(file_info.filename)+1;
 					printf("Created fileinfo with filename %s \n",file_info.filename);
 				}
+				//TODO: Useless delete later
 				if (strlen(syscall.directory_name)){
-					strncpy(file_info.filename,syscall.directory_name,strlen(syscall.directory_name));
-					file_info.size = strlen(file_info.filename);
+					strncpy(file_info.filename,syscall.directory_name,sizeof(file_info.filename));
+					file_info.size = strlen(file_info.filename)+1;
 					printf("Created fileinfo with dirname %s \n",file_info.filename);
 				}
 
@@ -1214,28 +1214,17 @@ int setup_tc_progs(){
 
 			int target = faults[i].target;
 			int index = get_interface_index(nodes[target].veth);
-
-
-			//printf("Created TC program number %d index is %d for network_direction %d\n",tc_ebpf_progs_counter,index,BPF_TC_EGRESS);
-
 			__be32 ips_to_block_out[MAX_IPS_BLOCKED] = {0};
 
 			for (int k = 0; k < faults[i].fault_details.block_ips.count_out; k++){
-
-				//TODO FIX IPS_BLOCKED LIST
 				__be32 ip = faults[i].fault_details.block_ips.nodes_out[k];
-
 				if(ip){
-
 					char str[INET_ADDRSTRLEN];
-
 					inet_ntop(AF_INET,&ip, str, INET_ADDRSTRLEN);
-
 					ips_to_block_out[k]=ip;
 				}
 			}
-
-			//TEMPORARY FIX FOR DOCKER DEPLOYMENTS
+			//In containers the index inside is always -1 from the one in the host namespace
 			__u32 index_in_unsigned = (__u32)index-1;
 
 			struct tc_key egress_key = {
@@ -1318,10 +1307,9 @@ int setup_tc_progs(){
 			tc_ebpf_progs_counter++;
 
 		}
-		//TODO: implement network isolation in new tc
+		//TODO: Implement these later (useless for our current approach)
 		if (faults[i].faulttype == NETWORK_ISOLATION){
 		}
-		//TODO: implement drop_packets in new tc
 		if(faults[i].faulttype == DROP_PACKETS){
 
 		}
@@ -1588,18 +1576,15 @@ void retrieve_new_pid_container(int node_nr,int nsenter_pid){
 //new_pid is the pid of the new script, boot_pid the pid that information is based in the maps, old pid is the pid pre restart
 void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
 
-	printf("Pid translation from %d to %d in kernel \n",new_pid,boot_pid);
+	printf("PID TRANSLATED: OLD: %d, NEW: %d\n",new_pid,boot_pid);
 	int error = bpf_map_update_elem(constants.nodes_translator_map_fd,&new_pid,&boot_pid,BPF_ANY);
 	if(error){
 		printf("Error inserting in pid translator %d \n",error);
 	}
 
-	//TODO: This needs to add the new_pid
-
 	int zero = 0;
 
 	error = bpf_map_update_elem(constants.nodes_status_map_fd,&new_pid,&zero,BPF_ANY);
-
 	if(error){
 		printf("Error inserting in node_status %d \n",error);
 	}
@@ -1610,6 +1595,7 @@ void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
 		printf("Error deleting pid in node_status %d \n",error);
 	}
 
+	//+2 is because the first two positions are reserved for other information
 	int pos = node_nr + 2;
 	error = bpf_map_update_elem(constants.auxiliary_info_map_fd,&pos,&new_pid,BPF_ANY);
 	if(error){
@@ -1620,12 +1606,9 @@ void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
 void reinject_uprobes(int node_nr){
 
 	node *node = &nodes[node_nr];
-
 	if(node->container){
 
 		char* dir = get_overlay2_location(node->name);
-
-		//Combine paths
 		char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 		snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes->binary);
 		node->leader_probe = uprobe(nodes->current_pid,nodes->leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode,1,0);

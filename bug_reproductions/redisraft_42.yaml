@@ -1,7 +1,7 @@
 reproduction:
   schedule: "/vagrant/schedules/reproducedbugs/redisraft/bug_42_104.yaml"
   oracle: "/vagrant/bug_reproductions/oracles/detect_bug_rr_42.sh"
-  result_folder: "/vagrant/tests/bugdetection/redisraft/currentrun/"
+  result_folder: "/vagrant/tests/bugdetection/redisraft/"
   trace_location: "/tmp/history.txt"
   buggy_trace: "/vagrant/processor/test_traces/15.txt"
   cleanup: "/vagrant/schedules/reproducedbugs/redisraft/scripts/remote/cleanup.sh"

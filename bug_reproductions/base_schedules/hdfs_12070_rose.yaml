@@ -8,4 +8,4 @@ execution_plan:
 nodes:
   hdfs:
     container: false
-    script: /home/sebastiaoamaro/phd/torefidevel/rw//Anduril/experiment/hdfs-12070/run-original-test.sh
+    script: /home/sebastiaoamaro/phd/torefidevel/rw/Anduril/experiment/hdfs-12070/run-original-test.sh

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 #include "vmlinux.h"
+#include "aux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_tracing.h>
@@ -80,19 +81,6 @@ struct process_fd {
 struct accept_args_t
 {
     struct sockaddr_in *addr;
-};
-
-struct event {
-	u64 type;
-	u64 timestamp;
-	u64 id;
-	u32 pid;
-	u32 tid;
-	u32 arg1;
-	u32 arg2;
-	u32 arg3;
-	u32 arg4;
-	long int ret;
 };
 
 struct connect_data_t {

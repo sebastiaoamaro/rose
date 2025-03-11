@@ -6,7 +6,7 @@ import yaml
 import os
 
 import parser.nodes
-from parser.faults import Fault, block_ips, syscall
+from parser.faults import Fault, block_ips, syscall, check_if_syscall_supported
 from parser.conditions import file_syscall_condition, syscall_condition, time_cond, user_function_condition
 from pathlib import Path
 
@@ -175,7 +175,7 @@ class History:
                         self.function_calls_by_node[node_id][event.name] = [event]
                     else:
                         self.function_calls_by_node[node_id][event.name].append(event)
-                if event.type in self.event_counter:
+                if event.name in self.event_counter:
                     self.event_counter[event.name].append(event)
                 else:
                     self.event_counter[event.name] = [event]
@@ -192,11 +192,11 @@ class History:
 
             event.id = self.ids[node_id]
 
-            if node_id not in self.pids:
+            if node_id not in self.pids and node_id != "any":
                 self.pids[node_id] = []
                 self.new_pid_events[node_id] = []
 
-            if event.pid not in self.pids[node_id] and int(event.pid) !=0 and int(event.pid) !=4:
+            if node_id != "any" and event.pid not in self.pids[node_id] and int(event.pid) !=0 and int(event.pid) !=4:
                 self.pids[node_id].append(event.pid)
                 self.new_pid_events[node_id].append(event)
 
@@ -267,7 +267,6 @@ class History:
 
                 self.network_history[event.node][dest_node].append(network_event)
 
-
             if event.type == "network_information":
                 ip_src = event.arg1
                 ip_dst = event.arg2
@@ -304,79 +303,67 @@ class History:
                     self.network_history[event.node][dest_node].append(network_event)
 
 
-            if event.type == "process_state_change":
-                for node_name,pid_list in self.pids.items():
-                    if event.pid in pid_list:
-                        event.node = node_name
-
             #Process sycall Fault
             if event.type == "sys_exit":
+
+                if not self.check_syscall_support(event.name):
+                    continue
 
                 fault = Fault()
                 fault.name = "syscall" + str(fault_nr)
                 fault.fault_category = 2
                 fault.type = "syscall"
-
                 fault_specifics = syscall()
                 fault_specifics.syscall_name = event.name
                 fault_specifics.return_value = event.ret
                 fault.start_time = event.relative_time/1000000
                 fault.fault_specifics = fault_specifics
-
+                fault.event_id = event.id
                 fault.target = event.node
                 fault.traced = event.node
-
                 fault.begin_conditions = []
 
                 #Check if the syscall has a filename
                 if len(event.arg5)>0:
                     cond = file_syscall_condition()
-
                     #cond.time = event.relative_time/1000000
                     cond.syscall_name = event.name
                     cond.file_name = get_name_from_path(event.arg5)
                     cond.call_count = 1
                     fault.begin_conditions.append(cond)
-
                     fault_nr += 1
                     fault.state_score = 2
                 #If it does not try to leverage the counter only
                 elif len(self.event_counter[event.name]) < 100:
+                    #print(f"Syscall is not frequent event.name is {event.name} count is {len(self.event_counter[event.name])}")
                     cond = syscall_condition()
                     cond.syscall_name = event.name
                     cond.call_count = 1
                     fault.begin_conditions.append(cond)
-
                     fault_nr += 1
                     fault.state_score = 1
-
-                #TODO: look for syscalls before which have context
+                #If we can not leverage information from the syscall itself, look for previous ones, this can not be done here takes to much time
                 else:
-                    cond = file_syscall_condition()
-                    last_syscall_event = self.get_context_syscall_before(event.node,event.id)
-                    cond.syscall_name = last_syscall_event.name
-                    cond.file_name = get_name_from_path(event.arg5)
-                    cond.call_count = 1
-                    fault.begin_conditions.append(cond)
-
                     fault_nr += 1
-                    fault.state_score = 1
+                    fault.state_score = 0
 
                 self.faults.append(fault)
 
             #Find process pauses/waits
             if event.type == "process_state_change":
-                print("Found process pause creating fault")
+                for node_name,pid_list in self.pids.items():
+                    if event.pid in pid_list:
+                        event.node = node_name
+
                 fault = Fault()
                 fault.name = "process_pause" + str(fault_nr)
                 fault.fault_category = 0
                 fault.type = "process_pause"
                 fault.state_score = 3
-
                 fault.target = event.node
                 fault.traced = event.node
                 fault.duration = int(event.arg2)*1000
-
+                fault.event_id = event.id
                 fault.begin_conditions = []
 
                 #TODO: Move this block of code to function: find_state_of_fault
@@ -390,11 +377,10 @@ class History:
                     fault.begin_conditions.append(cond)
                     fault.state_score += len(fault.begin_conditions)
 
-
                 if len(fault.begin_conditions) == 0:
                     cond = time_cond()
-                    cond.time = int((event.relative_time)/1000000)
-                    cond.time = math.floor(cond.time / 10000) * 10000
+                    cond.time = int((event.time - self.start_time)/1000000)
+                    cond.time = math.floor(cond.time/10000) * 10000
                     fault.start_time = cond.time
                     fault.begin_conditions.append(cond)
 
@@ -412,26 +398,21 @@ class History:
                     if event[0]/self.experiment_time < 1:
                         #print("Frequency too low" + " time: " + str(self.experiment_time) + " count: " + str(event[0]) )
                         continue
-
                     fault = Fault()
                     fault.name = "networkfault" + str(fault_nr)
                     fault.fault_category = 0
                     fault.type = "block_ips"
                     fault.state_score = 3
-
+                    fault.event_id = event[4]
                     #Blocking both ways for simplicity now
                     fault_specifics = block_ips()
-                    print("Dest node is " + dest_node)
                     fault_specifics.nodes_in = [dest_node]
                     fault_specifics.nodes_out = [dest_node]
                     fault.fault_specifics = fault_specifics
-
                     fault.target = node
                     fault.traced = node
                     fault.duration = event[1]
-
                     fault.begin_conditions = []
-
                     functions_before = self.get_functions_before(node,event[4])
 
                     for function_call,counter in functions_before.items():
@@ -469,6 +450,7 @@ class History:
                     fault.begin_conditions = []
 
                     last_event_before_crash = self.find_event_before_id(node,self.new_pid_events[node][i].id)
+                    fault.event_id = last_event_before_crash.id
 
                     functions_before = self.get_functions_before(node,self.new_pid_events[node][i].id)
                     for function_call,counter in functions_before.items():
@@ -521,17 +503,28 @@ class History:
         #print(function_calls_counter)
         return function_calls_counter
 
+    #TODO: Needs to look in the normal trace if the event is common
     def get_context_syscall_before(self,node_name,event_id):
         event_list = self.events_by_node[node_name]
 
         for event in reversed(event_list):
-            if event.type  == "syscall_exit" and event.id < event_id and len(event.arg5) > 0:
+            if event.type  == "sys_exit" and event.id < event_id and len(event.arg5) > 0:
                 return event
 
     def find_event_before_id(self,node_name,event_id):
         for event in reversed(self.events_by_node[node_name]):
             if event.id < event_id:
                 return event
+
+    def count_syscall_on_filename(self,node_name,syscall_name,filename):
+        count = 0
+        for event in self.events_by_node[node_name]:
+            if event.type == "sys_enter" and event.name == syscall_name and event.arg5 == filename:
+                count += 1
+        return count
+
+    def check_syscall_support(self,syscall_name):
+        return check_if_syscall_supported(syscall_name) != "TEMP_EMPTY"
 
 def write_new_schedule(base_schedule,faults):
 
@@ -561,11 +554,8 @@ def write_new_schedule(base_schedule,faults):
 def compare_faults(buggy_run, normal_run):
     faults_buggy = group_faults(buggy_run)
     faults_normal = group_faults(normal_run)
-
     unique_faults = set(faults_buggy.keys()) - set(faults_normal.keys())
-
     faults = []
-
     for name in unique_faults:
         #futex faults are common
         if "futex" not in name:
@@ -575,7 +565,6 @@ def compare_faults(buggy_run, normal_run):
     return faults
 
 def group_faults(fault_list):
-
     faults = {}
     for fault in fault_list:
         if fault.type == "syscall":
@@ -583,20 +572,16 @@ def group_faults(fault_list):
                 faults[fault.fault_specifics.syscall_name + str(fault.fault_specifics.return_value)].append(fault)
             else:
                 faults[fault.fault_specifics.syscall_name + str(fault.fault_specifics.return_value)] = [fault]
-
         if fault.type == "process_kill":
-
             if fault.type in faults:
                 faults[fault.type].append(fault)
             else:
                 faults[fault.type] = [fault]
-
         if fault.type == "block_ips":
             if fault.type in faults:
                 faults[fault.type + fault.target + fault.fault_specifics.nodes_in[0] + str(fault.start_time)].append(fault)
             else:
                 faults[fault.type + fault.target + fault.fault_specifics.nodes_in[0] + str(fault.start_time)] = [fault]
-
         if fault.type == "process_pause":
             if fault.type in faults:
                 faults[fault.type + str(fault.target) + str(fault.duration)].append(fault)
@@ -607,9 +592,8 @@ def group_faults(fault_list):
 def get_name_from_path(path):
     return Path(path).name
 
-def choose_faults(faults):
+def choose_faults(faults,history_buggy,history):
     faults_choosen = []
-
     partitions = {}
     for fault in faults:
         #Group block_ips to reduce number of total faults
@@ -622,6 +606,16 @@ def choose_faults(faults):
         if fault.type == "process_kill":
             faults_choosen.append(fault)
         if fault.type == "syscall":
+            if fault.state_score == 0:
+                cond = file_syscall_condition()
+                last_syscall_event = history_buggy.get_context_syscall_before(fault.target,fault.event_id)
+                if last_syscall_event is None:
+                    continue
+                count = history.count_syscall_on_filename(fault.target,last_syscall_event.name,last_syscall_event.arg5)
+                cond.syscall_name = last_syscall_event.name
+                cond.file_name = get_name_from_path(last_syscall_event.arg5)
+                cond.call_count = 1
+                fault.begin_conditions.append(cond)
             faults_choosen.append(fault)
         if fault.type =="process_pause":
             faults_choosen.append(fault)
@@ -631,4 +625,6 @@ def choose_faults(faults):
 
     faults_choosen.sort(key = lambda x: (x.state_score,-x.start_time),reverse=True)
 
-    return faults_choosen[:10]
+    print(faults_choosen)
+
+    return faults_choosen[:15]

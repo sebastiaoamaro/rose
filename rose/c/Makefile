@@ -24,7 +24,7 @@ INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
 CFLAGS := -g -Wall -Wextra
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
-APPS = tc aux fs uprobes popen faultschedule faultinject
+APPS = uprobes tc aux fs popen faultschedule faultinject
 MAIN = main
 TCMAIN = network
 
@@ -123,8 +123,8 @@ $(LIBBLAZESYM_HEADER): $(LIBBLAZESYM_SRC)/target/release/libblazesym.a | $(OUTPU
 $(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) *.h $(wildcard %.h) $(wildcard.%.%.h)$(VMLINUX) | $(OUTPUT) $(BPFTOOL)
 	$(call msg,BPF,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH)		      \
-		     $(INCLUDES) $(CLANG_BPF_SYS_INCLUDES)		      \
-		     -c $(filter %.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
+		     $(INCLUDES) $(CLANG_BPF_SYS_INCLUDES) \
+		     -c -w $(filter %.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 
 # Generate BPF skeletons

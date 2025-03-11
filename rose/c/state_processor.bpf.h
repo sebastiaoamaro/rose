@@ -166,7 +166,7 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 		int run = fault->run;
 
 		if ((state_condition > STATE_PROPERTIES_COUNT+MAX_FUNCTIONS) || (state_condition < 0))
-				return 1;
+			return 1;
 
 
 		if(fault->start_time && fault->duration){
@@ -371,7 +371,7 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 				fault->start_time = time_ms;
 				fault->timestamp = time;
 				//TODO: Change and confirm this works
-				//bpf_send_signal(19);
+				bpf_send_signal(19);
 			}
 
 			//Send message to user space to restart process

@@ -20,6 +20,7 @@ class Fault:
     exit = 0
     start_time = 0
     state_score = 0
+    event_id = 0
 
     def to_yaml(self):
         fault = {}
@@ -54,8 +55,10 @@ class Fault:
         if self.type == "syscall":
             details = self.fault_specifics.syscall_name
             details = details + " " + str(self.fault_specifics.return_value)
-            if self.begin_conditions[0]is file_syscall_condition:
-                details = details + " " + self.self.begin_conditions[0].file_name
+
+            if len(self.begin_conditions) > 0:
+                if self.begin_conditions[0] is file_syscall_condition:
+                    details = details + " " + self.self.begin_conditions[0].file_name
         else:
             details = self.type
         return (f"Fault(type={self.type},details={details},target={self.target},traced={self.traced},start_time={self.start_time},duration={self.duration}\n")
@@ -596,3 +599,34 @@ def get_fault_type_nr(type,fault_specifics):
                         return "FDATASYNCFILE_FAULT"
                     case "fsync":
                         return "FSYNC"
+
+
+def check_if_syscall_supported(syscall_name):
+    match syscall_name:
+        #Needs success = 0
+        case "write":
+            return 2
+        case "read":
+            return 3
+        case "open":
+            return 15
+        case "mkdir":
+            return 23
+        case "newfstatat":
+            return "NEWFSTATAT_FAULT"
+        case "openat":
+            return "OPENAT_FAULT"
+        case "fdatasync":
+            return "FDATASYNC_FAULT"
+        case "pwrite64":
+            return "PWRITE64_FAULT"
+        case "accept":
+            return "ACCEPT_FAULT"
+        case "close":
+            return "CLOSE_FAULT"
+        case "futex":
+            return "FUTEX_FAULT"
+        case "connect":
+            return "CONNECT_FAULT"
+        case _:
+            return "TEMP_EMPTY"

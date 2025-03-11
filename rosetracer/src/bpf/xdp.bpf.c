@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 #include "vmlinux.h"
+#include "aux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_tracing.h>
@@ -43,19 +44,6 @@ struct network_info
 {
 	u32 frequency;
 	u64 last_time_seen;
-};
-
-struct event {
-	u64 type;
-	u64 timestamp;
-	u64 id;
-	u32 pid;
-	u32 tid;
-	u32 arg1;
-	u32 arg2;
-	u32 arg3;
-	u32 arg4;
-	int ret;
 };
 
 
@@ -162,9 +150,9 @@ int xdp_pass(struct xdp_md *ctx)
 					};
 					//bpf_printk("Found a delay of %llu from %pI4 to %pI4",delay,&src_ip,&dst_ip);
 					bpf_map_update_elem(&history_delays,&event_counter,&event,BPF_ANY);
-		
+
 					update_event_counter();
-			}	
+			}
 		}else{
 			struct network_info net_info = {
 				1,

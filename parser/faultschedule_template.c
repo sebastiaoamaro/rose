@@ -25,61 +25,61 @@ char* get_veth_interface_name(const char* container_name);
 
 void create_tracer(tracer* tracer,char* tracer_location, char* pipe_location, char* functions_file,char* binary_path,char* tracing_type){
 
-    memset(tracer->tracer_location,'\0',sizeof(tracer_location));
+    // memset(tracer->tracer_location,'\0',strlen(tracer_location));
     strcpy(tracer->tracer_location,tracer_location);
 
-    memset(tracer->tracing_type,'\0',sizeof(tracing_type));
+    // memset(tracer->tracing_type,'\0',strlen(tracing_type));
     strcpy(tracer->tracing_type,tracing_type);
 
-    memset(tracer->pipe_location,'\0',sizeof(pipe_location));
+    // memset(tracer->pipe_location,'\0',strlen(pipe_location));
     strcpy(tracer->pipe_location,pipe_location);
 
-    memset(tracer->functions_file,'\0',sizeof(functions_file));
+    // memset(tracer->functions_file,'\0',strlen(functions_file));
     strcpy(tracer->functions_file,functions_file);
 
-    memset(tracer->binary_path,'\0',sizeof(binary_path));
+    // memset(tracer->binary_path,'\0',strlen(binary_path));
     strcpy(tracer->binary_path,binary_path);
 
 }
 void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script,char* cleanup_script, int cleanup_time, int wait_time){
 
-    memset(exe_plan->setup.script,'\0',sizeof(setup_script));
+    // memset(exe_plan->setup.script,'\0',strlen(setup_script));
     strcpy(exe_plan->setup.script,setup_script);
     exe_plan->setup.duration = setup_duration;
     exe_plan->setup.pid = 0;
 
-    memset(exe_plan->workload.script,'\0',sizeof(workload_script));
+    // memset(exe_plan->workload.script,'\0',strlen(workload_script));
     strcpy(exe_plan->workload.script,workload_script);
     exe_plan->workload.pid = 0;
     exe_plan->workload.wait_time = wait_time;
 
-    memset(exe_plan->cleanup.script,'\0',sizeof(cleanup_script));
+    // memset(exe_plan->cleanup.script,'\0',strlen(cleanup_script));
     strcpy(exe_plan->cleanup.script,cleanup_script);
     exe_plan->cleanup.pid = 0;
     exe_plan->cleanup.duration = cleanup_time;
 }
 void create_node(node* node, char* name,int pid, char* veth, char* ip, char* script,char* env,int container,char *binary,char *leader_symbol,int leader){
 
-    memset(node->name,'\0',sizeof(name));
+    // memset(node->name,'\0',strlen(name));
     strcpy(node->name,name);
     node->pid = pid;
 
-    memset(node->veth,'\0',sizeof(veth));
+    // memset(node->veth,'\0',strlen(veth));
     strcpy(node->veth,veth);
 
-    memset(node->ip,'\0',sizeof(ip));
+    // memset(node->ip,'\0',strlen(ip));
     strcpy(node->ip,ip);
 
-    memset(node->script,'\0',sizeof(script));
+    // memset(node->script,'\0',strlen(script));
     strcpy(node->script,script);
 
-    memset(node->env,'\0',sizeof(env));
+    // memset(node->env,'\0',strlen(env));
     strcpy(node->env,env);
 
-    memset(node->binary,'\0',sizeof(binary));
+    // memset(node->binary,'\0',strlen(binary));
     strcpy(node->binary,binary);
 
-    memset(node->leader_symbol,'\0',sizeof(leader_symbol));
+    // memset(node->leader_symbol,'\0',strlen(leader_symbol));
     strcpy(node->leader_symbol,leader_symbol);
 
     node->container = container;
@@ -94,7 +94,7 @@ void create_node(node* node, char* name,int pid, char* veth, char* ip, char* scr
     if (container){
         char* interface_name = get_veth_interface_name(node->name);
         printf("Interface name is %s \n",interface_name);
-            memset(node->veth,'\0',sizeof(interface_name));
+            // memset(node->veth,'\0',strlen(interface_name));
             strcpy(node->veth,interface_name);
     }
 }
@@ -114,7 +114,7 @@ int get_maximum_time(){
 
 void create_fault(struct fault* fault,char* name,int target,int traced, int faulttype,int fault_category,fault_details fault_details,int repeat,int occurrences,int duration,int condition_count,int exit){
 
-    memset(fault->name,'\0',sizeof(name));
+    // memset(fault->name,'\0',sizeof(name));
     strcpy(fault->name,name);
     fault->target = target;
     fault->traced = traced;
@@ -144,9 +144,9 @@ void add_begin_condition(struct fault* fault,fault_condition fault_condition,int
 
 void build_user_function(user_function* user_func,char* binary_location,char* symbol,int call_count,int offset){
 
-    memset(user_func->binary_location,'\0',sizeof(user_func->binary_location));
+    // memset(user_func->binary_location,'\0',sizeof(user_func->binary_location));
     strcpy(user_func->binary_location,binary_location);
-    memset(user_func->symbol,'\0',sizeof(user_func->symbol));
+    // memset(user_func->symbol,'\0',sizeof(user_func->symbol));
     strcpy(user_func->symbol,symbol);
     user_func->call_count = call_count;
     user_func->offset = offset;
@@ -155,11 +155,10 @@ void build_user_function(user_function* user_func,char* binary_location,char* sy
 void build_file_syscall(file_system_call* file_syscall,int syscall, char* directory_name,char* file_name,int call_count){
 
     file_syscall->syscall = syscall;
-    memset(file_syscall->directory_name,'\0',sizeof(directory_name));
+    snprintf(file_syscall->file_name,sizeof(file_syscall->file_name),"%s",file_name);
+    // memset(file_syscall->directory_name,'\0',sizeof(directory_name));
     strcpy(file_syscall->directory_name,directory_name);
 
-    memset(file_syscall->file_name,'\0',sizeof(file_name));
-    strcpy(file_syscall->file_name,file_name);
 
     file_syscall->call_count = call_count;
 }
@@ -240,7 +239,7 @@ char* get_veth_interface_name(const char* container_name) {
             if (end) {
                 *end = '\0'; // Null-terminate the string
             }
-            memset(veth_name,'\0',sizeof(start));
+            // memset(veth_name,'\0',sizeof(start));
             strcpy(veth_name, start);
             veth_name[sizeof(veth_name) - 1] = '\0'; // Ensure null-termination
             pclose(pipe);

@@ -16,12 +16,12 @@ faults:
     type: syscall
     details:
       name: read
-      return_value: 1
+      return_value: -5
     target: hdfs
     traced: hdfs
     begin_conditions:
-    - condition1:
-        type: file_syscall
-        syscall_name: read
-        file_name: blk_
-        call_count: 1
+      - condition1:
+          type: file_syscall
+          syscall_name: read
+          file_name: blk_
+          call_count: 2

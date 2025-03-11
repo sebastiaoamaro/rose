@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 #include "vmlinux.h"
+#include "aux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_tracing.h>
@@ -9,7 +10,6 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 #define ETH_P_IP 0x0800
 #define HISTORY_SIZE 1048576
 #define MAP_FAILED	((void *) -1)
-#define TAIL_LEN 416
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
@@ -51,14 +51,14 @@ struct {
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, struct process_fd);
-	__type(value, char[TAIL_LEN]);
+	__type(value, char[FILENAME_MAX_SIZE]);
 	__uint(max_entries, 1048576);
 } fd_to_name SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, int);
-	__type(value, char[TAIL_LEN]);
+	__type(value, char[FILENAME_MAX_SIZE]);
 	__uint(max_entries, 512);
 } pid_to_open_name SEC(".maps");
 
@@ -69,6 +69,20 @@ struct {
 	__uint(max_entries, 4096);
 } dup_map SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, struct process_and_syscall);
+//	__type(value, long unsigned int);
+    __type(value, char[FILENAME_MAX_SIZE]);
+	__uint(max_entries, HISTORY_SIZE);
+}important_arguments SEC(".maps");
+
+
+struct process_and_syscall{
+    int id;
+    u64 pid_tgid;
+
+};
 
 struct process_fd {
 	int fd;
@@ -80,20 +94,6 @@ struct accept_args_t
 {
     struct sockaddr_in *addr;
 };
-
-struct event {
-	u64 type;
-	u64 timestamp;
-	u64 id;
-	u32 pid;
-	u32 tid;
-	u32 arg1;
-	u32 arg2;
-	u32 arg3;
-	u32 arg4;
-	long int ret;
-};
-
 struct connect_data_t {
     int family;
     __u32 saddr;
@@ -105,6 +105,7 @@ enum type { SYSCALL_ENTER = 1,SYSCALL_EXIT = 2, UPROBE = 3, OPEN = 5};
 const volatile int pid_counter = 0;
 volatile int event_counter = 0;
 volatile int delay_counter = 0;
+volatile int verbose = 1;
 
 /* trigger creation of event struct in skeleton code */
 struct event _event = {};
@@ -136,34 +137,6 @@ static inline int update_event_counter(){
 	return 0;
 }
 
-// SEC("tracepoint/syscalls/sys_enter_connect")
-// int trace_connect_entry(struct trace_event_raw_sys_enter *ctx) {
-
-// 		int pid_relevant = check_pid_prog();
-
-// 		if (!pid_relevant)
-// 			return 0;
-
-//     struct connect_data_t data = {};
-//     struct sockaddr_in *addr_in;
-
-//     // Get address struct and length from syscall arguments
-//     struct sockaddr *uservaddr = (struct sockaddr *)ctx->args[1];
-//     int addrlen = (int)ctx->args[2];
-
-//     // Check family and extract address information
-//     bpf_probe_read_user(&data.family, sizeof(data.family), &uservaddr->sa_family);
-
-// 		addr_in = (struct sockaddr_in *)uservaddr;
-// 		bpf_probe_read_user(&data.saddr, sizeof(data.saddr), &addr_in->sin_addr.s_addr);
-
-// 		//bpf_printk("Syscall connect called with address %d\n", data.saddr);
-
-// 		bpf_map_update_elem(&connect_map,&pid_relevant, &data.saddr, BPF_ANY);
-
-//     return 0;
-// }
-
 SEC("tp/syscalls/sys_enter")
 int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 
@@ -192,7 +165,7 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 				return 0;
 
 			const char *filename = (const char *)ctx->args[0];
-			char path[TAIL_LEN + 1] = {};
+			char path[FILENAME_MAX_SIZE + 1] = {};
 			int len = bpf_probe_read_user_str(path, sizeof(path), filename);
 
 			bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
@@ -208,7 +181,7 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 				return 0;
 
 			const char *filename = (const char *)ctx->args[1];
-			char path[TAIL_LEN + 1] = {};
+			char path[FILENAME_MAX_SIZE + 1] = {};
 			int len = bpf_probe_read_user_str(path, sizeof(path), filename);
 
 			bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
@@ -217,13 +190,37 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 			return 0;
 
 	}
+	else if(id == 262){
+    	u64 pid_tgid = bpf_get_current_pid_tgid();
+    	int pid_relevant = check_pid_prog(pid_tgid);
+        if (!pid_relevant)
+            return 0;
+        struct process_and_syscall psys = {
+            id,
+            pid_tgid,
+        };
+
+        long unsigned int filename = ctx->args[1];
+
+        char path[FILENAME_MAX_SIZE];
+
+        int len = bpf_probe_read_user_str(path, FILENAME_MAX_SIZE,(void *)filename);
+
+
+        int res = bpf_map_update_elem(&important_arguments,&psys, &path, BPF_ANY);
+
+        // if (res < 0)
+        //     bpf_printk("Failed to add with code %d \n", res);
+        // if (verbose)
+        //     bpf_printk("Added %s added to %llu with %p \n",filename, pid_tgid,filename);
+
+	}
 
     return 0;
 }
 
 SEC("tp/syscalls/sys_exit")
 int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
-
 
 	long id = ctx->id;
 
@@ -236,7 +233,6 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 
 	if (!pid_relevant)
 		return 0;
-
 	long int ret = ctx->ret;
 
 	if (ret<0 && id !=9 && id != 12){
@@ -253,23 +249,68 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 			fd = *fd_in_map;
 		}
 
+		if (id == 262){
+		    //verbose = 0;
+            struct process_and_syscall psys = {
+                id,
+                pid_tgid,
+            };
+            //bpf_printk("Looking for filename for pid_tgid %llu \n",pid_tgid);
+		    //long unsigned int *file_addr = bpf_map_lookup_elem(&important_arguments,&psys);
+		    char *filename = bpf_map_lookup_elem(&important_arguments,&psys);
 
-		struct event key = {
-			SYSCALL_EXIT,
-			timestamp,
-			id,
-			pid,
-			tid,
-			fd,
-			0,
-			0,
-			0,
-			ret
-		};
-			bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
+       	    // if (!file_addr) {
+            //     bpf_printk("Failed to find file address \n");
+            //     return 0;
+            // }
+            // long unsigned int buff_addr = *file_addr;
+			if (filename){
+                struct event key = {
+         			SYSCALL_EXIT,
+         			timestamp,
+         			id,
+         			pid,
+         			tid,
+         			fd,
+         			0,
+         			0,
+         			0,
+         			ret,
+          		};
 
-			update_event_counter();
-	}
+         	 	//int len = bpf_probe_read_user_str(&key.extra, FILENAME_MAX_SIZE,(void *) buff_addr);
+                int len = bpf_probe_read_str(&key.extra, FILENAME_MAX_SIZE,filename);
+                if (len <= 0){
+                    bpf_printk("Failed to read file name \n");
+                    return 0;
+                }
+
+                //bpf_printk("Read name in sys_exit %s with size %d \n",key.extra,len);
+                bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
+                update_event_counter();
+            }
+            else{
+                //bpf_printk("Empty in map \n");
+            }
+			return 0;
+	    }else{
+			struct event key = {
+     			SYSCALL_EXIT,
+     			timestamp,
+     			id,
+     			pid,
+     			tid,
+     			fd,
+     			0,
+     			0,
+     			0,
+     			ret
+            };
+            bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
+            update_event_counter();
+		}
+
+    }
 
 	//Checking for small reads 1-2 bytes
 	// else if (id == 0 && ret < 3){
@@ -330,15 +371,15 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 
 	else if (id == 2 || id == 257 || id == 85){
 
-		char path[TAIL_LEN + 1] = {};
+		char path[FILENAME_MAX_SIZE + 1] = {};
 
 		char *path_pointer = bpf_map_lookup_elem(&pid_to_open_name,&pid_relevant);
 
 		if (path_pointer){
 
-			int len = bpf_probe_read_str(path, TAIL_LEN+1, path_pointer);
+			int len = bpf_probe_read_str(path, FILENAME_MAX_SIZE+1, path_pointer);
 
-			if (len>0 && len<TAIL_LEN+1){
+			if (len>0 && len<FILENAME_MAX_SIZE+1){
 				path[len-1] = '\0';
 			}
 			else{
@@ -382,7 +423,6 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 			//bpf_printk("Added pid %d, fd %d, ts %llu, new_fd %d",pid_relevant,fd,timestamp,ret);
 
 	}
-
     return 0;
 }
 

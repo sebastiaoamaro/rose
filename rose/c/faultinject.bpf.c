@@ -9,6 +9,7 @@
 #include "aux.h"
 #include "fs.bpf.h"
 #include "fs.h"
+#include <bpf/usdt.bpf.h>
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
@@ -110,6 +111,7 @@ const volatile int time_only = 0;
 
 /* Declare the external kfunc */
 extern int bpf_strstr(const char* str,const char* str2, int str_len) __ksym;
+extern int bpf_compare_str(const char* str,const char* str2, int str_len) __ksym;
 
 SEC("kprobe/__x64_sys_write")
 int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
@@ -136,23 +138,23 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 
 	int process_fd = 1;
 
-	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&pid);
+	//struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&pid);
 
-	if(fdrelevant){
-		for (int i=0;i<fdrelevant->size;i++){
-			if(i>MAX_RELEVANT_FILES)
-				break;
-			__u64 relevant_fd = fdrelevant->fds[i];
-			if(relevant_fd == fd){
-				process_fd = 0;
-				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
-				inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
-				break;
-			}
-		}
-	}else{
-		process_fd = 0;
-	}
+	// if(fdrelevant){
+	// 	for (int i=0;i<fdrelevant->size;i++){
+	// 		if(i>MAX_RELEVANT_FILES)
+	// 			break;
+	// 		__u64 relevant_fd = fdrelevant->fds[i];
+	// 		if(relevant_fd == fd){
+	// 			process_fd = 0;
+	// 			process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
+	// 			inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
+	// 			break;
+	// 		}
+	// 	}
+	// }else{
+	// 	process_fd = 0;
+	// }
 
 	if (fd > 0 && process_fd){
 		struct file *file = get_file_from_fd(fd);
@@ -193,7 +195,7 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 			}
 			//bpf_printk("Comparing %s and %s \n with offset %d",&(fi.filename[fi.offset]),file_open->filename,fi.size);
 			if(string_contains(file_open->filename,&(fi.filename[fi.offset]),fi.size)){
-				
+
 				struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);
 				if(fds){
 					u64 position = fds->size;
@@ -249,7 +251,7 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 		time_only
 	};
 
-		__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
@@ -258,35 +260,34 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 
 	int process_fd = 1;
 
-	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&pid);
+	// struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&pid);
 
-	if(fdrelevant){
-		for (int i=0;i<fdrelevant->size;i++){
-			if(i>MAX_RELEVANT_FILES)
-				break;
-			__u64 relevant_fd = fdrelevant->fds[i];
-			if(relevant_fd == fd){
-				process_fd = 0;
-				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
-					&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
-				inject_override(pid,sys_info.file_specific_code,(struct pt_regs *) ctx,0,&faults_specification);
-				break;
-			}
-		}
-	}else{
-		process_fd = 0;
-	}
+	// if(fdrelevant){
+	// 	for (int i=0;i<fdrelevant->size;i++){
+	// 		if(i>MAX_RELEVANT_FILES)
+	// 			break;
+	// 		__u64 relevant_fd = fdrelevant->fds[i];
+	// 		if(relevant_fd == fd){
+	// 			process_fd = 0;
+	// 			process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
+	// 				&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
+	// 			inject_override(pid,sys_info.file_specific_code,(struct pt_regs *) ctx,0,&faults_specification);
+	// 			break;
+	// 		}
+	// 	}
+	// }else{
+	// 	process_fd = 0;
+	// }
 
 	if (fd > 0 && process_fd){
 		struct file *file = get_file_from_fd(fd);
 
 		if(!file){
-			//bpf_printk("File not found \n");
+			bpf_printk("File not found \n");
 			return 2;
 		}
 
 		struct path path = get_path_from_file(file);
-
 		struct inode *inode = get_inode_from_path(&path);
 
 		if (!inode) return 2;
@@ -302,7 +303,10 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 
 		bpf_probe_read(&fi.file_type, sizeof(fi.file_type), &inode->i_mode);
 
-		if (get_file_path(&path, &event_path, &fi) != 0) return 2;
+		if (get_file_path(&path, &event_path, &fi) != 0){
+		  bpf_printk("Get file path failed \n");
+		  return 2;
+		}
 
 		struct info_key info_key = {
 			pid,
@@ -310,15 +314,15 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 		};
 		struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&info_key);
 		if(file_open){
-
 			if (fi.size == 0){
 				return 0;
 			}
-			//bpf_printk("In read comparing %s and %s \n",&(fi.filename[fi.offset]),file_open->filename);
+			//bpf_printk("In read file is: %s and file_open->filename: %s \n",&(fi.filename[fi.offset]),file_open->filename);
+
 			if(string_contains(file_open->filename,&(fi.filename[fi.offset]),file_open->size)){
 				struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);
 
-				bpf_printk("In read size %d found %s and %s \n",fi.size,&(fi.filename[fi.offset]),file_open->filename);
+				//bpf_printk("In read found %s and %s \n",&(fi.filename[fi.offset]),file_open->filename);
 				if(fds){
 					u64 position = fds->size;
 					if(position < MAX_RELEVANT_FILES){
@@ -367,7 +371,7 @@ int BPF_KPROBE(__x64_sys_close,struct pt_regs *regs)
 				break;
 			u64 relevant_fd = fdrelevant->fds[i];
 			if(relevant_fd == fd){
-
+			    //bpf_printk("Closing fd %d\n",fd);
 				fdrelevant->fds[i] = 0;
 				break;
 			}
@@ -382,7 +386,7 @@ int BPF_KPROBE(__x64_sys_close,struct pt_regs *regs)
 		fault_count,
 		time_only
 	};
-	
+
 	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 	inject_override(pid,sys_info.general_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 
@@ -411,55 +415,43 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
-
 	struct sys_info sys_info = {
-			0,
-			OPENNAT_COUNT,
-			OPENAT_SPECIFIC,
-			OPENAT_FAULT,
-			OPENAT_FILE,
-			fault_count,
-			time_only
-		};
-
+		0,
+		OPENNAT_COUNT,
+		OPENAT_SPECIFIC,
+		OPENAT_FAULT,
+		OPENAT_FILE,
+		fault_count,
+		time_only
+	};
 	char *path = (char*) PT_REGS_PARM2_CORE(regs);
-
 	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&pid);
-
 	struct info_key info_key = {
 		pid,
 		sys_info.file_specific_code
 	};
-
-
 	struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&info_key);
 
 	if(file_open){
-		//bpf_printk("Filename is %s \n",file_open->filename);
-		//bpf_printk("In open comparing %s and %s \n",path,file_open->filename);
-
-		int string_equal = 0;
-		for (int i = 0; i < 4; i++){
-			const char str1[64];
-    		bpf_probe_read(&str1, sizeof(str1),path+i*64);
-			int result = bpf_strstr(file_open->filename,str1,file_open->size);
-			if (result){
-				string_equal = result;
-				break;
-			}
-		}
-
-		if (!string_equal){
-			//bpf_printk("Could not find string in openat \n");
-			return 0;
-		}
-
+	   //bpf_printk("Filename is %s \n",file_open->filename);
+    	int string_equal = 0;
+    	for (int i = 0; i < 4; i++){
+    		const char str1[64];
+      		bpf_probe_read(&str1, sizeof(str1),path+i*64);
+    		int result = bpf_strstr(file_open->filename,str1,file_open->size);
+    		if (result){
+    			string_equal = result;
+    			break;
+    		}
+    	}
+    	if (!string_equal){
+    		//bpf_printk("Could not find string in openat \n");
+    		return 0;
+    	}
 		process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
 			&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 		inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
-
 	}
-
 	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,
 		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 	inject_override(pid,sys_info.general_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
@@ -538,16 +530,16 @@ int BPF_KRETPROBE(__x64_sys_openat_ret)
 
         if(file_info){
             if(string_contains(file_info->filename,&(fi.filename[fi.offset]),fi.offset)){
-							struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);
-							if(fds){
-								u64 position = fds->size;
-								if(position < MAX_RELEVANT_FILES){
-									fds->fds[position] = fd;
-									fds->size = fds->size + 1;
-								}
-							}else{
-								bpf_printk("This should not happen, main should init the structures \n");
-							}
+				struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);
+				if(fds){
+					u64 position = fds->size;
+					if(position < MAX_RELEVANT_FILES){
+						fds->fds[position] = fd;
+						fds->size = fds->size + 1;
+					}
+				}else{
+					bpf_printk("This should not happen, main should init the structures \n");
+				}
 
 				inject_override(pid,OPENAT_RET,(struct pt_regs *) ctx,0,&faults_specification);
 
@@ -557,20 +549,6 @@ int BPF_KRETPROBE(__x64_sys_openat_ret)
 
 	//int result = process_current_state(OPENAT_COUNT,OPENNAT_HOOK,pid);
 	inject_override(pid,OPENAT_RET,(struct pt_regs *) ctx,0,&faults_specification);
-
-
-	//TODO IMPLEMENT FOR RETS NO STATE_INFO INCREMENTATION
-	// struct sys_info sys_info = {
-	// 	fd,
-	// 	OPENNAT_COUNT,
-	// 	READ_FILE,
-	// 	OPENAT_RET,
-	// 	fault_count,
-	// 	time_only
-	// };
-
-	// process_fd_syscall(ctx,sys_info,&relevant_state_info,&faults_specification,&faults,&rb,&files,&relevant_fd);
-
 	return 0;
 
 }
@@ -742,7 +720,7 @@ int BPF_KPROBE(__x64_sys_fsync,struct pt_regs *regs)
 
 	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 	inject_override(pid,sys_info.general_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
-	
+
 }
 
 SEC("ksyscall/fdatasync")
@@ -970,5 +948,30 @@ int BPF_KPROBE(__x64_sys_connect,struct pt_regs *regs)
 	inject_override(pid,sys_info.general_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
 
 
+	return 0;
+}
+
+
+SEC("usdt")
+int entry_probe(struct pt_regs *ctx){
+
+    char name[64] = {0};
+
+    void *method_name = (void *)PT_REGS_PARM3(ctx);
+
+    if (!method_name){
+        bpf_printk("No method name provided\n");
+        return 0;
+    }
+    //bpf_printk("Name is %s \n",(char *)method_name);
+
+    int len = bpf_probe_read_user_str(&name, sizeof(name), method_name);
+
+    if (len < 0){
+        //bpf_printk("Failed to read method name, err is %d", len);
+        return 0;
+    }
+
+    //bpf_printk("Entering method: %s\n", name);
 	return 0;
 }

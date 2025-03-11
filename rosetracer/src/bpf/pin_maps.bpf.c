@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 #include "vmlinux.h"
+#include "aux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_tracing.h>
@@ -52,17 +53,4 @@ struct network_info
 {
 	u32 frequency;
 	u64 last_time_seen;
-};
-
-struct event {
-	u64 type;
-	u64 timestamp;
-	u64 id;
-	u32 pid;
-	u32 tid;
-	int ret;
-	u32 arg1;
-	u32 arg2;
-	u32 arg3;
-	u32 arg4;
 };

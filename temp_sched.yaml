@@ -1,26 +1,262 @@
 execution_plan:
   cleanup:
-    duration: 30
+    duration: 60
+  maximum_time: 120
+  setup:
+    duration: 5
+    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/startrediscluster2d1cf30.sh
   tracer:
+    binary_to_examine: /redisraft.so
+    functions_file: /vagrant/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
     pipe_location: /tmp/containerpid
     tracer_location: /vagrant/rosetracer/target/release/rosetracer
-    tracing_type: full_trace,process_controlled
+    tracing_type: full_trace,container_controlled
+  workload:
+    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
+    wait_time: 15
 nodes:
-  tendermint:
-    container: false
-    script: /vagrant/schedules/reproducedbugs/tendermint/tendermint.sh
+  redis1:
+    binary: /redisraft.so
+    container: true
+    ip: 172.19.1.10
+    leader: true
+    leader_symbol: raft_become_leader
+    script: ./startredis.sh 1 172.19.1.10
+  redis2:
+    binary: /redisraft.so
+    container: true
+    ip: 172.19.1.11
+    leader_symbol: raft_become_leader
+    script: ./startredis.sh 2 172.19.1.11
+  redis3:
+    binary: /redisraft.so
+    container: true
+    ip: 172.19.1.12
+    leader_symbol: raft_become_leader
+    script: ./startredis.sh 3 172.19.1.12
+  redis4:
+    binary: /redisraft.so
+    container: true
+    ip: 172.19.1.13
+    leader_symbol: raft_become_leader
+    script: ./startredis.sh 4 172.19.1.13
+  redis5:
+    binary: /redisraft.so
+    container: true
+    ip: 172.19.1.14
+    leader_symbol: raft_become_leader
+    script: ./startredis.sh 5 172.19.1.14
 faults:
-  syscall33:
+  networkfault103003:
     begin_conditions:
     - condition_nr0:
-        call_count: '2'
-        syscall_name: newfstatat
-        type: syscall
-    details:
-      name: newfstatat
-      repeatable: 0
-      return_value: -1
+        time: 80000
+        type: time
+    duration: 6047
+    ips_in:
+    - redis3
+    - redis2
+    - redis5
+    - redis4
+    ips_out:
+    - redis3
+    - redis2
+    - redis5
+    - redis4
+    target: redis1
+    traced: redis1
+    type: block_ips
+  networkfault103006:
+    begin_conditions:
+    - condition_nr0:
+        time: 20000
+        type: time
+    duration: 25124
+    ips_in:
+    - redis1
+    ips_out:
+    - redis1
+    target: redis2
+    traced: redis2
+    type: block_ips
+  networkfault103007:
+    begin_conditions:
+    - condition_nr0:
+        time: 80000
+        type: time
+    duration: 6015
+    ips_in:
+    - redis1
+    - redis5
+    ips_out:
+    - redis1
+    - redis5
+    target: redis2
+    traced: redis2
+    type: block_ips
+  networkfault103009:
+    begin_conditions:
+    - condition_nr0:
+        time: 20000
+        type: time
+    duration: 25132
+    ips_in:
+    - redis1
+    ips_out:
+    - redis1
+    target: redis3
+    traced: redis3
+    type: block_ips
+  networkfault103011:
+    begin_conditions:
+    - condition_nr0:
+        time: 80000
+        type: time
+    duration: 6021
+    ips_in:
+    - redis5
+    - redis1
+    ips_out:
+    - redis5
+    - redis1
+    target: redis3
+    traced: redis3
+    type: block_ips
+  networkfault103012:
+    begin_conditions:
+    - condition_nr0:
+        time: 20000
+        type: time
+    duration: 25112
+    ips_in:
+    - redis1
+    ips_out:
+    - redis1
+    target: redis4
+    traced: redis4
+    type: block_ips
+  networkfault103013:
+    begin_conditions:
+    - condition_nr0:
+        time: 80000
+        type: time
+    duration: 6107
+    ips_in:
+    - redis1
+    - redis5
+    ips_out:
+    - redis1
+    - redis5
+    target: redis4
+    traced: redis4
+    type: block_ips
+  networkfault103015:
+    begin_conditions:
+    - condition_nr0:
+        time: 20000
+        type: time
+    duration: 25120
+    ips_in:
+    - redis1
+    ips_out:
+    - redis1
+    target: redis5
+    traced: redis5
+    type: block_ips
+  networkfault103016:
+    begin_conditions:
+    - condition_nr0:
+        time: 80000
+        type: time
+    duration: 6012
+    ips_in:
+    - redis1
+    - redis3
+    - redis4
+    - redis2
+    ips_out:
+    - redis1
+    - redis3
+    - redis4
+    - redis2
+    target: redis5
+    traced: redis5
+    type: block_ips
+  process_kill103020:
+    begin_conditions:
+    - condition_nr0:
+        time: 30000
+        type: time
     duration: 0
-    target: tendermint
-    traced: tendermint
+    target: redis1
+    traced: redis1
+    type: process_kill
+  process_kill103021:
+    begin_conditions:
+    - condition_nr0:
+        time: 50000
+        type: time
+    duration: 0
+    target: redis1
+    traced: redis1
+    type: process_kill
+  syscall102963:
+    begin_conditions:
+    - condition_nr0:
+        call_count: '1'
+        file_name: stat
+        syscall_name: read
+        type: file_syscall
+    details:
+      name: connect
+      repeatable: 0
+      return_value: -111
+    duration: 0
+    target: redis3
+    traced: redis3
+    type: syscall
+  syscall16311:
+    begin_conditions:
+    - condition_nr0:
+        call_count: '1'
+        file_name: stat
+        syscall_name: read
+        type: file_syscall
+    details:
+      name: read
+      repeatable: 0
+      return_value: -110
+    duration: 0
+    target: redis3
+    traced: redis3
+    type: syscall
+  syscall61409:
+    begin_conditions:
+    - condition_nr0:
+        call_count: '1'
+        file_name: stat
+        syscall_name: read
+        type: file_syscall
+    details:
+      name: connect
+      repeatable: 0
+      return_value: -110
+    duration: 0
+    target: redis3
+    traced: redis3
+    type: syscall
+  syscall65016:
+    begin_conditions:
+    - condition_nr0:
+        call_count: '1'
+        file_name: online
+        syscall_name: openat
+        type: file_syscall
+    details:
+      name: openat
+      repeatable: 0
+      return_value: -2
+    duration: 0
+    target: redis1
+    traced: redis1
     type: syscall

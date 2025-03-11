@@ -2,26 +2,26 @@ execution_plan:
   cleanup:
     duration: 70
   tracer:
-    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+    tracer_location: /vagrant/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
     tracing_type: production_trace,process_controlled
 
 nodes:
   zookeeper:
     container: false
-    script: /home/sebastiaoamaro/phd/torefidevel/rw/Anduril/ground_truth/zookeeper-3157/run-original-test.sh
+    script: /vagrant/rw/Anduril/ground_truth/zookeeper-3157/run-original-test.sh
 
 faults:
   write_fail:
     type: syscall
     details:
       name: read
-      return_value: 100
+      return_value: -5
     target: zookeeper
     traced: zookeeper
     begin_conditions:
-    - condition1:
-        type: file_syscall
-        syscall_name: read
-        file_name: snapshot.0
-        call_count: 1
+      - condition1:
+          type: file_syscall
+          syscall_name: read
+          file_name: log.100000001
+          call_count: 2

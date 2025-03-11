@@ -19,8 +19,8 @@ faults:
     target: hdfs
     traced: hdfs
     begin_conditions:
-    - condition1:
-        type: file_syscall
-        syscall_name: newfstatat
-        file_name: .meta
-        call_count: 10
+      - condition1:
+          type: file_syscall
+          syscall_name: newfstatat
+          file_name: .meta
+          call_count: 10

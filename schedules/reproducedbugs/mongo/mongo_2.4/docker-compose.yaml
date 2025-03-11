@@ -1,0 +1,97 @@
+version: "2"
+services:
+  mongo2-4rs0-0:
+    hostname: mongo0
+    container_name: mongo2-4rs0-0
+    image: custom-mongo:2.2.7
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --oplogSize 128 --bind_ip 0.0.0.0
+    ports:
+      - 27017:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.20.0.2
+    environment:
+      TERM: xterm
+    volumes:
+      - ./start.sh:/rs-init.sh
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo_2.4_rs/data0:/data/db
+  mongo2-4rs0-1:
+    hostname: mongo1
+    container_name: mongo2-4rs0-1
+    image: custom-mongo:2.2.7
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --oplogSize 128 --bind_ip 0.0.0.0
+    ports:
+      - 27018:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.20.0.3
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo_2.4_rs/data1:/data/db
+  mongo2-4rs0-2:
+    hostname: mongo2
+    container_name: mongo2-4rs0-2
+    image: custom-mongo:2.2.7
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --oplogSize 128 --bind_ip 0.0.0.0
+    ports:
+      - 27019:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.20.0.4
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo_2.4_rs/data2:/data/db
+  mongo2-4rs0-3:
+    hostname: mongo3
+    container_name: mongo2-4rs0-3
+    image: custom-mongo:2.2.7
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --oplogSize 128 --bind_ip 0.0.0.0
+    ports:
+      - 27020:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.20.0.5
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo_2.4_rs/data3:/data/db
+  mongo2-4rs0-4:
+    hostname: mongo4
+    container_name: mongo2-4rs0-4
+    image: custom-mongo:2.2.7
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --oplogSize 128 --bind_ip 0.0.0.0
+    ports:
+      - 27021:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.20.0.6
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo_2.4_rs/data4:/data/db
+
+networks:
+  db:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/24

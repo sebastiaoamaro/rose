@@ -1,6 +1,6 @@
 execution_plan:
   tracer:
-    tracer_location: /vagrant/rosetracer/target/release/rosetracer
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
     tracing_type: full_trace,process_controlled
   cleanup:
@@ -8,4 +8,4 @@ execution_plan:
 nodes:
   zookeeper:
     container: false
-    script: /vagrant/rw/Anduril/ground_truth/zookeeper-4203/run-original-test.sh
+    script: /home/sebastiaoamaro/phd/torefidevel/rw/Anduril/ground_truth/zookeeper-4203/run-original-test.sh
