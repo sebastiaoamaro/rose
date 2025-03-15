@@ -47,31 +47,12 @@ nodes:
     leader_symbol: raft_become_leader
     script: ./startredis.sh 5 172.19.1.14
 faults:
-  networkfault103003:
-    begin_conditions:
-    - condition_nr0:
-        time: 80000
-        type: time
-    duration: 6047
-    ips_in:
-    - redis3
-    - redis2
-    - redis5
-    - redis4
-    ips_out:
-    - redis3
-    - redis2
-    - redis5
-    - redis4
-    target: redis1
-    traced: redis1
-    type: block_ips
-  networkfault103006:
+  networkfault178315:
     begin_conditions:
     - condition_nr0:
         time: 20000
         type: time
-    duration: 25124
+    duration: 25330
     ips_in:
     - redis1
     ips_out:
@@ -79,27 +60,12 @@ faults:
     target: redis2
     traced: redis2
     type: block_ips
-  networkfault103007:
-    begin_conditions:
-    - condition_nr0:
-        time: 80000
-        type: time
-    duration: 6015
-    ips_in:
-    - redis1
-    - redis5
-    ips_out:
-    - redis1
-    - redis5
-    target: redis2
-    traced: redis2
-    type: block_ips
-  networkfault103009:
+  networkfault178316:
     begin_conditions:
     - condition_nr0:
         time: 20000
         type: time
-    duration: 25132
+    duration: 25137
     ips_in:
     - redis1
     ips_out:
@@ -107,27 +73,12 @@ faults:
     target: redis3
     traced: redis3
     type: block_ips
-  networkfault103011:
-    begin_conditions:
-    - condition_nr0:
-        time: 80000
-        type: time
-    duration: 6021
-    ips_in:
-    - redis5
-    - redis1
-    ips_out:
-    - redis5
-    - redis1
-    target: redis3
-    traced: redis3
-    type: block_ips
-  networkfault103012:
+  networkfault178317:
     begin_conditions:
     - condition_nr0:
         time: 20000
         type: time
-    duration: 25112
+    duration: 25158
     ips_in:
     - redis1
     ips_out:
@@ -135,27 +86,12 @@ faults:
     target: redis4
     traced: redis4
     type: block_ips
-  networkfault103013:
-    begin_conditions:
-    - condition_nr0:
-        time: 80000
-        type: time
-    duration: 6107
-    ips_in:
-    - redis1
-    - redis5
-    ips_out:
-    - redis1
-    - redis5
-    target: redis4
-    traced: redis4
-    type: block_ips
-  networkfault103015:
+  networkfault178318:
     begin_conditions:
     - condition_nr0:
         time: 20000
         type: time
-    duration: 25120
+    duration: 25265
     ips_in:
     - redis1
     ips_out:
@@ -163,74 +99,85 @@ faults:
     target: redis5
     traced: redis5
     type: block_ips
-  networkfault103016:
+  process_kill178319:
     begin_conditions:
     - condition_nr0:
-        time: 80000
-        type: time
-    duration: 6012
-    ips_in:
-    - redis1
-    - redis3
-    - redis4
-    - redis2
-    ips_out:
-    - redis1
-    - redis3
-    - redis4
-    - redis2
-    target: redis5
-    traced: redis5
-    type: block_ips
-  process_kill103020:
-    begin_conditions:
-    - condition_nr0:
-        time: 30000
-        type: time
+        binary_location: /redisraft.so
+        call_count: '1'
+        offset: '0'
+        symbol: raftNodeHasSufficientLogs
+        type: user_function
     duration: 0
     target: redis1
     traced: redis1
     type: process_kill
-  process_kill103021:
+  process_kill178320:
     begin_conditions:
     - condition_nr0:
-        time: 50000
-        type: time
+        binary_location: /redisraft.so
+        call_count: '1'
+        offset: '0'
+        symbol: storeSnapshotData
+        type: user_function
+    - condition_nr1:
+        binary_location: /redisraft.so
+        call_count: '1'
+        offset: '0'
+        symbol: handleLoadSnapshot
+        type: user_function
+    - condition_nr2:
+        binary_location: /redisraft.so
+        call_count: '4'
+        offset: '0'
+        symbol: raft_randomize_election_timeout
+        type: user_function
+    - condition_nr3:
+        binary_location: /redisraft.so
+        call_count: '2'
+        offset: '0'
+        symbol: raftPersistVote
+        type: user_function
+    - condition_nr4:
+        binary_location: /redisraft.so
+        call_count: '2'
+        offset: '0'
+        symbol: raft_vote_for_nodeid
+        type: user_function
+    - condition_nr5:
+        binary_location: /redisraft.so
+        call_count: '2'
+        offset: '0'
+        symbol: raft_vote
+        type: user_function
+    - condition_nr6:
+        binary_location: /redisraft.so
+        call_count: '2'
+        offset: '0'
+        symbol: raftPersistTerm
+        type: user_function
+    - condition_nr7:
+        binary_location: /redisraft.so
+        call_count: '2'
+        offset: '0'
+        symbol: raftNotifyStateEvent
+        type: user_function
+    - condition_nr8:
+        binary_location: /redisraft.so
+        call_count: '4'
+        offset: '0'
+        symbol: raft_become_candidate
+        type: user_function
+    - condition_nr9:
+        binary_location: /redisraft.so
+        call_count: '2'
+        offset: '0'
+        symbol: raft_election_start
+        type: user_function
     duration: 0
     target: redis1
     traced: redis1
     type: process_kill
-  syscall102963:
-    begin_conditions:
-    - condition_nr0:
-        call_count: '1'
-        file_name: stat
-        syscall_name: read
-        type: file_syscall
-    details:
-      name: connect
-      repeatable: 0
-      return_value: -111
-    duration: 0
-    target: redis3
-    traced: redis3
-    type: syscall
-  syscall16311:
-    begin_conditions:
-    - condition_nr0:
-        call_count: '1'
-        file_name: stat
-        syscall_name: read
-        type: file_syscall
-    details:
-      name: read
-      repeatable: 0
-      return_value: -110
-    duration: 0
-    target: redis3
-    traced: redis3
-    type: syscall
-  syscall61409:
+  syscall106077:
     begin_conditions:
     - condition_nr0:
         call_count: '1'
@@ -242,10 +189,10 @@ faults:
       repeatable: 0
       return_value: -110
     duration: 0
-    target: redis3
-    traced: redis3
+    target: redis4
+    traced: redis4
     type: syscall
-  syscall65016:
+  syscall138161:
     begin_conditions:
     - condition_nr0:
         call_count: '1'
@@ -259,4 +206,33 @@ faults:
     duration: 0
     target: redis1
     traced: redis1
+    type: syscall
+  syscall145436:
+    begin_conditions:
+    - condition_nr0:
+        call_count: '1'
+        syscall_name: accept
+        type: syscall
+    details:
+      name: accept
+      repeatable: 0
+      return_value: -11
+    duration: 0
+    target: redis3
+    traced: redis3
+    type: syscall
+  syscall14701:
+    begin_conditions:
+    - condition_nr0:
+        call_count: '1'
+        file_name: stat
+        syscall_name: read
+        type: file_syscall
+    details:
+      name: read
+      repeatable: 0
+      return_value: -110
+    duration: 0
+    target: redis5
+    traced: redis5
     type: syscall
