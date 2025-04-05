@@ -1,0 +1,25 @@
+execution_plan:
+  tracer:
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
+  cleanup:
+    duration: 60
+nodes:
+  kafka:
+    container: false
+    script: /home/sebastiaoamaro/phd/torefidevel/rw/Anduril/experiment/kafka-12508/run-original-test.sh
+faults:
+  read_fail:
+    type: syscall
+    details:
+      name: openat
+      return_value: -12
+    target: kafka
+    traced: kafka
+    begin_conditions:
+    - condition1:
+        type: file_syscall
+        syscall_name: openat
+        file_name: rocksdb
+        call_count: 30

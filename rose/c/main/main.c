@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 /* Copyright (c) 2020 Facebook */
 #include <argp.h>
+#include <linux/bpf.h>
 #include <signal.h>
 #include <stdio.h>
 #include <time.h>
@@ -95,6 +96,7 @@ static struct constants {
 	int auxiliary_info_map_fd;
 	int nodes_status_map_fd;
 	int nodes_translator_map_fd;
+	int pids;
 	char *collect_process_info_pipe;
 
 } constants;
@@ -203,7 +205,6 @@ int main()
 	print_block("Setting up nodes \n");
 	collect_container_pids();
 
-
 	setup_node_scripts();
 	collect_container_processes();
 	setup_begin_conditions();
@@ -224,8 +225,6 @@ int main()
 		goto cleanup;
 	}
 
-
-
 	int err;
 	struct ring_buffer *rb = NULL;
 	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
@@ -234,6 +233,7 @@ int main()
 
 	//If they are containers with start before the workload
 	start_container_nodes_scripts();
+	start_nodes_scripts();
 	if(plan->workload.wait_time > 0 ){
 		printf("SLEEPING: %d, BEFORE WORKLOAD\n",plan->workload.wait_time);
 		sleep(plan->workload.wait_time);
@@ -241,7 +241,6 @@ int main()
 	pthread_t thread_id;
 	pthread_create(&thread_id, NULL, (void *)count_time, NULL);
 
-	start_nodes_scripts();
 	start_workload();
 
 	while (!exiting) {
@@ -284,8 +283,6 @@ int main()
 			uprobes_bpf__destroy(nodes[i].leader_probe);
 	}
 
-	free(faults);
-
 	if (plan){
 		if(strcmp(plan->cleanup.script,"")){
 			printf("RUNNING CLEANUP SCRIPT %s \n",plan->cleanup.script);
@@ -309,24 +306,6 @@ int main()
 
 		//Add faults to the trace
 		printf("ROSE: ADDING FAULTS TO TRACE\n");
-		// while (!bpf_map_get_next_key(constants.bpf_map_fault_fd, &key, &next_key)) {
-		// 	if (!bpf_map_lookup_elem(constants.bpf_map_fault_fd, &key, &value)) {
-		// 	    printf("Fault found in EBPF map has nr %d and ts %llu\n",value.fault_nr,value.timestamp);
-		// 		if (value.timestamp > 0){
-		// 		    printf("Wrote Fault to history\n");
-		// 			int fault_nr = value.fault_nr;
-		// 			int target = value.target;
-		// 			if (target == -2)
-		// 				fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0,arg5:na\n","majority",value.faulttype,value.timestamp);
-		// 			if (target == -1)
-		// 				fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0,arg5:na\n","leader",value.faulttype,value.timestamp);
-		// 			if (target >= 0)
-		// 				fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault%d,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0,arg5:na\n",nodes[target].name,value.fault_nr,value.timestamp);
-		// 		}
-		// 	}
-		// 	key = next_key;
-		// }
-		//
 		for (int i = 0; i< FAULT_COUNT;i++){
 			struct simplified_fault fault;
 			int err_lookup;
@@ -338,12 +317,13 @@ int main()
 			    printf("Wrote Fault to history\n");
 				int fault_nr = fault.fault_nr;
 				int target = fault.target;
+				printf("Fault name is %s \n",faults[fault_nr].name);
 				if (target == -2)
-					fprintf(fptr,"Node:any,Pid:0,Tid:0,event_type:Fault,event_name:Fault,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n","majority",fault.timestamp,fault.fault_nr);
+					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:%s,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n","majority",faults[fault_nr].name,fault.timestamp,fault.fault_nr);
 				if (target == -1)
-					fprintf(fptr,"Node:any,Pid:0,Tid:0,event_type:Fault,event_name:Fault,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n","leader",fault.timestamp,fault.fault_nr);
+					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:%s,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n","leader",faults[fault_nr].name,fault.timestamp,fault.fault_nr);
 				if (target >= 0)
-					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:Fault,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n",nodes[target].name,fault.timestamp,fault.fault_nr);
+					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:%s,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n",nodes[target].name,faults[fault_nr].name,fault.timestamp,fault.fault_nr);
 			}
 		}
 		fclose(fptr);
@@ -385,11 +365,7 @@ int main()
 	printf("REAPING CHILD PROCESSES\n");
 	kill_child_processes(getpid());
 	printf("FINISHED CLEANUP\n");
-
-
-
 	exit(1);
-	//return 1;
 }
 
 void start_tracer(){
@@ -474,6 +450,8 @@ void get_fd_of_maps (struct aux_bpf *bpf){
 	constants.auxiliary_info_map_fd = bpf_map__fd(bpf->maps.auxiliary_info);
 	constants.nodes_status_map_fd = bpf_map__fd(bpf->maps.nodes_status);
 	constants.nodes_translator_map_fd = bpf_map__fd(bpf->maps.nodes_pid_translator);
+	constants.pids = bpf_map__fd(bpf->maps.pids);
+
 
 };
 
@@ -481,7 +459,6 @@ void run_setup(){
 
 	if(!plan)
 		return;
-
 
 	char *args_script[1];
 
@@ -585,7 +562,8 @@ void setup_node_scripts(){
 			start_target_process(i,&nodes[i].pid);
 			printf("Node %d with pid %d \n",i,nodes[i].pid);
 			nodes[i].current_pid = nodes[i].pid;
-		}
+			int one = 1;
+			bpf_map_update_elem(constants.pids, &nodes[i].current_pid, &one, BPF_ANY);		}
 		//nodes[i].pid = constants.target_pid;
 		//printf("Starting process with pid is %d \n",nodes[i].pid);
 	}
@@ -612,6 +590,8 @@ void collect_container_processes(){
 			nodes[i].pid = script_pid;
 			nodes[i].current_pid = script_pid;
 			send_signal(script_pid,SIGSTOP,nodes[i].name);
+			int one = 1;
+			bpf_map_update_elem(constants.pids, &nodes[i].current_pid, &one, BPF_ANY);
 		}
 	}
 
@@ -661,7 +641,6 @@ void start_container_nodes_scripts(){
 		if (nodes[i].container){
 			kill(nodes[i].pid,SIGCONT);
 		}
-
 		if(nodes[i].pid_tc_in !=0){
 			kill(nodes[i].pid_tc_in,SIGUSR1);
 		}
@@ -892,9 +871,6 @@ void setup_begin_conditions(){
 
 				int syscall_nr = syscall.syscall;
 
-				if (syscall_nr == NO_STATE){
-				    continue;
-				}
 
 				insert_relevant_condition_in_ebpf(i,pid,syscall_nr,syscall.call_count);
 			}
@@ -916,10 +892,6 @@ void setup_begin_conditions(){
 				}
 
 				int syscall_nr = syscall.syscall;
-
-				if (syscall_nr == NO_STATE){
-				    continue;
-				}
 
 				struct info_key info_key = {
 					pid,
@@ -1066,7 +1038,7 @@ void add_faults_to_bpf(){
 	print_block("Adding Faults to eBPF Maps");
 
 	for (int i = 0; i < FAULT_COUNT; i++){
-		printf("ROSE: ADDING FAULT TO BPF NR: %d, TYPE:%D \n",i,faults[i].faulttype);
+		printf("ROSE: ADDING FAULT TO BPF NR: %d, TYPE:%d \n",i,faults[i].faulttype);
 		struct simplified_fault new_fault;
 		new_fault.run = 0;
 		new_fault.duration = faults[i].duration;
@@ -1076,9 +1048,12 @@ void add_faults_to_bpf(){
 		new_fault.done = faults[i].done;
 		new_fault.quorum_size = QUORUM;
 		new_fault.faults_done = 0;
-
 		new_fault.pid = nodes[faults[i].traced].pid;
+
 		new_fault.target = faults[i].target;
+
+		if (faults[i].faulttype == BLOCK_IPS)
+		  new_fault.target_if_index = get_interface_index(nodes[faults[i].target].veth)-1;
 		new_fault.occurrences = faults[i].occurrences;
 		new_fault.relevant_conditions = faults[i].relevant_conditions;
 		new_fault.fault_nr = i;
@@ -1086,6 +1061,7 @@ void add_faults_to_bpf(){
 
 		for(int k = 0; k < (STATE_PROPERTIES_COUNT+MAX_FUNCTIONS); k++){
 			new_fault.initial.conditions_match[k] = 0;
+			new_fault.initial.fault_type_conditions[k] = 0;
 		}
 
 		for(int j = 0; j <faults[i].relevant_conditions;j++){
@@ -1093,20 +1069,12 @@ void add_faults_to_bpf(){
 			if(type == SYSCALL){
 				systemcall syscall = faults[i].fault_conditions_begin[j].condition.syscall;
 				int cond_nr = syscall.syscall;
-				if (cond_nr == NO_STATE){
-				    printf("ROSE: SKIPPED NO_STATE COND\n");
-				    continue;
-				}
 				new_fault.initial.fault_type_conditions[cond_nr] = syscall.call_count;
 				printf("Fault %d has condition system call %d with call_count %d \n",i,cond_nr,syscall.call_count);
 			}
 			if (type == FILE_SYSCALL){
 				file_system_call syscall = faults[i].fault_conditions_begin[j].condition.file_system_call;
 				int cond_nr = syscall.syscall;
-				if (cond_nr == NO_STATE){
-				    printf("ROSE: SKIPPED NO_STATE COND\n");
-				    continue;
-				}
 				new_fault.initial.fault_type_conditions[cond_nr] = syscall.call_count;
 				printf("Fault %d has condition file_system_call %d with call_count %d \n",i,cond_nr,syscall.call_count);
 			}
@@ -1229,7 +1197,8 @@ int setup_tc_progs(){
 
 			struct tc_key egress_key = {
 				index_in_unsigned,
-				BPF_TC_EGRESS
+				BPF_TC_EGRESS,
+				i
 			};
 
 			int error = bpf_map_update_elem(constants.blocked_ips,&egress_key,&ips_to_block_out,BPF_ANY);
@@ -1282,7 +1251,8 @@ int setup_tc_progs(){
 
 			struct tc_key ingress_key = {
 				index_in_unsigned,
-				BPF_TC_INGRESS
+				BPF_TC_INGRESS,
+				i
 			};
 
 			error = bpf_map_update_elem(constants.blocked_ips,&ingress_key,&ips_to_block_in,BPF_ANY);
@@ -1571,12 +1541,13 @@ void retrieve_new_pid_container(int node_nr,int nsenter_pid){
 		script_pid = get_children_pids(child_pid);
 	}
 	nodes[node_nr].current_pid = script_pid;
+
 }
 
 //new_pid is the pid of the new script, boot_pid the pid that information is based in the maps, old pid is the pid pre restart
 void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
 
-	printf("PID TRANSLATED: OLD: %d, NEW: %d\n",new_pid,boot_pid);
+	printf("PID TRANSLATED: NEW: %d, OLD: %d\n",new_pid,boot_pid);
 	int error = bpf_map_update_elem(constants.nodes_translator_map_fd,&new_pid,&boot_pid,BPF_ANY);
 	if(error){
 		printf("Error inserting in pid translator %d \n",error);

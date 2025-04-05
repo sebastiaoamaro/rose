@@ -1,0 +1,33 @@
+FROM ubuntu:12.04
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://old-releases.ubuntu.com/ubuntu/|g' /etc/apt/sources.list
+RUN apt-get update && apt-get install -y \
+    nano \
+    git \
+    python \
+    curl \
+    libpcap-dev \
+    pkg-config \
+    g++ \
+    wget \
+    iputils-ping
+
+RUN wget https://bootstrap.pypa.io/ez_setup.py
+RUN python ez_setup.py
+RUN wget https://files.pythonhosted.org/packages/source/p/pip/pip-20.3.4.tar.gz
+RUN tar -xzf pip-20.3.4.tar.gz
+WORKDIR /pip-20.3.4
+RUN python setup.py install
+
+WORKDIR /
+RUN wget https://sourceforge.net/projects/scons/files/scons/3.1.2/scons-3.1.2.tar.gz
+RUN tar -xzf scons-3.1.2.tar.gz
+WORKDIR /scons-3.1.2
+RUN python setup.py install
+
+WORKDIR /
+RUN git clone https://github.com/mongodb/mongo.git
+WORKDIR /mongo
+RUN git checkout r2.4.3
+RUN scons all
+
+ADD start.sh .

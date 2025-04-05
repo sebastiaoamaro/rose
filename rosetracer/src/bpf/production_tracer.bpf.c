@@ -15,8 +15,9 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, u32);
 	__type(value, u32);
-	__uint(max_entries, 64);
-} pids SEC(".maps");
+	__uint(max_entries, 1024);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} pid_tree SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
@@ -78,34 +79,11 @@ struct {
 }important_arguments SEC(".maps");
 
 
-struct process_and_syscall{
-    int id;
-    u64 pid_tgid;
-
-};
-
-struct process_fd {
-	int fd;
-	int pid;
-	u64 timestamp;
-};
-
-struct accept_args_t
-{
-    struct sockaddr_in *addr;
-};
-struct connect_data_t {
-    int family;
-    __u32 saddr;
-};
-
-
 enum type { SYSCALL_ENTER = 1,SYSCALL_EXIT = 2, UPROBE = 3, OPEN = 5};
 
 const volatile int pid_counter = 0;
 volatile int event_counter = 0;
 volatile int delay_counter = 0;
-volatile int verbose = 1;
 
 /* trigger creation of event struct in skeleton code */
 struct event _event = {};
@@ -115,7 +93,7 @@ static inline int check_pid_prog(u64 pid_tgid) {
     u32 key = pid_tgid >> 32; // Get current PID
     u32 *value;
 
-    value = bpf_map_lookup_elem(&pids, &key);
+    value = bpf_map_lookup_elem(&pid_tree, &key);
     if (value) {
         // PID is in the map
         //bpf_printk("PID %d is in the map\n", key);
@@ -205,14 +183,11 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
         char path[FILENAME_MAX_SIZE];
 
         int len = bpf_probe_read_user_str(path, FILENAME_MAX_SIZE,(void *)filename);
-
-
         int res = bpf_map_update_elem(&important_arguments,&psys, &path, BPF_ANY);
-
-        // if (res < 0)
-        //     bpf_printk("Failed to add with code %d \n", res);
-        // if (verbose)
-        //     bpf_printk("Added %s added to %llu with %p \n",filename, pid_tgid,filename);
+        //bpf_printk("NAME:%s, POINTER:%p, PID_TGID:%llu \n",filename,filename,pid_tgid);
+        //int res = bpf_map_update_elem(&important_arguments,&psys, &filename, BPF_ANY);
+        if (res < 0)
+            bpf_printk("Failed to add with code %d \n", res);
 
 	}
 
@@ -235,6 +210,7 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 		return 0;
 	long int ret = ctx->ret;
 
+	//Failing opens has its own special handling since they we need the filename
 	if (ret<0 && id !=9 && id != 12){
 		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
 		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
@@ -259,40 +235,36 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 		    //long unsigned int *file_addr = bpf_map_lookup_elem(&important_arguments,&psys);
 		    char *filename = bpf_map_lookup_elem(&important_arguments,&psys);
 
-       	    // if (!file_addr) {
-            //     bpf_printk("Failed to find file address \n");
-            //     return 0;
-            // }
-            // long unsigned int buff_addr = *file_addr;
-			if (filename){
-                struct event key = {
-         			SYSCALL_EXIT,
-         			timestamp,
-         			id,
-         			pid,
-         			tid,
-         			fd,
-         			0,
-         			0,
-         			0,
-         			ret,
-          		};
-
-         	 	//int len = bpf_probe_read_user_str(&key.extra, FILENAME_MAX_SIZE,(void *) buff_addr);
-                int len = bpf_probe_read_str(&key.extra, FILENAME_MAX_SIZE,filename);
-                if (len <= 0){
-                    bpf_printk("Failed to read file name \n");
-                    return 0;
-                }
-
-                //bpf_printk("Read name in sys_exit %s with size %d \n",key.extra,len);
-                bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
-                update_event_counter();
+       	    if (!filename) {
+                //bpf_printk("FAILED, PID_TGID:%llu\n",pid_tgid);
+                return 0;
             }
-            else{
-                //bpf_printk("Empty in map \n");
+            //long unsigned int buff_addr = *file_addr;
+            struct event key = {
+     			SYSCALL_EXIT,
+     			timestamp,
+     			id,
+     			pid,
+     			tid,
+     			fd,
+     			0,
+     			0,
+     			0,
+     			ret,
+      		};
+
+     	 	//int len = bpf_probe_read_user_str(&key.extra, FILENAME_MAX_SIZE,(void *) buff_addr);
+            int len = bpf_probe_read_str(&key.extra, FILENAME_MAX_SIZE,filename);
+            if (len <= 0){
+                bpf_printk("Failed to read file name with error %d\n", len);
+                return 0;
             }
+
+            //bpf_printk("NAME:%s, SIZE:%d, POINTER:%p, PID_TGID:%llu \n",key.extra,key.extra,len,buff_addr,pid_tgid);
+            bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
+            update_event_counter();
 			return 0;
+
 	    }else{
 			struct event key = {
      			SYSCALL_EXIT,
@@ -306,8 +278,19 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
      			0,
      			ret
             };
+            if (id == 2 || id == 257 || id == 85){
+          		char *path_pointer = bpf_map_lookup_elem(&pid_to_open_name,&pid_relevant);
+          		if (path_pointer){
+         			int len = bpf_probe_read_str(key.extra, FILENAME_MAX_SIZE+1, path_pointer);
+                    if (len <= 0){
+                        bpf_printk("Failed to read open name with error %d\n", len);
+                        return 0;
+                    }
+                }
+			}
             bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
             update_event_counter();
+            return 0;
 		}
 
     }
@@ -473,4 +456,34 @@ int handle_uprobe(struct pt_regs *ctx) {
 		update_event_counter();
 
     return 0;
+}
+
+SEC("tp/sched/sched_process_exec")
+int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
+{
+
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task_btf();
+    struct task_struct *parent;
+    int ppid = 0;
+
+    if (task) {
+        parent = task->real_parent;
+        if (parent) {
+            ppid = parent->pid;
+        }
+    }
+
+   	int *parent_pid_pointer = bpf_map_lookup_elem(&pid_tree,&ppid);
+
+	if (!parent_pid_pointer) {
+	   return 0;
+	}
+
+    bpf_printk("ADDED PID:%d, PARENT:%d \n",pid,ppid);
+    bpf_map_update_elem(&pid_tree, &pid, &ppid, BPF_ANY);
+	return 0;
 }

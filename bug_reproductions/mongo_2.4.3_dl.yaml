@@ -1,0 +1,7 @@
+reproduction:
+  schedule: "/vagrant/bug_reproductions/base_schedules/mongo_2.4.3_dl_rose.yaml"
+  oracle: "/vagrant/bug_reproductions/oracles/detect_bug_mongo_2.4.3_dl.sh"
+  result_folder: "/vagrant/tests/bugdetection/mongo/"
+  trace_location: "/tmp/history.txt"
+  buggy_trace: "/vagrant/bug_reproductions/traces/mongo_2.4.3_dl.txt"
+  cleanup: "/vagrant/schedules/reproducedbugs/mongo/mongo_2.4.3/scripts/cleanup.sh"

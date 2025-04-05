@@ -1,0 +1,11 @@
+execution_plan:
+  tracer:
+    tracer_location: /vagrant/rosetracer/target/release/rosetracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
+  cleanup:
+    duration: 90
+nodes:
+  kafka:
+    container: false
+    script: /vagrant/rw/Anduril/experiment/kafka-12508/run-original-test.sh

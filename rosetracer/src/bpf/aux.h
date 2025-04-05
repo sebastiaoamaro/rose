@@ -1,7 +1,7 @@
 #ifndef AUX_H
 #define AUX_H
 
-#define FILENAME_MAX_SIZE 256
+#define FILENAME_MAX_SIZE 200
 
 struct event {
 	u64 type;
@@ -17,4 +17,16 @@ struct event {
 	char extra[FILENAME_MAX_SIZE];
 };
 
+
+struct process_and_syscall{
+    int id;
+    u64 pid_tgid;
+
+};
+
+struct process_fd {
+	int fd;
+	int pid;
+	u64 timestamp;
+};
 #endif // AUX_H

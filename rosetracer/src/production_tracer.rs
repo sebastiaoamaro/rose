@@ -1,8 +1,8 @@
 use crate::auxiliary::collect_events;
 use crate::auxiliary::write_to_file;
 use crate::auxiliary::{
-    self, collect_fd_map, collect_network_delays, collect_network_info, monitor_pid, pin_maps,
-    start_xdp_in_container,
+    self, collect_fd_map, collect_network_delays, collect_network_info, create_pid_tree,
+    monitor_pid, pin_maps, start_xdp_in_container,
 };
 use anyhow::Result;
 use auxiliary::pin_maps::PinMapsSkelBuilder;
@@ -83,6 +83,12 @@ pub fn run_tracing(
         .trace_sys_exit
         .attach_tracepoint("raw_syscalls", "sys_exit")
         .expect("Failed to attach sys_exit");
+
+    let _tracepoint_proc_start = skel
+        .progs
+        .handle_exec
+        .attach_tracepoint("sched", "sched_process_exec")
+        .expect("Failed to attach sched_process_exec");
 
     //Variable needs to be here so that program stays alive
     let _xdp_prog;
@@ -173,6 +179,8 @@ pub fn run_tracing(
         .expect("Failed to trace processes controlled");
     }
 
+    create_pid_tree(&skel.maps.pid_tree, &mut hashmap_pid_to_node);
+
     let mut filenames = collect_fd_map(&skel.maps.fd_to_name, &skel.maps.dup_map);
 
     collect_network_info(&skel_maps.maps.network_information);
@@ -225,7 +233,8 @@ pub fn trace_processes(
             };
 
             let pid_vec = auxiliary::u32_to_u8_array_little_endian(pid);
-            skel.maps.pids.update(&pid_vec, &pid_vec, MapFlags::ANY)?;
+            let one = auxiliary::u32_to_u8_array_little_endian(1);
+            skel.maps.pid_tree.update(&pid_vec, &one, MapFlags::ANY)?;
 
             hashmap_pid_to_node.insert(pid, node_name.to_string().clone());
 
@@ -343,7 +352,8 @@ pub fn trace_containers(
             let veth_index = if_nametoindex(veth).map_err(|e| e.to_string()).unwrap();
 
             let pid_vec = auxiliary::u32_to_u8_array_little_endian(pid);
-            skel.maps.pids.update(&pid_vec, &pid_vec, MapFlags::ANY)?;
+            let one = auxiliary::u32_to_u8_array_little_endian(1);
+            skel.maps.pid_tree.update(&pid_vec, &one, MapFlags::ANY)?;
 
             hashmap_pid_to_node.insert(pid, node_name.to_string().clone());
 
@@ -435,10 +445,11 @@ pub fn start_tracing_container(
             ..Default::default()
         };
 
+        //with -1 no overhead, but the handle will be called multiple times, specify pid
         let uprobe =
             skel.progs
                 .handle_uprobe
-                .attach_uprobe_with_opts(-1, binary_location.clone(), 0, opts);
+                .attach_uprobe_with_opts(pid, binary_location.clone(), 0, opts);
 
         match uprobe {
             Ok(uprobe_injected) => {
@@ -495,8 +506,9 @@ pub fn trace_containers_controlled(
             let if_index: i32 = parts[3].parse().unwrap();
 
             let pid_vec = auxiliary::u32_to_u8_array_little_endian(pid);
+            let one = auxiliary::u32_to_u8_array_little_endian(1);
 
-            skel.maps.pids.update(&pid_vec, &pid_vec, MapFlags::ANY)?;
+            skel.maps.pid_tree.update(&pid_vec, &one, MapFlags::ANY)?;
 
             let node_already_traced = hashmap_node_to_pid.get(&node_name.clone()).is_some();
 
@@ -597,7 +609,9 @@ pub fn trace_processes_controlled(
 
             let pid_vec = auxiliary::u32_to_u8_array_little_endian(pid);
 
-            skel.maps.pids.update(&pid_vec, &pid_vec, MapFlags::ANY)?;
+            let one = auxiliary::u32_to_u8_array_little_endian(1);
+
+            skel.maps.pid_tree.update(&pid_vec, &one, MapFlags::ANY)?;
 
             hashmap_pid_to_node.insert(pid, node_name.clone());
             hashmap_node_to_pid.insert(node_name.clone(), pid);

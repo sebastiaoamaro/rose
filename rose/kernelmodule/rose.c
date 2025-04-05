@@ -31,7 +31,7 @@ __bpf_kfunc int bpf_strstr(const char* str1,const char* str2,int str_len)
     int count = 0;
     for (int i = 0; i < found_end; ++i){
         if (str1[count] == str2[i] ){
-            // bpf_printk("%c and %c \n",comparand[count],comparand2[i]);
+            //printk(KERN_INFO "%c and %c \n",comparand[count],comparand2[i]);
             count++;
             if(str_len == count){
                 printk(KERN_INFO "They are equal str_len is %d \n",str_len);

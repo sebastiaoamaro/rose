@@ -43,6 +43,13 @@ struct {
 	__uint(max_entries, 1);
 } event_counter_for_delays SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, u32);
+	__type(value, u32);
+	__uint(max_entries, 1024);
+} pid_tree SEC(".maps");
+
 struct pair
 {
 	u32 src;

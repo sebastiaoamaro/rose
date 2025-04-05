@@ -218,6 +218,17 @@ struct aux_bpf* start_aux_maps(){
 		return NULL;
 	}
 
+	err = bpf_map__unpin(skel->maps.pids, "/sys/fs/bpf/pids");
+	if(err) {
+		printf("[ERROR] libbpf unpin API: %d\n", err);
+		//return NULL;
+	}
+
+	err = bpf_map__pin(skel->maps.pids, "/sys/fs/bpf/pids");
+	if(err) {
+		printf("[ERROR] libbpf pin API: %d\n", err);
+		return NULL;
+	}
     return skel;
 
 }

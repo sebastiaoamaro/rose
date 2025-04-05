@@ -1,0 +1,27 @@
+execution_plan:
+  setup:
+    script: /vagrant/schedules/reproducedbugs/hdfs/scripts/setup.sh
+    duration: 5
+  tracer:
+    tracer_location: /vagrant/rosetracer/target/release/rosetracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
+  workload:
+    wait_time: 10
+    script: /vagrant/schedules/reproducedbugs/hdfs/scripts/startworkload.sh
+  cleanup:
+    duration: 15
+    script: /vagrant/schedules/reproducedbugs/hdfs/scripts/stop_cluster.sh
+nodes:
+  name_node:
+    container: false
+    script: /vagrant/schedules/reproducedbugs/hdfs/scripts/start_name_node.sh
+  data_node_2:
+    container: false
+    script: /vagrant/schedules/reproducedbugs/hdfs/scripts/start_data_node_2.sh
+  data_node_3:
+    container: false
+    script: /vagrant/schedules/reproducedbugs/hdfs/scripts/start_data_node_3.sh
+  secondary_name_node:
+    container: false
+    script: /vagrant/schedules/reproducedbugs/hdfs/scripts/start_secondary_name_node.sh

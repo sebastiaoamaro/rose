@@ -1,8 +1,8 @@
-version: '2'
+version: "2"
 services:
-  mongo3-2-10_rs0-0:
+  mongo-0:
     hostname: mongo0
-    container_name: mongo3-2-10_rs0-0
+    container_name: mongo-0
     image: mongo:3.2.10
 
     command: mongod --port 27017 --dbpath /data/db --replSet rs0 --oplogSize 128 --bind_ip 0.0.0.0
@@ -16,12 +16,12 @@ services:
     environment:
       TERM: xterm
     volumes:
-      - ./start.sh:/rs-init.sh
+      - ./start.sh:/start.sh
       - /etc/localtime:/etc/localtime:ro
       - /mongo_3.2.10_rs/data0:/data/db
-  mongo3-2-10_rs0-1:
+  mongo-1:
     hostname: mongo1
-    container_name: mongo3-2-10_rs0-1
+    container_name: mongo-1
     image: mongo:3.2.10
 
     command: mongod --port 27017 --dbpath /data/db --replSet rs0 --oplogSize 128 --bind_ip 0.0.0.0
@@ -37,9 +37,9 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /mongo_3.2.10_rs/data1:/data/db
-  mongo3-2-10_rs0-2:
+  mongo-2:
     hostname: mongo2
-    container_name: mongo3-2-10_rs0-2
+    container_name: mongo-2
     image: mongo:3.2.10
 
     command: mongod --port 27017 --dbpath /data/db --replSet rs0 --oplogSize 128 --bind_ip 0.0.0.0

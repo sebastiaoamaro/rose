@@ -25,10 +25,13 @@ struct fault;
 struct tc_key{
     int index;
     int network_direction;
+    int fault_nr;
 };
 
 struct faultstate_simple{
+    //Holds the values for the conditions
     int fault_type_conditions[STATE_PROPERTIES_COUNT+MAX_FUNCTIONS];
+    //Holds if the conditions are met
     int conditions_match[STATE_PROPERTIES_COUNT+MAX_FUNCTIONS];
 };
 
@@ -41,6 +44,7 @@ struct simplified_fault{
     struct faultstate_simple end;
     int pid;
     int target;
+    int target_if_index;
     int repeat;
     int occurrences;
     int return_value;
@@ -64,6 +68,7 @@ struct fault_description{
     int counter;
     int return_value;
     int syscall_nr;
+    int fault_nr;
 };
 
 struct info_key{
@@ -153,8 +158,7 @@ enum stateinfo{
     ACCEPT_STATE = 30,
     CLOSE_STATE = 31,
     FUTEX_STATE = 32,
-    CONNECT_STATE = 33,
-    NO_STATE = 999
+    CONNECT_STATE = 33
 };
 
 

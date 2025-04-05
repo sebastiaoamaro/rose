@@ -1,0 +1,309 @@
+version: "2"
+services:
+  mongo0:
+    hostname: mongo0
+    container_name: mongo0
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27017:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.2
+    environment:
+      TERM: xterm
+    volumes:
+      - ./start4.sh:/rs-init.sh
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data0:/data/db
+  mongo1:
+    hostname: mongo1
+    container_name: mongo1
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27018:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.3
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data1:/data/db
+
+  mongo2:
+    hostname: mongo2
+    container_name: mongo2
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27019:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.4
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data2:/data/db
+
+  mongo3:
+    hostname: mongo3
+    container_name: mongo3
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27020:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.5
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data3:/data/db
+
+  mongo4:
+    hostname: mongo4
+    container_name: mongo4
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27021:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.6
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data4:/data/db
+
+  mongo5:
+    hostname: mongo5
+    container_name: mongo5
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27022:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.7
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data5:/data/db
+
+  mongo6:
+    hostname: mongo6
+    container_name: mongo6
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27023:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.8
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data6:/data/db
+
+  mongo7:
+    hostname: mongo7
+    container_name: mongo7
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27032:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.32
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data7:/data/db
+
+  mongo8:
+    hostname: mongo8
+    container_name: mongo8
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27024:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.10
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data8:/data/db
+
+  mongo9:
+    hostname: mongo9
+    container_name: mongo9
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27025:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.11
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data9:/data/db
+  mongo10:
+    hostname: mongo10
+    container_name: mongo10
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27026:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.12
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data10:/data/db
+  mongo11:
+    hostname: mongo11
+    container_name: mongo11
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27027:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.13
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data11:/data/db
+  mongo12:
+    hostname: mongo12
+    container_name: mongo12
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27028:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.14
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data12:/data/db
+
+  mongo13:
+    hostname: mongo13
+    container_name: mongo13
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27029:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.15
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data13:/data/db
+
+  mongo14:
+    hostname: mongo14
+    container_name: mongo14
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27030:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.16
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data14:/data/db
+
+  mongo15:
+    hostname: mongo15
+    container_name: mongo15
+    image: mongo:8.0
+
+    command: mongod --port 27017 --dbpath /data/db --replSet rs0 --bind_ip 0.0.0.0
+    ports:
+      - 27031:27017
+    expose:
+      - "27017"
+    networks:
+      db:
+        ipv4_address: 172.19.0.17
+    environment:
+      TERM: xterm
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /mongo/16/data15:/data/db
+networks:
+  db:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.19.0.0/24

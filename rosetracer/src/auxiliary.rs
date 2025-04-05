@@ -64,7 +64,7 @@ pub struct NameAtTimestamp {
     pub timestamp: u64,
 }
 
-static SYSCALLS_WITH_FD: [u64; 11] = [
+static SYSCALLS_WITH_FD: [u64; 10] = [
     0,  // read
     1,  // write
     3,  // close
@@ -72,7 +72,7 @@ static SYSCALLS_WITH_FD: [u64; 11] = [
     33, // dup2
     34, // pause (uses a signal file descriptor indirectly)
     49, // bind
-    439, 257, 89, 51,
+    439, 89, 51,
 ];
 
 static _NETWORK_SYSCALLS_WITH_FD: [u64; 10] = [
@@ -348,6 +348,62 @@ pub fn collect_fd_map(
     return filenames;
 }
 
+//Get all pids created by initial nodes, and assigns them a node_name
+pub fn create_pid_tree(pids: &libbpf_rs::Map, hashmap_pid_to_node: &mut HashMap<i32, String>) {
+    let mut pid_parent_map: HashMap<u32, u32> = HashMap::new();
+
+    let keys = pids.keys();
+
+    for key in keys {
+        let result = pids.lookup(&key, MapFlags::ANY);
+
+        match result {
+            Ok(result) => {
+                let parent = result.unwrap().clone();
+
+                unsafe {
+                    let child: *const u32 = key.as_ptr() as *const u32;
+                    let child: &u32 = &*child;
+
+                    let parent: *const u32 = parent.as_ptr() as *const u32;
+                    let parent: &u32 = &*parent;
+
+                    //Child 0 means empty key, parent == 1 means origin pid
+                    if *child == 0 {
+                        continue;
+                    }
+                    pid_parent_map.insert(*child, *parent);
+                }
+            }
+            Err(e) => {
+                println!("Err: {:?}", e);
+            }
+        }
+    }
+
+    for (&pid, parent_pid) in &pid_parent_map {
+        let first_pid = pid;
+        let mut origin_pid = pid;
+        let mut temp_parent = parent_pid.clone();
+
+        // Traverse up the parent tree
+        while let Some(&new_parent) = pid_parent_map.get(&temp_parent) {
+            if new_parent == 1 {
+                origin_pid = temp_parent;
+                break;
+            }
+            origin_pid = new_parent;
+            temp_parent = new_parent;
+        }
+
+        let node_name = hashmap_pid_to_node
+            .get(&origin_pid.try_into().unwrap_or(0))
+            .expect(format!("Did not find an origin node for this pid {}", origin_pid).as_str());
+
+        hashmap_pid_to_node.insert(first_pid.try_into().unwrap_or(0), node_name.clone());
+    }
+}
+
 pub fn collect_events(
     called_functions: &libbpf_rs::Map,
     functions: Vec<String>,
@@ -401,7 +457,7 @@ pub fn collect_events(
 
                         if SYSCALLS_WITH_FD.contains(&event.id) {
                             filename = find_filename(event, filenames);
-                        } else if event.id == 262 {
+                        } else if event.id == 262 || event.id == 257 {
                             let c_string = event.extra.split(|&c| c == 0).next().unwrap_or(&[]);
                             filename = String::from_utf8_lossy(c_string).to_string()
                         }
@@ -773,6 +829,15 @@ pub fn pin_maps(skel: &mut PinMapsSkel) {
         Err(e) => println!("Error unpinning map: {}", e),
     }
 
+    let res = skel.maps.pid_tree.unpin("/sys/fs/bpf/pid_tree");
+
+    match res {
+        Ok(_) => {
+            //println!("Successfully unpinned map")
+        }
+        Err(e) => println!("Error unpinning map: {}", e),
+    }
+
     skel.maps
         .history
         .pin("/sys/fs/bpf/history")
@@ -793,8 +858,11 @@ pub fn pin_maps(skel: &mut PinMapsSkel) {
         .event_counter_for_delays
         .pin("/sys/fs/bpf/event_counter_for_delays")
         .expect("Failed to pin map");
+    skel.maps
+        .pid_tree
+        .pin("/sys/fs/bpf/pid_tree")
+        .expect("Failed to pin map");
 }
-
 pub fn get_syscall_name(syscall_id: u64) -> String {
     match syscall_id {
         0 => String::from("read"),

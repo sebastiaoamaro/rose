@@ -99,7 +99,7 @@ int monitor(struct __sk_buff *ctx)
 	struct fault_description *description_of_fault_drop;
 
 	description_of_fault_drop = bpf_map_lookup_elem(&faults_specification,&fault_to_inject_droppacket);
-	
+
 
 	if (description_of_fault_drop){
 		if (description_of_fault_drop->on){
@@ -144,7 +144,7 @@ int monitor(struct __sk_buff *ctx)
 	// e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);
 	// if (!e)
 	// 	return 0;
-	
+
 	bpf_skb_load_bytes(ctx, nhoff + offsetof(struct iphdr, protocol), &(ip_proto), 1);
 
 	//if (ip_proto != IPPROTO_GRE) {
@@ -156,7 +156,7 @@ int monitor(struct __sk_buff *ctx)
 
 
 	struct fault_key fault_to_inject_blockips = {
-		0,
+		if_index,
 		BLOCK_IPS,
 	};
 
@@ -168,11 +168,12 @@ int monitor(struct __sk_buff *ctx)
 	description_of_fault_block = bpf_map_lookup_elem(&faults_specification,&fault_to_inject_blockips);
 
 	if (description_of_fault_block){
-		//bpf_printk("Time to block_ips in direction %d \n",network_direction);
+	   //bpf_printk("Time to block_ips for %d in direction %d with fault_nr %d\n",if_index,network_direction,description_of_fault_block->fault_nr);
 
 		struct tc_key key = {
 				if_index,
-				network_direction
+				network_direction,
+				description_of_fault_block->fault_nr
 			};
 
 

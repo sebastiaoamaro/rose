@@ -4,4 +4,5 @@ reproduction:
   result_folder: "/vagrant/tests/bugdetection/redisraft/"
   trace_location: "/tmp/history.txt"
   buggy_trace: "/vagrant/bug_reproductions/traces/rr_nr.txt"
+  binary: "/vagrant/rw/redis_raft_bugs/redisraftbinaries/redisraft2d1cf30.so"
   cleanup: "/vagrant/schedules/reproducedbugs/redisraft/scripts/cleanup.sh"

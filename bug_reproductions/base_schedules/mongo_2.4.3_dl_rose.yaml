@@ -1,0 +1,29 @@
+execution_plan:
+  maximum_time: 120
+  setup:
+    script: /vagrant/schedules/reproducedbugs/mongo/mongo_2.4.3/scripts/start_cluster.sh
+    duration: 90
+  workload:
+    script: /vagrant/schedules/reproducedbugs/mongo/mongo_2.4.3/scripts/run_workload.sh
+  cleanup:
+    duration: 10
+  tracer:
+    tracer_location: /vagrant/rosetracer/target/release/rosetracer
+    pipe_location: /tmp/containerpid
+    tracing_type: full_trace,container_controlled
+nodes:
+  mongo-0:
+    container: true
+    ip: 172.20.0.2
+  mongo-1:
+    container: true
+    ip: 172.20.0.3
+  mongo-2:
+    container: true
+    ip: 172.20.0.4
+  mongo-3:
+    container: true
+    ip: 172.20.0.5
+  mongo-4:
+    container: true
+    ip: 172.20.0.6

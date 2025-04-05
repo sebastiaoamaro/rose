@@ -91,8 +91,8 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 					if(current_state->repeat && (value % relevant_value == 0)){
 						process_counter(state_key,relevant_value,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
 					}
-					}
 				}
+			}
 
 		}
 		return 0;
@@ -168,13 +168,11 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 		if ((state_condition > STATE_PROPERTIES_COUNT+MAX_FUNCTIONS) || (state_condition < 0))
 			return 1;
 
-
+		//Check for fault termination
 		if(fault->start_time && fault->duration){
-			//bpf_printk("Start time is %llu for fault %d duration is %d\n",fault->start_time,fault->fault_nr,fault->duration);
 
 			__u64 time_ns = bpf_ktime_get_ns();
 			__u64 time_now = time_ns / 1000000;
-
 			__u64 max_fault_time = fault->start_time + fault->duration;
 
 			//If fault finished
@@ -182,7 +180,7 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 
 				int pid;
 				if (fault->faulttype == NETWORK_ISOLATION ||fault->faulttype == DROP_PACKETS ||fault->faulttype == BLOCK_IPS)
-					pid = 0;
+					pid = fault->target_if_index;
 				else
 					pid = fault->pid;
 
@@ -196,7 +194,8 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 				fault->occurrences,
 				0,
 				fault->return_value,
-				0
+				0,
+				fault->fault_nr
 				};
 
 				int error = bpf_map_update_elem(data->maps->faults_specification,&fault_to_inject,&description_of_fault,BPF_ANY);
@@ -291,7 +290,7 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 			}
 			//Network faults are done with TC they have no pid, so pid is 0
 			else if (fault->faulttype == NETWORK_ISOLATION ||fault->faulttype == DROP_PACKETS ||fault->faulttype == BLOCK_IPS){
-				inject_fault(fault->faulttype,0,fault,*pos,data->maps);
+				inject_fault(fault->faulttype,fault->target_if_index,fault,*pos,data->maps);
 			}
 			else{
 				inject_fault(fault->faulttype,current_pid,fault,*pos,data->maps);
@@ -333,7 +332,8 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 			fault->occurrences,
 			0,
 			fault->return_value,
-			0
+			0,
+			fault->fault_nr
 		};
 
 		struct fault_key fault_to_inject = {
@@ -404,7 +404,7 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 			}
 
 		}else{
-			bpf_printk("FAULT: READY, TYPE: %d, PID: %d\n",fault_type,pid_to_target);
+			bpf_printk("FAULT:%d READY, TYPE: %d, PID: %d\n",fault->fault_nr,fault_type,pid_to_target);
 			__u64 time = bpf_ktime_get_ns();
 			__u64 time_ms = time / 1000000;
 			fault->start_time = time_ms;

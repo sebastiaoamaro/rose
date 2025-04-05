@@ -51,9 +51,9 @@ faults:
     target: redis2
     traced: redis2
     duration: 25000
-    ips_in: 
+    ips_in:
       - redis1
-    ips_out: 
+    ips_out:
       - redis1
     begin_conditions:
       - condition1:
@@ -64,9 +64,9 @@ faults:
     target: redis3
     traced: redis3
     duration: 25000
-    ips_in: 
+    ips_in:
       - redis1
-    ips_out: 
+    ips_out:
       - redis1
     begin_conditions:
       - condition1:
@@ -77,9 +77,9 @@ faults:
     target: redis4
     traced: redis4
     duration: 25000
-    ips_in: 
+    ips_in:
       - redis1
-    ips_out: 
+    ips_out:
       - redis1
     begin_conditions:
       - condition1:
@@ -90,15 +90,15 @@ faults:
     target: redis5
     traced: redis5
     duration: 25000
-    ips_in: 
+    ips_in:
       - redis1
-    ips_out: 
+    ips_out:
       - redis1
     begin_conditions:
       - condition1:
           type: time
           time: 10000
-  process_kill_all1:
+  process_kill_1:
     type: process_kill
     target: redis1
     traced: redis1
@@ -106,7 +106,7 @@ faults:
       - condition1:
           type: time
           time: 20000
-  process_kill1:
+  process_kill_1_2:
     type: process_kill
     target: redis1
     traced: redis1
@@ -123,6 +123,3 @@ faults:
           symbol: storeSnapshotData
           offset: 209
           call_count: 1
-      - condition2:
-          type: time
-          time: 20000

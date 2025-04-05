@@ -61,7 +61,7 @@ class Fault:
                     details = details + " " + self.self.begin_conditions[0].file_name
         else:
             details = self.type
-        return (f"Fault(type={self.type},details={details},target={self.target},traced={self.traced},start_time={self.start_time},duration={self.duration}\n")
+        return (f"Fault (state_score = {self.state_score}, type={self.type},details={details},target={self.target},traced={self.traced},start_time={self.start_time},duration={self.duration})\n")
 
 #Type of faults
 class file_system_operation:

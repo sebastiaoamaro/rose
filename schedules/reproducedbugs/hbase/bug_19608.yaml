@@ -1,4 +1,5 @@
 execution_plan:
+  maximum_time: 60
   tracer:
     tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
@@ -14,7 +15,7 @@ faults:
   write_fail:
     type: syscall
     details:
-      name: read
+      name: openat
       return_value: -5
       success: False
     target: zookeeper
@@ -22,6 +23,6 @@ faults:
     begin_conditions:
       - condition1:
           type: file_syscall
-          syscall_name: read
-          file_name: .meta
-          call_count: 40
+          syscall_name: openat
+          file_name: originForInjection
+          call_count: 1

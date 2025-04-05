@@ -1,7 +1,7 @@
 #!/bin/bash
-workload_size=10000000
-#workload_size=100000
-runs=3
+#workload_size=10000000
+workload_size=1000000
+runs=1
 # maindirectory=/home/sebastiaoamaro/phd/torefidevel/rosetracer/
 # main=/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
 maindirectory=/vagrant/rosetracer/
@@ -21,23 +21,23 @@ sudo rm -r /redis/*
 
 ulimit -n 4096
 #rm results/*
-for topology in 3 6 12
+for topology in 3
 do
-    for (( run=1; run<=$runs; run++ ))
-    do
-        sudo /vagrant/tests/redis/configs/setup.sh $topology
+    # for (( run=1; run<=$runs; run++ ))
+    # do
+    #     sudo /vagrant/tests/redis/configs/setup.sh $topology
 
-        #Normal run
-        docker compose -f configs/docker-compose$topology.yaml up -d
-        sleep 30
-        redis-cli --cluster create $(cat configs/ips$topology.txt) --cluster-yes
-        sleep 30
+    #     #Normal run
+    #     docker compose -f configs/docker-compose$topology.yaml up -d
+    #     sleep 30
+    #     redis-cli --cluster create $(cat configs/ips$topology.txt) --cluster-yes
+    #     sleep 30
 
-        echo Starting Workload
-        ./run_ycsb.sh $workload_size topology$topology:$run
-        docker compose -f configs/docker-compose$topology.yaml down
-        sudo rm -r /redis/*
-    done
+    #     echo Starting Workload
+    #     ./run_ycsb.sh $workload_size topology$topology:$run
+    #     docker compose -f configs/docker-compose$topology.yaml down
+    #     sudo rm -r /redis/*
+    # done
 
 ############################################################################################################
 ############################################################################################################
@@ -45,7 +45,7 @@ do
 
     #Tracing active
     container_info="container_and_pid.txt"
-    functions_file="../../tracertests/functions.txt"
+    functions_file="functions.txt"
     file="check.txt"
     binary_path="/usr/local/bin/redis-server"
 

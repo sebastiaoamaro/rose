@@ -16,9 +16,9 @@
 #include "faultschedule.h"
 #include "aux.h"
 
-#define NODE_COUNT 5
-#define FAULT_COUNT 15
-#define MAXIMUM_TIME 120
+#define NODE_COUNT 1
+#define FAULT_COUNT 1
+#define MAXIMUM_TIME 60
 
 char* get_veth_interface_name(const char* container_name);
 
@@ -254,249 +254,37 @@ char* get_veth_interface_name(const char* container_name) {
 
 execution_plan* build_execution_plan(){
     execution_plan* exe_plan = ( execution_plan*)malloc(1 * sizeof(execution_plan));
-    create_execution_plan(exe_plan,"/vagrant/schedules/reproducedbugs/redisraft/scripts/startrediscluster2d1cf30.sh",5,"/vagrant/schedules/reproducedbugs/redisraft/scripts/runworkload.sh","",60,15);
+    create_execution_plan(exe_plan,"",0,"","",60,0);
     return exe_plan;
 }
  tracer* build_tracer(){
     tracer* deployment_tracer = (tracer*)malloc(1 * sizeof(tracer));
-    create_tracer(deployment_tracer,"/vagrant/rosetracer/target/release/rosetracer","/tmp/containerpid","/vagrant/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt","/redisraft.so","full_trace,container_controlled");
+    create_tracer(deployment_tracer,"/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer","/tmp/containerpid","","","production_trace,process_controlled");
 
     return deployment_tracer;
 }
 node* build_nodes(){
     node* nodes = ( node*)malloc(NODE_COUNT * sizeof(node));
-    create_node(&nodes[0],"redis1",0,"","172.19.1.10","./startredis.sh 1 172.19.1.10","",1,"/redisraft.so","raft_become_leader",1);
-    create_node(&nodes[1],"redis2",0,"","172.19.1.11","./startredis.sh 2 172.19.1.11","",1,"/redisraft.so","raft_become_leader",0);
-    create_node(&nodes[2],"redis3",0,"","172.19.1.12","./startredis.sh 3 172.19.1.12","",1,"/redisraft.so","raft_become_leader",0);
-    create_node(&nodes[3],"redis4",0,"","172.19.1.13","./startredis.sh 4 172.19.1.13","",1,"/redisraft.so","raft_become_leader",0);
-    create_node(&nodes[4],"redis5",0,"","172.19.1.14","./startredis.sh 5 172.19.1.14","",1,"/redisraft.so","raft_become_leader",0);
+    create_node(&nodes[0],"kafka",0,"","","/home/sebastiaoamaro/phd/torefidevel/rw/Anduril/experiment/kafka-12508/run-original-test.sh","",0,"","",0);
 
     return nodes;
 }
 fault* build_faults_extra(){
     fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));
     fault_details fault_details0;
-    block_ips block_ips0;
-    add_ip_to_block_extra(&block_ips0,"172.19.1.12",0,1);
-    add_ip_to_block_extra(&block_ips0,"172.19.1.11",1,1);
-    add_ip_to_block_extra(&block_ips0,"172.19.1.14",2,1);
-    add_ip_to_block_extra(&block_ips0,"172.19.1.13",3,1);
-    add_ip_to_block_extra(&block_ips0,"172.19.1.12",0,2);
-    add_ip_to_block_extra(&block_ips0,"172.19.1.11",1,2);
-    add_ip_to_block_extra(&block_ips0,"172.19.1.14",2,2);
-    add_ip_to_block_extra(&block_ips0,"172.19.1.13",3,2);
-    fault_details0.block_ips = block_ips0;
-    fault_details0.block_ips.count_in = 4;
-    fault_details0.block_ips.count_out = 4;
-    create_fault(&faults[0],"networkfault103003",0,0,5,0,fault_details0,0,0,6047,1,0);
+    syscall_operation syscall0;
+    syscall0.syscall = OPENAT_FAULT;
+    syscall0.success = 0;
+    syscall0.return_value = -5;
+    fault_details0.syscall = syscall0;
+    create_fault(&faults[0],"read_fail",0,0,OPENAT_FAULT,2,fault_details0,0,0,0,1,0);
 
     fault_condition fault_condition_0_0;
-    int time_0_0 = 80000;
-    fault_condition_0_0.type = TIME;
-    fault_condition_0_0.condition.time = time_0_0;
+    file_system_call file_syscall_0_0;
+    fault_condition_0_0.type = FILE_SYSCALL;
+    build_file_syscall(&file_syscall_0_0,OPENAT_SPECIFIC,"","syscall_check_1",1);
+    fault_condition_0_0.condition.file_system_call = file_syscall_0_0;
     add_begin_condition(&faults[0],fault_condition_0_0,0);
-    fault_details fault_details1;
-    block_ips block_ips1;
-    add_ip_to_block_extra(&block_ips1,"172.19.1.10",0,1);
-    add_ip_to_block_extra(&block_ips1,"172.19.1.10",0,2);
-    fault_details1.block_ips = block_ips1;
-    fault_details1.block_ips.count_in = 1;
-    fault_details1.block_ips.count_out = 1;
-    create_fault(&faults[1],"networkfault103006",1,1,5,0,fault_details1,0,0,25124,1,0);
-
-    fault_condition fault_condition_1_0;
-    int time_1_0 = 20000;
-    fault_condition_1_0.type = TIME;
-    fault_condition_1_0.condition.time = time_1_0;
-    add_begin_condition(&faults[1],fault_condition_1_0,0);
-    fault_details fault_details2;
-    block_ips block_ips2;
-    add_ip_to_block_extra(&block_ips2,"172.19.1.10",0,1);
-    add_ip_to_block_extra(&block_ips2,"172.19.1.14",1,1);
-    add_ip_to_block_extra(&block_ips2,"172.19.1.10",0,2);
-    add_ip_to_block_extra(&block_ips2,"172.19.1.14",1,2);
-    fault_details2.block_ips = block_ips2;
-    fault_details2.block_ips.count_in = 2;
-    fault_details2.block_ips.count_out = 2;
-    create_fault(&faults[2],"networkfault103007",1,1,5,0,fault_details2,0,0,6015,1,0);
-
-    fault_condition fault_condition_2_0;
-    int time_2_0 = 80000;
-    fault_condition_2_0.type = TIME;
-    fault_condition_2_0.condition.time = time_2_0;
-    add_begin_condition(&faults[2],fault_condition_2_0,0);
-    fault_details fault_details3;
-    block_ips block_ips3;
-    add_ip_to_block_extra(&block_ips3,"172.19.1.10",0,1);
-    add_ip_to_block_extra(&block_ips3,"172.19.1.10",0,2);
-    fault_details3.block_ips = block_ips3;
-    fault_details3.block_ips.count_in = 1;
-    fault_details3.block_ips.count_out = 1;
-    create_fault(&faults[3],"networkfault103009",2,2,5,0,fault_details3,0,0,25132,1,0);
-
-    fault_condition fault_condition_3_0;
-    int time_3_0 = 20000;
-    fault_condition_3_0.type = TIME;
-    fault_condition_3_0.condition.time = time_3_0;
-    add_begin_condition(&faults[3],fault_condition_3_0,0);
-    fault_details fault_details4;
-    block_ips block_ips4;
-    add_ip_to_block_extra(&block_ips4,"172.19.1.14",0,1);
-    add_ip_to_block_extra(&block_ips4,"172.19.1.10",1,1);
-    add_ip_to_block_extra(&block_ips4,"172.19.1.14",0,2);
-    add_ip_to_block_extra(&block_ips4,"172.19.1.10",1,2);
-    fault_details4.block_ips = block_ips4;
-    fault_details4.block_ips.count_in = 2;
-    fault_details4.block_ips.count_out = 2;
-    create_fault(&faults[4],"networkfault103011",2,2,5,0,fault_details4,0,0,6021,1,0);
-
-    fault_condition fault_condition_4_0;
-    int time_4_0 = 80000;
-    fault_condition_4_0.type = TIME;
-    fault_condition_4_0.condition.time = time_4_0;
-    add_begin_condition(&faults[4],fault_condition_4_0,0);
-    fault_details fault_details5;
-    block_ips block_ips5;
-    add_ip_to_block_extra(&block_ips5,"172.19.1.10",0,1);
-    add_ip_to_block_extra(&block_ips5,"172.19.1.10",0,2);
-    fault_details5.block_ips = block_ips5;
-    fault_details5.block_ips.count_in = 1;
-    fault_details5.block_ips.count_out = 1;
-    create_fault(&faults[5],"networkfault103012",3,3,5,0,fault_details5,0,0,25112,1,0);
-
-    fault_condition fault_condition_5_0;
-    int time_5_0 = 20000;
-    fault_condition_5_0.type = TIME;
-    fault_condition_5_0.condition.time = time_5_0;
-    add_begin_condition(&faults[5],fault_condition_5_0,0);
-    fault_details fault_details6;
-    block_ips block_ips6;
-    add_ip_to_block_extra(&block_ips6,"172.19.1.10",0,1);
-    add_ip_to_block_extra(&block_ips6,"172.19.1.14",1,1);
-    add_ip_to_block_extra(&block_ips6,"172.19.1.10",0,2);
-    add_ip_to_block_extra(&block_ips6,"172.19.1.14",1,2);
-    fault_details6.block_ips = block_ips6;
-    fault_details6.block_ips.count_in = 2;
-    fault_details6.block_ips.count_out = 2;
-    create_fault(&faults[6],"networkfault103013",3,3,5,0,fault_details6,0,0,6107,1,0);
-
-    fault_condition fault_condition_6_0;
-    int time_6_0 = 80000;
-    fault_condition_6_0.type = TIME;
-    fault_condition_6_0.condition.time = time_6_0;
-    add_begin_condition(&faults[6],fault_condition_6_0,0);
-    fault_details fault_details7;
-    block_ips block_ips7;
-    add_ip_to_block_extra(&block_ips7,"172.19.1.10",0,1);
-    add_ip_to_block_extra(&block_ips7,"172.19.1.10",0,2);
-    fault_details7.block_ips = block_ips7;
-    fault_details7.block_ips.count_in = 1;
-    fault_details7.block_ips.count_out = 1;
-    create_fault(&faults[7],"networkfault103015",4,4,5,0,fault_details7,0,0,25120,1,0);
-
-    fault_condition fault_condition_7_0;
-    int time_7_0 = 20000;
-    fault_condition_7_0.type = TIME;
-    fault_condition_7_0.condition.time = time_7_0;
-    add_begin_condition(&faults[7],fault_condition_7_0,0);
-    fault_details fault_details8;
-    block_ips block_ips8;
-    add_ip_to_block_extra(&block_ips8,"172.19.1.10",0,1);
-    add_ip_to_block_extra(&block_ips8,"172.19.1.12",1,1);
-    add_ip_to_block_extra(&block_ips8,"172.19.1.13",2,1);
-    add_ip_to_block_extra(&block_ips8,"172.19.1.11",3,1);
-    add_ip_to_block_extra(&block_ips8,"172.19.1.10",0,2);
-    add_ip_to_block_extra(&block_ips8,"172.19.1.12",1,2);
-    add_ip_to_block_extra(&block_ips8,"172.19.1.13",2,2);
-    add_ip_to_block_extra(&block_ips8,"172.19.1.11",3,2);
-    fault_details8.block_ips = block_ips8;
-    fault_details8.block_ips.count_in = 4;
-    fault_details8.block_ips.count_out = 4;
-    create_fault(&faults[8],"networkfault103016",4,4,5,0,fault_details8,0,0,6012,1,0);
-
-    fault_condition fault_condition_8_0;
-    int time_8_0 = 80000;
-    fault_condition_8_0.type = TIME;
-    fault_condition_8_0.condition.time = time_8_0;
-    add_begin_condition(&faults[8],fault_condition_8_0,0);
-    fault_details fault_details9;
-    process_fault process_kill9;
-    process_kill9.type = 11;
-    fault_details9.process_fault = process_kill9;
-    create_fault(&faults[9],"process_kill103020",0,0,11,1,fault_details9,0,0,0,1,0);
-
-    fault_condition fault_condition_9_0;
-    int time_9_0 = 30000;
-    fault_condition_9_0.type = TIME;
-    fault_condition_9_0.condition.time = time_9_0;
-    add_begin_condition(&faults[9],fault_condition_9_0,0);
-    fault_details fault_details10;
-    process_fault process_kill10;
-    process_kill10.type = 11;
-    fault_details10.process_fault = process_kill10;
-    create_fault(&faults[10],"process_kill103021",0,0,11,1,fault_details10,0,0,0,1,0);
-
-    fault_condition fault_condition_10_0;
-    int time_10_0 = 50000;
-    fault_condition_10_0.type = TIME;
-    fault_condition_10_0.condition.time = time_10_0;
-    add_begin_condition(&faults[10],fault_condition_10_0,0);
-    fault_details fault_details11;
-    syscall_operation syscall11;
-    syscall11.syscall = CONNECT_FAULT;
-    syscall11.success = 0;
-    syscall11.return_value = -111;
-    fault_details11.syscall = syscall11;
-    create_fault(&faults[11],"syscall102963",2,2,CONNECT_FAULT,2,fault_details11,0,0,0,1,0);
-
-    fault_condition fault_condition_11_0;
-    file_system_call file_syscall_11_0;
-    fault_condition_11_0.type = FILE_SYSCALL;
-    build_file_syscall(&file_syscall_11_0,READ_FILE,"","stat",1);
-    fault_condition_11_0.condition.file_system_call = file_syscall_11_0;
-    add_begin_condition(&faults[11],fault_condition_11_0,0);
-    fault_details fault_details12;
-    syscall_operation syscall12;
-    syscall12.syscall = 3;
-    syscall12.success = 0;
-    syscall12.return_value = -110;
-    fault_details12.syscall = syscall12;
-    create_fault(&faults[12],"syscall16311",2,2,3,2,fault_details12,0,0,0,1,0);
-
-    fault_condition fault_condition_12_0;
-    file_system_call file_syscall_12_0;
-    fault_condition_12_0.type = FILE_SYSCALL;
-    build_file_syscall(&file_syscall_12_0,READ_FILE,"","stat",1);
-    fault_condition_12_0.condition.file_system_call = file_syscall_12_0;
-    add_begin_condition(&faults[12],fault_condition_12_0,0);
-    fault_details fault_details13;
-    syscall_operation syscall13;
-    syscall13.syscall = CONNECT_FAULT;
-    syscall13.success = 0;
-    syscall13.return_value = -110;
-    fault_details13.syscall = syscall13;
-    create_fault(&faults[13],"syscall61409",2,2,CONNECT_FAULT,2,fault_details13,0,0,0,1,0);
-
-    fault_condition fault_condition_13_0;
-    file_system_call file_syscall_13_0;
-    fault_condition_13_0.type = FILE_SYSCALL;
-    build_file_syscall(&file_syscall_13_0,READ_FILE,"","stat",1);
-    fault_condition_13_0.condition.file_system_call = file_syscall_13_0;
-    add_begin_condition(&faults[13],fault_condition_13_0,0);
-    fault_details fault_details14;
-    syscall_operation syscall14;
-    syscall14.syscall = OPENAT_FAULT;
-    syscall14.success = 0;
-    syscall14.return_value = -2;
-    fault_details14.syscall = syscall14;
-    create_fault(&faults[14],"syscall65016",0,0,OPENAT_FAULT,2,fault_details14,0,0,0,1,0);
-
-    fault_condition fault_condition_14_0;
-    file_system_call file_syscall_14_0;
-    fault_condition_14_0.type = FILE_SYSCALL;
-    build_file_syscall(&file_syscall_14_0,OPENAT_SPECIFIC,"","online",1);
-    fault_condition_14_0.condition.file_system_call = file_syscall_14_0;
-    add_begin_condition(&faults[14],fault_condition_14_0,0);
 
     return faults;
 }

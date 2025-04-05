@@ -4,7 +4,7 @@ import sys
 import ipaddress
 import yaml
 import os
-
+import re
 import parser.nodes
 from parser.faults import Fault, block_ips, syscall, check_if_syscall_supported
 from parser.conditions import file_syscall_condition, syscall_condition, time_cond, user_function_condition
@@ -96,6 +96,7 @@ class History:
         self.experiment_time = 0
         self.faults_injected = []
         self.function_calls_by_node = {}
+        self.first_event_id = 0
 
 
     def parse_event_line(self, line):
@@ -217,6 +218,9 @@ class History:
 
         self.events.sort(key=lambda x: x.time)
 
+        self.faults_injected.sort(key=lambda x: x.time)
+
+
         for event in self.events:
             event.relative_time = event.time - self.start_time
 
@@ -292,7 +296,8 @@ class History:
                     continue
 
                 frequency = event.arg3
-                if int(frequency)/(self.experiment_time) > 1:
+                ratio = int(frequency)/(self.experiment_time)
+                if ratio > 1:
                     delay = int((self.end_time-event.time)/1000000)
                     #If delay is less than 250, then it is not relevant
                     if delay < 5000:
@@ -328,7 +333,7 @@ class History:
                     cond = file_syscall_condition()
                     #cond.time = event.relative_time/1000000
                     cond.syscall_name = event.name
-                    cond.file_name = get_name_from_path(event.arg5)
+                    cond.file_name = remove_numbers(get_name_from_path(event.arg5))
                     cond.call_count = 1
                     fault.begin_conditions.append(cond)
                     fault_nr += 1
@@ -367,7 +372,7 @@ class History:
                 fault.begin_conditions = []
 
                 #TODO: Move this block of code to function: find_state_of_fault
-                functions_before = self.get_functions_before(event.node,event.id)
+                functions_before = self.get_functions_before(event.node,event.id,10,1)[1]
 
                 for function_call,counter in functions_before.items():
                     cond = user_function_condition()
@@ -377,12 +382,19 @@ class History:
                     fault.begin_conditions.append(cond)
                     fault.state_score += len(fault.begin_conditions)
 
+                time = int((event.time - self.start_time)/1000000)
+                time_rounded = math.floor(time / 10000) * 10000
+                fault.start_time = time_rounded
+
+                #Processes are stopped by us to setup other things, thus pauses at the start are detected but are not real
+                if fault.start_time == 0:
+                    continue
+
                 if len(fault.begin_conditions) == 0:
                     cond = time_cond()
-                    cond.time = int((event.time - self.start_time)/1000000)
-                    cond.time = math.floor(cond.time/10000) * 10000
-                    fault.start_time = cond.time
+                    cond.time = time_rounded
                     fault.begin_conditions.append(cond)
+
 
                 fault_nr += 1
                 self.faults.append(fault)
@@ -395,8 +407,8 @@ class History:
                     if event[2] < self.start_time:
                         print("Network event before start time")
                         continue
-                    if event[0]/self.experiment_time < 1:
-                        #print("Frequency too low" + " time: " + str(self.experiment_time) + " count: " + str(event[0]) )
+                    if event[0]/self.experiment_time < 0.3:
+                        print("Frequency too low" + " time: " + str(self.experiment_time) + " count: " + str(event[0]) )
                         continue
                     fault = Fault()
                     fault.name = "networkfault" + str(fault_nr)
@@ -413,7 +425,7 @@ class History:
                     fault.traced = node
                     fault.duration = event[1]
                     fault.begin_conditions = []
-                    functions_before = self.get_functions_before(node,event[4])
+                    functions_before = self.get_functions_before(node,event[4],10,1)[1]
 
                     for function_call,counter in functions_before.items():
                         cond = user_function_condition()
@@ -423,12 +435,15 @@ class History:
                         fault.begin_conditions.append(cond)
                         fault.state_score += len(fault.begin_conditions)
 
+                    time = int((event[2]-self.start_time)/1000000)
+                    time_rounded = math.floor(time / 10000) * 10000
+                    fault.start_time = time_rounded
+
                     if len(fault.begin_conditions) == 0:
                         cond = time_cond()
-                        cond.time = int((event[2]-self.start_time)/1000000)
-                        cond.time = math.floor(cond.time / 10000) * 10000
-                        fault.start_time = cond.time
+                        cond.time = time_rounded
                         fault.begin_conditions.append(cond)
+
                     fault_nr += 1
                     self.faults.append(fault)
 
@@ -452,36 +467,36 @@ class History:
                     last_event_before_crash = self.find_event_before_id(node,self.new_pid_events[node][i].id)
                     fault.event_id = last_event_before_crash.id
 
-                    functions_before = self.get_functions_before(node,self.new_pid_events[node][i].id)
-                    for function_call,counter in functions_before.items():
-                        cond = user_function_condition()
+                    # functions_before = self.get_functions_before(node,self.new_pid_events[node][i].id,10,1)[1]
+                    # for function_call,counter in functions_before.items():
+                    #     cond = user_function_condition()
 
-                        cond.binary_location = self.nodes[self.new_pid_events[node][i].node].binary
-                        cond.symbol = function_call
-                        cond.call_count = counter
+                    #     cond.binary_location = self.nodes[self.new_pid_events[node][i].node].binary
+                    #     cond.symbol = function_call
+                    #     cond.call_count = counter
 
-                        fault.begin_conditions.append(cond)
-                        fault.state_score += len(fault.begin_conditions)
+                    #     fault.begin_conditions.append(cond)
+                    #     fault.state_score += len(fault.begin_conditions)
 
+                    time = int((last_event_before_crash.time - self.start_time)/1000000)
+                    time_rounded = math.floor(time / 10000) * 10000
+                    fault.start_time = time_rounded
                     if len(fault.begin_conditions) == 0:
-                            cond = time_cond()
-                            cond.time = int((last_event_before_crash.time - self.start_time)/1000000)
-                            cond.time = math.floor(cond.time / 10000) * 10000
-                            fault.start_time = cond.time
-                            fault.begin_conditions.append(cond)
+                        cond = time_cond()
+                        cond.time = time_rounded
+                        fault.begin_conditions.append(cond)
 
                     fault_nr += 1
                     self.faults.append(fault)
 
         return self.faults
 
-    def get_functions_before(self,node_name,event_id):
-
+    def get_functions_before(self,node_name,event_id,window,unique_value):
         function_calls = []
         #This will serve as the conditions for the fault
         function_calls_counter = {}
         event_list = self.events_by_node[node_name]
-        event_size_list = 15
+        event_size_list = window
 
         event_counter = 0
         for event in reversed(event_list):
@@ -496,12 +511,14 @@ class History:
                 if event_counter == event_size_list:
                     break
 
+        #Checks for unique events in all of the history, maybe it should be in the window?
         for function_call in function_calls:
-             if function_call.name in function_calls_counter and len(self.function_calls_by_node[node_name][function_call.name]) > 2:
+            #if function_call.name in function_calls_counter and len(self.function_calls_by_node[node_name][function_call.name]) > unique_value:
+            if function_call.name in function_calls_counter and function_calls_counter[function_call.name] > unique_value:
                  function_calls_counter.pop(function_call.name)
 
-        #print(function_calls_counter)
-        return function_calls_counter
+        #Returns number of events found: int and the important events: dict
+        return (event_counter,function_calls_counter)
 
     #TODO: Needs to look in the normal trace if the event is common
     def get_context_syscall_before(self,node_name,event_id):
@@ -523,6 +540,14 @@ class History:
                 count += 1
         return count
 
+    def check_fault_order(self,faults_for_schedule):
+        print(self.faults_injected)
+        return all(
+#            obj1.arg1 <= obj2.arg1
+            faults_for_schedule[int(obj1.arg1)].start_time <= faults_for_schedule[int(obj2.arg1)].start_time
+            for obj1, obj2 in zip(self.faults_injected, self.faults_injected[1:])
+        )
+
     def check_syscall_support(self,syscall_name):
         return check_if_syscall_supported(syscall_name) != "TEMP_EMPTY"
 
@@ -539,13 +564,13 @@ def write_new_schedule(base_schedule,faults):
         yaml.dump(exe_plan, file, default_flow_style=False)
         yaml.dump(nodes, file, default_flow_style=False)
 
-        faults.sort(key=lambda x: x.start_time)
-
+        #faults_sorted = sorted(faults, key=lambda x: x.start_time)
         faults_dict = {"faults":{}}
 
         for fault in faults:
             fault_dict = fault.to_yaml()
             faults_dict["faults"][fault.name] = fault_dict
+
         yaml.dump(faults_dict, file, default_flow_style=False)
 
     return schedule_location
@@ -625,6 +650,19 @@ def choose_faults(faults,history_buggy,history):
 
     faults_choosen.sort(key = lambda x: (x.state_score,-x.start_time),reverse=True)
 
-    print(faults_choosen)
+    return faults_choosen[:10]
 
-    return faults_choosen[:15]
+
+def remove_numbers(input_string):
+    # Find all numbers in the string
+    numbers = re.findall(r'\d', input_string)
+
+    # Check if there are more than 10 numbers
+    if len(numbers) > 10:
+        # Find the index of the first number
+        first_number_index = re.search(r'\d', input_string).start()
+        # Remove everything from the first number onwards
+        return input_string[:first_number_index]
+    else:
+        # Return the original string if there are 10 or fewer numbers
+        return input_string

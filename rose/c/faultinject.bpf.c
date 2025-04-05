@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 /* Copyright (c) 2020 Facebook */
 #include "vmlinux.h"
-#include <bpf/bpf_helpers.h>
-#include <bpf/bpf_tracing.h>
-#include <bpf/bpf_core_read.h>
+// #include <bpf/bpf_helpers.h>
+// #include <bpf/bpf_tracing.h>
+// #include <bpf/bpf_core_read.h>
 #include "state_processor.bpf.h"
 #include "faultinject.h"
 #include "aux.h"
 #include "fs.bpf.h"
 #include "fs.h"
 #include <bpf/usdt.bpf.h>
-
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 struct {
@@ -97,12 +96,19 @@ struct {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, MAP_SIZE);
+	__uint(max_entries, 16384);
 	__type(key, int);
 	__type(value,int);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } nodes_pid_translator SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 16384);
+	__type(key, int);
+	__type(value,int);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} pids SEC(".maps");
 
 const volatile int fault_count = 0;
 
@@ -317,7 +323,7 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 			if (fi.size == 0){
 				return 0;
 			}
-			//bpf_printk("In read file is: %s and file_open->filename: %s \n",&(fi.filename[fi.offset]),file_open->filename);
+			bpf_printk("PID:%d, READ_FILE: %s, FILE_COND: %s \n",pid,&(fi.filename[fi.offset]),file_open->filename);
 
 			if(string_contains(file_open->filename,&(fi.filename[fi.offset]),file_open->size)){
 				struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);
@@ -415,6 +421,25 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
+
+	int *old_pid = bpf_map_lookup_elem(&nodes_pid_translator,&pid);
+
+	int pid_to_use = 0;
+	if(old_pid){
+		pid_to_use = *old_pid;
+		//bpf_printk("Translated pid, current_pid is %d, old_pid is %d \n",pid,pid_to_use);
+	}else{
+		//bpf_printk("No pid translation \n");
+		;
+	}
+
+	if (!pid_to_use){
+		pid_to_use = pid;
+	}
+
+	int current_pid = pid;
+	pid = pid_to_use;
+
 	struct sys_info sys_info = {
 		0,
 		OPENNAT_COUNT,
@@ -424,6 +449,7 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 		fault_count,
 		time_only
 	};
+
 	char *path = (char*) PT_REGS_PARM2_CORE(regs);
 	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&pid);
 	struct info_key info_key = {
@@ -433,12 +459,12 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 	struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&info_key);
 
 	if(file_open){
-	   //bpf_printk("Filename is %s \n",file_open->filename);
     	int string_equal = 0;
     	for (int i = 0; i < 4; i++){
     		const char str1[64];
       		bpf_probe_read(&str1, sizeof(str1),path+i*64);
-    		int result = bpf_strstr(file_open->filename,str1,file_open->size);
+            //-1 Because of \0
+    		int result = bpf_strstr(file_open->filename,str1,file_open->size-1);
     		if (result){
     			string_equal = result;
     			break;
@@ -448,6 +474,7 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
     		//bpf_printk("Could not find string in openat \n");
     		return 0;
     	}
+        bpf_printk("PID:%d,FILENAME:%s, PATH:%s, SIZE: %d \n",current_pid,file_open->filename,path,file_open->size);
 		process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
 			&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 		inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
@@ -951,27 +978,84 @@ int BPF_KPROBE(__x64_sys_connect,struct pt_regs *regs)
 	return 0;
 }
 
+SEC("tp/sched/sched_process_exec")
+int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
+{
 
-SEC("usdt")
-int entry_probe(struct pt_regs *ctx){
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
 
-    char name[64] = {0};
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task_btf();
+    struct task_struct *parent;
+    int ppid = 0;
 
-    void *method_name = (void *)PT_REGS_PARM3(ctx);
-
-    if (!method_name){
-        bpf_printk("No method name provided\n");
-        return 0;
+    if (task) {
+        parent = task->real_parent;
+        if (parent) {
+            ppid = parent->pid;
+        }
     }
-    //bpf_printk("Name is %s \n",(char *)method_name);
+    int original_pid = ppid;
+   	int *parent_pid_pointer = bpf_map_lookup_elem(&pids,&ppid);
 
-    int len = bpf_probe_read_user_str(&name, sizeof(name), method_name);
+	if (!parent_pid_pointer) {
+	   return 0;
+	}
 
-    if (len < 0){
-        //bpf_printk("Failed to read method name, err is %d", len);
-        return 0;
+	int parent_pid = *parent_pid_pointer;
+
+    int count = 0;
+
+    //Loop through existing pids to know the origin node
+    while (parent_pid && count < 20) {
+        if (parent_pid == 1){
+            int *start_pid = bpf_map_lookup_elem(&nodes_pid_translator,&original_pid);
+
+            if (start_pid){
+                bpf_map_update_elem(&nodes_pid_translator, &pid, &start_pid, BPF_ANY);
+            }
+            else{
+                //Temporary fix for all my tests that used exec -a
+                if (original_pid != 0){
+                    bpf_map_update_elem(&nodes_pid_translator, &pid, &original_pid, BPF_ANY);
+                }
+            }
+            break;
+
+        }else{
+            bpf_map_update_elem(&pids, &pid, &parent_pid,BPF_ANY);
+        }
+        original_pid = parent_pid;
+        parent_pid_pointer = bpf_map_lookup_elem(&pids,&parent_pid);
+        if(parent_pid_pointer){
+            parent_pid = *parent_pid_pointer;
+        }
+        count++;
     }
-
-    //bpf_printk("Entering method: %s\n", name);
 	return 0;
 }
+
+// SEC("usdt")
+// int entry_probe(struct pt_regs *ctx){
+
+//     char name[64] = {0};
+
+//     void *method_name = (void *)PT_REGS_PARM3(ctx);
+
+//     if (!method_name){
+//         bpf_printk("No method name provided\n");
+//         return 0;
+//     }
+//     //bpf_printk("Name is %s \n",(char *)method_name);
+
+//     int len = bpf_probe_read_user_str(&name, sizeof(name), method_name);
+
+//     if (len < 0){
+//         //bpf_printk("Failed to read method name, err is %d", len);
+//         return 0;
+//     }
+
+//     //bpf_printk("Entering method: %s\n", name);
+// 	return 0;
+// }

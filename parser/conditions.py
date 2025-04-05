@@ -198,7 +198,5 @@ def get_cond_type_nr(type,condition):
                     return "FUTEX_STATE"
                 case "connect":
                     return "CONNECT_STATE"
-                case _:
-                    return "NO_STATE"
         case 4:
             return 21

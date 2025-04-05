@@ -33,8 +33,7 @@ void init_tc(int count){
 //int main (__u32 index,int pos,int handle,int faults,int direction)
 int main(int,char **argv)
 {
-
-	int index = atoi(argv[1]);
+    int index = atoi(argv[1]);
 	int pos = atoi(argv[2]);
 	int handle = atoi(argv[3]);
 	int faults = atoi(argv[4]);
@@ -42,8 +41,9 @@ int main(int,char **argv)
 
 	//printf("Index is %d, pos is %d, handle is %d, fault_count is %d, direction is %d \n",index,pos,handle,faults,direction);
 
+	// Docker changed netdevice number to be always 2, will depend on version
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, tc_hook,
-		.ifindex = index, .attach_point = direction);
+		.ifindex = 2, .attach_point = direction);
 	DECLARE_LIBBPF_OPTS(bpf_tc_opts, tc_opts,
 		.handle = handle, .priority = 1);
 	bool hook_created = false;

@@ -1,6 +1,4 @@
 #!/bin/bash
-#Run in mongo0?
-
 mongo <<EOF
 var config = {
     "_id": "rs0",
