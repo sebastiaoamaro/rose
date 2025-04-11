@@ -1,3 +1,0 @@
-configs-redis-3-1,69972
-configs-redis-2-1,69912
-configs-redis-1-1,69963

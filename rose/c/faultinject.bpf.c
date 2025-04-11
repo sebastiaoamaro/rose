@@ -139,6 +139,7 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
 
 	FileFDKey fdkey = {};
 
@@ -190,7 +191,7 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 		if (get_file_path(&path, &event_path, &fi) != 0) return 2;
 
 		struct info_key info_key = {
-			pid,
+			origin_pid,
 			sys_info.file_specific_code
 		};
 		struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&info_key);
@@ -261,6 +262,8 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
 
 	FileFDKey fdkey = {};
 
@@ -315,7 +318,7 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 		}
 
 		struct info_key info_key = {
-			pid,
+			origin_pid,
 			sys_info.file_specific_code
 		};
 		struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&info_key);
@@ -364,6 +367,8 @@ int BPF_KPROBE(__x64_sys_close,struct pt_regs *regs)
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
 
 	int fd = PT_REGS_PARM1_CORE(regs);
 
@@ -422,23 +427,7 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-	int *old_pid = bpf_map_lookup_elem(&nodes_pid_translator,&pid);
-
-	int pid_to_use = 0;
-	if(old_pid){
-		pid_to_use = *old_pid;
-		//bpf_printk("Translated pid, current_pid is %d, old_pid is %d \n",pid,pid_to_use);
-	}else{
-		//bpf_printk("No pid translation \n");
-		;
-	}
-
-	if (!pid_to_use){
-		pid_to_use = pid;
-	}
-
-	int current_pid = pid;
-	pid = pid_to_use;
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
 
 	struct sys_info sys_info = {
 		0,
@@ -451,9 +440,8 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 	};
 
 	char *path = (char*) PT_REGS_PARM2_CORE(regs);
-	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&pid);
 	struct info_key info_key = {
-		pid,
+		origin_pid,
 		sys_info.file_specific_code
 	};
 	struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&info_key);
@@ -474,7 +462,7 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
     		//bpf_printk("Could not find string in openat \n");
     		return 0;
     	}
-        bpf_printk("PID:%d,FILENAME:%s, PATH:%s, SIZE: %d \n",current_pid,file_open->filename,path,file_open->size);
+        bpf_printk("ORIGIN_PID:%d,PID:%d,FILENAME:%s, PATH:%s, SIZE: %d \n",origin_pid,pid,file_open->filename,path,file_open->size);
 		process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
 			&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 		inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
@@ -614,10 +602,12 @@ int BPF_KPROBE(__x64_sys_newfstatat,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
 
 	char *path =  (char*) PT_REGS_PARM2_CORE(regs);
 
-	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&pid);
+	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&origin_pid);
 
 	struct info_key info_key = {
 		pid,
@@ -733,7 +723,7 @@ int BPF_KPROBE(__x64_sys_fsync,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-		int fd = PT_REGS_PARM1_CORE(regs);
+	int fd = PT_REGS_PARM1_CORE(regs);
 
 	struct sys_info sys_info = {
 		fd,
@@ -771,12 +761,14 @@ int BPF_KPROBE(__x64_sys_fdatasync,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
 
 	FileFDKey fdkey = {};
 
 	int process_fd = 1;
 
-	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&pid);
+	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&origin_pid);
 
 	if(fdrelevant){
 		for (int i=0;i<fdrelevant->size;i++){
@@ -878,7 +870,7 @@ int BPF_KPROBE(__x64_sys_pwrite64,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-		struct sys_info sys_info = {
+	struct sys_info sys_info = {
 		0,
 		PWRITE64_STATE,
 		0,
@@ -903,7 +895,7 @@ int BPF_KPROBE(__x64_sys_accept,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-		struct sys_info sys_info = {
+	struct sys_info sys_info = {
 		0,
 		ACCEPT_STATE,
 		0,
@@ -937,7 +929,7 @@ int BPF_KPROBE(__x64_sys_futex,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-		struct sys_info sys_info = {
+	struct sys_info sys_info = {
 		0,
 		FUTEX_STATE,
 		0,
@@ -961,7 +953,7 @@ int BPF_KPROBE(__x64_sys_connect,struct pt_regs *regs)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 
-		struct sys_info sys_info = {
+	struct sys_info sys_info = {
 		0,
 		CONNECT_STATE,
 		0,

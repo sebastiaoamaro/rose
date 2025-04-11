@@ -10,9 +10,10 @@ fn main() {
     build_bpf_file("count_syscalls", "src/bpf/count_syscalls.bpf.c");
     build_bpf_file("save_info", "src/bpf/save_info.bpf.c");
     build_bpf_file("save_io", "src/bpf/save_io.bpf.c");
-    build_bpf_file("uprobes", "src/bpf/uprobes.bpf.c");
     build_bpf_file("tracer", "src/bpf/tracer.bpf.c");
+    build_bpf_file("statistics_tracer", "src/bpf/statistics_tracer.bpf.c");
     build_bpf_file("production_tracer", "src/bpf/production_tracer.bpf.c");
+    build_bpf_file("rw_tracer", "src/bpf/rw_tracer.bpf.c");
     build_bpf_file("pin_maps", "src/bpf/pin_maps.bpf.c");
     build_bpf_file("xdp", "src/bpf/xdp.bpf.c");
 }
@@ -42,9 +43,7 @@ fn build_bpf_file(bpf_file: &str, file_name: &str) {
 
     SkeletonBuilder::new()
         .source(&file_name)
-        .clang_args([OsStr::new("-I"),
-            OsStr::new(&arch)]
-        )
+        .clang_args([OsStr::new("-I"), OsStr::new(&arch)])
         .build_and_generate(out)
         .expect("bpf compilation failed");
     println!("cargo:rerun-if-changed={}", file_name);

@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <stdlib.h>
+#include "aux.h"
 
 static int ready = 0;
 void sig_handler(int signum){
@@ -20,7 +21,7 @@ void sig_handler(int signum){
 }
 
 FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid, int container_process)
-{   
+{
 
     pid_t child_pid;
     int fd[2];
@@ -36,7 +37,7 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
         if (type == 'r')
         {
             close(fd[0]);    //Close the READ end of the pipe since the child's fd is write-only
-            dup2(fd[1], 1); //Redirect stdout to pipe
+            dup2(fd[1], 1);
         }
         else
         {
@@ -57,9 +58,9 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
 
             }
         }
-        int err = execvpe(command,args,env);
+        int err = execvp(command,args);
         if (err < 0)
-            printf("Err in execv is %d and errno is %d for command %s \n",command,err,errno);
+            printf("COMMAND:%s, Err in execvp: %s (errno=%d)\n", command, strerror(errno), errno);
         exit(0);
     }
     else
@@ -75,7 +76,6 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
 
     }
     *pid = child_pid;
-    //printf("PID IS %d \n",child_pid);   
     if (type == 'r')
     {
         return fdopen(fd[0], "r");

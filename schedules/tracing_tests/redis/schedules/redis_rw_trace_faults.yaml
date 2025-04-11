@@ -1,0 +1,66 @@
+execution_plan:
+  maximum_time: 600
+  setup:
+    script: /vagrant/schedules/tracing_tests/redis/scripts/start_cluster.sh
+    duration: 60
+  workload:
+    script: /vagrant/schedules/tracing_tests/redis/scripts/start_workload.sh
+  cleanup:
+    script: /vagrant/schedules/tracing_tests/redis/scripts/cleanup.sh
+    duration: 1
+  tracer:
+    tracer_location: "/vagrant/rosetracer/target/release/rosetracer"
+    pipe_location: "/tmp/containerpid"
+    functions_file: /vagrant/tests/redis/functions.txt
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: rw_trace,container_controlled
+nodes:
+  configs-redis-1-1:
+    container: true
+    binary: /redisraft.so
+    ip: 172.38.0.11
+  configs-redis-2-1:
+    container: true
+    binary: /redisraft.so
+    ip: 172.38.0.12
+  configs-redis-3-1:
+    container: true
+    binary: /redisraft.so
+    ip: 172.38.0.13
+
+faults:
+  block_ips_redis1:
+    type: block_ips
+    target: configs-redis-1-1
+    traced: configs-redis-1-1
+    duration: 20000
+    ips_in:
+      - configs-redis-3-1
+    ips_out:
+      - configs-redis-3-1
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 540000
+
+  process_pause1:
+    type: process_pause
+    target: configs-redis-2-1
+    traced: configs-redis-2-1
+    duration: 20000
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 540000
+
+  read_fail:
+    type: syscall
+    details:
+      name: read
+      return_value: -5
+    target: configs-redis-3-1
+    traced: configs-redis-3-1
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 540000

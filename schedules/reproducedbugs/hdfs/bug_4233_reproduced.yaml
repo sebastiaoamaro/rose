@@ -8,7 +8,7 @@ execution_plan:
     tracing_type: production_trace,process_controlled
   workload:
     wait_time: 10
-    script: /vagrant/schedules/reproducedbugs/hdfs/scripts/startworkload.sh
+    script: /vagrant/schedules/reproducedbugs/hdfs/scripts/start_workload.sh
   cleanup:
     duration: 15
     script: /vagrant/schedules/reproducedbugs/hdfs/scripts/stop_cluster.sh

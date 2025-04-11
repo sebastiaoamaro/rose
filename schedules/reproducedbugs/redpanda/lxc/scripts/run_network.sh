@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Build the network
+echo 1048576 > /proc/sys/fs/aio-max-nr
 echo "Building the network"
 sudo lxd init --auto
 

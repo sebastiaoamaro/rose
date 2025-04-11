@@ -37,12 +37,28 @@ struct maps_ebpf{
 struct clear_conditions_ctx{
 	int *conditions;
 };
-
+static inline int get_origin_pid(int pid, struct bpf_map *nodes_pid_translator);
 static void process_counter(int stateinfo,int state_condition_value,int target_pid,int traced_pid,int fault_count,struct bpf_map *faults_specification,struct bpf_map *faults,struct bpf_map *rb,struct bpf_map *auxiliary_info,struct bpf_map *nodes);
 static inline int inject_fault(int faulttype,int pid, struct simplified_fault *fault,int pos,struct maps_ebpf *maps);
 static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_fault *fault , struct callback_ctx *data);
 
+///////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////PID_TRANSLATION//////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////
 
+static inline int get_origin_pid(int pid, struct bpf_map *nodes_pid_translator){
+   	int *old_pid = bpf_map_lookup_elem(nodes_pid_translator,&pid);
+
+	int pid_to_use = 0;
+	if(old_pid){
+		pid_to_use = *old_pid;
+		//bpf_printk("Translated pid, current_pid is %d, old_pid is %d \n",pid,pid_to_use);
+	}else{
+	   pid_to_use = pid;
+	}
+
+	return pid_to_use;
+}
 ///////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////STATE_PROCESSING/////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -55,20 +71,22 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 	// 	bpf_printk("Got here from condition %d \n",state_key);
 	//Get traced_pid from map
 
-	int *old_pid = bpf_map_lookup_elem(nodes_translator,&current_pid);
+	//TODO: This is doubled, but adding an argument to a function in eBPF is pain, temporary fix
+	int pid_to_use = get_origin_pid(current_pid, nodes_translator);
+	//int *old_pid = bpf_map_lookup_elem(nodes_translator,&current_pid);
 
-	int pid_to_use = 0;
-	if(old_pid){
-		pid_to_use = *old_pid;
-		//bpf_printk("Translated pid, current_pid is %d, old_pid is %d \n",current_pid,pid_to_use);
-	}else{
-		//bpf_printk("No pid translation \n");
-		;
-	}
+	// int pid_to_use = 0;
+	// if(old_pid){
+	// 	pid_to_use = *old_pid;
+	// 	//bpf_printk("Translated pid, current_pid is %d, old_pid is %d \n",current_pid,pid_to_use);
+	// }else{
+	// 	//bpf_printk("No pid translation \n");
+	// 	;
+	// }
 
-	if (!pid_to_use){
-		pid_to_use = current_pid;
-	}
+	// if (!pid_to_use){
+	// 	pid_to_use = current_pid;
+	// }
 
 	struct info_key information_pid = {
 		pid_to_use,

@@ -19,7 +19,8 @@
 #define MAX_FILE_LOCATION_LEN 1024
 #define MAX_COMMAND_LEN 512
 #define MAX_RESPONSE_LEN 1024
-
+#define CONTAINER_TYPE_DOCKER 1
+#define CONTAINER_TYPE_LXC 2
 struct fault;
 
 struct tc_key{
@@ -197,8 +198,10 @@ int get_interface_names(char **,int);
 int translate_pid(int);
 void pause_process(void* args);
 void print_block(char*);
-pid_t get_container_pid(const char *container_name);
-char* get_overlay2_location(const char* container_name);
+pid_t get_lxc_container_pid(const char *container_name);
+pid_t get_docker_container_pid(const char *container_name);
+char* get_lxc_container_location(const char* container_name);
+char* get_docker_container_location(const char* container_name);
 void kill_process(void* args);
 void sleep_for_ms(long milliseconds);
 bool is_element_in_array(int arr[], int size, int element);
@@ -207,4 +210,7 @@ int send_signal(int pid, int signal,char*);
 long get_children_pids(pid_t pid);
 void kill_child_processes(pid_t parent_pid);
 int get_jvmso_path(char *path,int pid);
+void bump_memlock_rlimit(void);
+pid_t find_host_pid_for_container_pid(pid_t target_pid);
+char **build_nsenter_args(const char *pid_str,int container_type);
 #endif /* __AUX_H */

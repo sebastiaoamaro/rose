@@ -212,6 +212,10 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 
 	//Failing opens has its own special handling since they we need the filename
 	if (ret<0 && id !=9 && id != 12){
+
+	    if (id == 0 && ret == -11){
+			return 0;
+		}
 		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
 		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
 

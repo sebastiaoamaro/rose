@@ -7,7 +7,7 @@ execution_plan:
     script: /vagrant/schedules/tracing_tests/redis/scripts/start_workload.sh
   cleanup:
     script: /vagrant/schedules/tracing_tests/redis/scripts/cleanup.sh
-    duration: 15
+    duration: 1
   tracer:
     tracer_location: "/vagrant/rosetracer/target/release/rosetracer"
     pipe_location: "/tmp/containerpid"

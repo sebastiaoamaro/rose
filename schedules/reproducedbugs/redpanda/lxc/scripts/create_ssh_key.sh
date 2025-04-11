@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Directory and key file paths
-SSH_DIR="$HOME/.ssh"
+SSH_DIR="/root/.ssh"
 PRIVATE_KEY="$SSH_DIR/id_rsa"
 PUBLIC_KEY="$SSH_DIR/id_rsa.pub"
 

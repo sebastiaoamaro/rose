@@ -37,6 +37,8 @@ typedef struct Workload{
     char script[STRING_SIZE];
     int pid;
     int wait_time;
+    int wait_workload;
+    FILE *read_end;
 }workload;
 
 typedef struct Cleanup{
@@ -57,6 +59,7 @@ typedef struct Node {
     int pid;
     //current_pid will hold the nodes current pid usefull for process_kills
     int current_pid;
+    char pid_file[STRING_SIZE];
     char veth[STRING_SIZE];
     char ip[STRING_SIZE];
     char script[STRING_SIZE];
@@ -66,6 +69,7 @@ typedef struct Node {
     int pid_tc_in;
     int pid_tc_out;
     int container;
+    int container_type;
     int container_pid;
     struct uprobes_bpf *leader_probe;
     int leader;
@@ -203,7 +207,7 @@ typedef struct fault {
 
 
 
-void create_node(node* node, char* name,int pid, char* veth, char* ip, char* script,char* env,int container,char* binary,char *leader_symbol,int leader);
+void create_node(node* node, char* name,int pid,char* pid_file, char* veth, char* ip, char* script,char* env,int container,int container_type,char* binary,char *leader_symbol,int leader);
 void add_ip_to_block(struct fault*,char *,int);
 
 int get_maximum_time();

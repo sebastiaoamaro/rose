@@ -1,5 +1,6 @@
 use libbpf_rs::skel::OpenSkel as _;
 use libbpf_rs::skel::SkelBuilder as _;
+use libbpf_rs::Link;
 use std::env;
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,19 +19,35 @@ fn main() -> Result<()> {
 
     let if_index = args[1].parse::<i32>().unwrap();
 
+    let container_type = args[2].parse::<i32>().unwrap();
+
     let skel_builder = XdpSkelBuilder::default();
 
     let mut open_object_tracer = MaybeUninit::uninit();
     let open_skel = skel_builder.open(&mut open_object_tracer)?;
-
     let skel = open_skel.load()?;
     //println!("If index is {}", if_index - 1);
-    // Docker changed netdevice number to be always 2, will depend on version
-    let xdp_prog = skel
-        .progs
-        .xdp_pass
-        .attach_xdp(2)
-        .expect("Failed to attach xdp");
+    let xdp_prog: Option<Link> = match container_type {
+        0 => Some(
+            skel.progs
+                .xdp_pass
+                .attach_xdp(if_index)
+                .expect("Failed to attach XDP program"),
+        ),
+        1 => Some(
+            skel.progs
+                .xdp_pass
+                .attach_xdp(2)
+                .expect("Failed to attach XDP program"),
+        ),
+        2 => Some(
+            skel.progs
+                .xdp_pass
+                .attach_xdp(if_index - 1)
+                .expect("Failed to attach XDP program"),
+        ),
+        _ => None,
+    };
 
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
@@ -41,7 +58,9 @@ fn main() -> Result<()> {
     while running.load(Ordering::SeqCst) {
         sleep(Duration::from_secs(1));
     }
-    xdp_prog.detach()?;
+    if !xdp_prog.is_none() {
+        xdp_prog.unwrap().detach()?;
+    }
 
     Ok(())
 }

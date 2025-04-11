@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <sys/sysinfo.h>
+#include <sys/stat.h>
 //Modules
 #include <aux.skel.h>
 #include <faultinject.h>
@@ -61,7 +62,7 @@ void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid, int current_pid_
 int get_node_nr_from_pid(int pid);
 void reinject_uprobes(int node_nr);
 void send_info_to_tracer();
-void send_node_and_pid_to_tracer(int container_pid,int pid, char* node_name,int if_index);
+void send_node_and_pid_to_tracer(int container_pid,int container_type, int pid, char* node_name,int if_index);
 void create_tracer_pipe();
 void start_tracer();
 void open_tracer_pipe();
@@ -127,28 +128,15 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va
 	return vfprintf(stderr, format, args);
 }
 
-static void bump_memlock_rlimit(void)
-{
-	struct rlimit rlim_new = {
-		.rlim_cur	= RLIM_INFINITY,
-		.rlim_max	= RLIM_INFINITY,
-	};
-
-	if (setrlimit(RLIMIT_MEMLOCK, &rlim_new)) {
-		fprintf(stderr, "Failed to increase RLIMIT_MEMLOCK limit!\n");
-		exit(1);
-	}
-}
-
 static void bump_file_rlimit(void)
 {
 	struct rlimit rlim_new = {
-		.rlim_cur	= 65356,
-		.rlim_max	= 65356,
+		.rlim_cur	= 1048576,
+		.rlim_max	= 1048576,
 	};
 
 	if (setrlimit(RLIMIT_NOFILE, &rlim_new)) {
-		fprintf(stderr, "Failed to increase RLIMIT_MEMLOCK limit!\n");
+		fprintf(stderr, "Failed to increase RLIMIT_FILELOCK limit!\n");
 		exit(1);
 	}
 }
@@ -202,7 +190,7 @@ int main()
 	FAULT_COUNT = get_fault_count();
 
 	print_fault_schedule(plan,nodes,faults,deployment_tracer);
-	print_block("Setting up nodes \n");
+	print_block("SETTING UP NODES");
 	collect_container_pids();
 
 	setup_node_scripts();
@@ -258,6 +246,24 @@ int main()
 
 	cleanup:
 
+	if (plan->workload.pid){
+		fclose(plan->workload.read_end);
+	}
+
+
+	if (plan->workload.wait_workload > 0){
+		printf("WAITING FOR WORKLOAD TO END BEFORE WORKLOAD CLEANUP\n");
+		while (waitpid(plan->workload.pid, NULL, WNOHANG) == 0) {
+            sleep(1);
+		 }
+	}
+
+	if(plan){
+		if (plan->workload.pid){
+			kill(plan->workload.pid,SIGKILL);
+		}
+	}
+
 	printf("SLEEPING: %d, BEFORE CLEANUP\n",plan->cleanup.duration);
 	sleep(plan->cleanup.duration);
 	printf("EXPERIMENT ENDED, RUNNING CLEANUP\n");
@@ -288,9 +294,9 @@ int main()
 			printf("RUNNING CLEANUP SCRIPT %s \n",plan->cleanup.script);
 			int status = system(plan->cleanup.script);
 			if (status == -1) {
-						printf("Failed to call script.\n");
+					printf("Failed to call script.\n");
 				} else {
-						printf("Script executed successfully.\n");
+					printf("CLEANUP SUCESSFULL.\n");
 			}
 		}
 	}
@@ -355,12 +361,6 @@ int main()
 			kill(nodes[i].pid_tc_out,SIGINT);
 		}
 	}
-
-		if(plan){
-			if (plan->workload.pid){
-				kill(plan->workload.pid,SIGKILL);
-			}
-		}
 
 	printf("REAPING CHILD PROCESSES\n");
 	kill_child_processes(getpid());
@@ -478,25 +478,23 @@ void run_setup(){
 		FILE *fp = custom_popen(plan->setup.script,args_script,env_script,'r',&(plan->setup.pid),0);
 
 		pthread_t thread_id;
-
 		struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
 
 		args->fp= fp;
 		args->pid = &(plan->setup.pid);
-		pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+		//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 	}
 
 	if(strlen(plan->workload.script)){
 		print_block("Creating Workload process");
 		FILE *fp = custom_popen(plan->workload.script,args_script,env_script,'r',&(plan->workload.pid),0);
-
+		plan->workload.read_end = fp;
 		pthread_t thread_id;
-
 		struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
 
 		args->fp= fp;
 		args->pid = &(plan->workload.pid);
-		pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+		//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 	}
 
 	//Start setup
@@ -527,7 +525,14 @@ void collect_container_pids(){
 		node_count = 0;
 		for(int i=0; i < NODE_COUNT;i++){
 			if (nodes[i].container){
-				nodes[i].container_pid = get_container_pid(nodes[i].name);
+			    int container_pid = 0;
+				if (nodes[i].container_type == CONTAINER_TYPE_DOCKER){
+					container_pid = get_docker_container_pid(nodes[i].name);
+				}
+				if (nodes[i].container_type == CONTAINER_TYPE_LXC){
+					container_pid = get_lxc_container_pid(nodes[i].name);
+				}
+				nodes[i].container_pid = container_pid;
 				if(nodes[i].container_pid){
 					nodes[i].pid = nodes[i].container_pid;
 					nodes[i].current_pid = nodes[i].container_pid;
@@ -555,43 +560,84 @@ void setup_node_scripts(){
 		}
 		//printf("Starting processes with command %s \n",nodes[i].script);
 
-		if (nodes[i].container){
+		if (nodes[i].container && !strlen(nodes[i].pid_file)){
 			start_target_process_in_container(i,&nodes[i].pid);
 		}
-		else{
+		else if (!nodes[i].container){
 			start_target_process(i,&nodes[i].pid);
 			printf("Node %d with pid %d \n",i,nodes[i].pid);
 			nodes[i].current_pid = nodes[i].pid;
 			int one = 1;
-			bpf_map_update_elem(constants.pids, &nodes[i].current_pid, &one, BPF_ANY);		}
-		//nodes[i].pid = constants.target_pid;
-		//printf("Starting process with pid is %d \n",nodes[i].pid);
+			bpf_map_update_elem(constants.pids, &nodes[i].current_pid, &one, BPF_ANY);
+		}
 	}
 }
 
 void collect_container_processes(){
 	for(int i = 0; i< NODE_COUNT; i++){
-		//printf("Looking for pid for node %d with pid %d \n",i,nodes[i].current_pid);
-		if (nodes[i].container && strlen(nodes[i].script) > 0 ){
+		if (nodes[i].container && strlen(nodes[i].script) > 0 && !(strlen(nodes[i].pid_file))){
 			int child_pid = get_children_pids(nodes[i].pid);
 
 			while(!child_pid){
 				sleep(1);
 				child_pid = get_children_pids(nodes[i].pid);
 			}
-			//printf("Child pid is %d \n",child_pid);
 			int script_pid = get_children_pids(child_pid);
 
 			while(!script_pid){
 				sleep(1);
 				script_pid = get_children_pids(child_pid);
 			}
-			//printf("Script pid is %d \n",script_pid);
 			nodes[i].pid = script_pid;
 			nodes[i].current_pid = script_pid;
 			send_signal(script_pid,SIGSTOP,nodes[i].name);
 			int one = 1;
 			bpf_map_update_elem(constants.pids, &nodes[i].current_pid, &one, BPF_ANY);
+		}
+		if (nodes[i].container){
+          	 if (strlen(nodes[i].pid_file)){
+                printf("LOOKING FOR PID IN FILE %s\n",nodes[i].pid_file);
+                char *dir;
+                if (nodes[i].container_type == CONTAINER_TYPE_DOCKER){
+                    dir = get_docker_container_location(nodes[i].name);
+                }
+                if (nodes[i].container_type == CONTAINER_TYPE_LXC){
+                    dir = get_lxc_container_location(nodes[i].name);
+                }
+
+                char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
+                snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].pid_file);
+
+                // Wait until file contains the pid
+                struct stat st;
+                while (1) {
+                    if (stat(combined_path, &st) == 0) {
+                        if (st.st_size > 0) {
+                            break;
+                        }
+                    }
+                    sleep_for_ms(10);
+                }
+                FILE *file;
+                file = fopen(combined_path, "r");
+                if (file == NULL) {
+                    perror("Error opening file");
+                    return 1;
+                }
+                int pid;
+                if (fscanf(file, "%d", &pid) == 1) {
+                    printf("PID IN FILE IS: %d \n", pid);
+                } else {
+                    printf("Failed to read an integer.\n");
+                }
+
+                int host_pid = find_host_pid_for_container_pid(pid);
+                printf("HOST PID IS %d\n",host_pid);
+                nodes[i].pid = host_pid;
+                nodes[i].current_pid = host_pid;
+                fclose(file);
+                continue;
+            }
 		}
 	}
 
@@ -605,19 +651,19 @@ void send_info_to_tracer(){
 	for(int i = 0; i< NODE_COUNT; i++){
 			if(nodes[i].container){
 				nodes[i].if_index = get_interface_index(nodes[i].veth);
-				send_node_and_pid_to_tracer(nodes[i].container_pid,nodes[i].current_pid,nodes[i].name,nodes[i].if_index);
+				send_node_and_pid_to_tracer(nodes[i].container_pid,nodes[i].container_type,nodes[i].current_pid,nodes[i].name,nodes[i].if_index);
 			}
 			else{
-				send_node_and_pid_to_tracer(nodes[i].container_pid,nodes[i].current_pid,nodes[i].name,nodes[i].if_index);
+				send_node_and_pid_to_tracer(nodes[i].container_pid,0,nodes[i].current_pid,nodes[i].name,nodes[i].if_index);
 			}
 	}
 
 }
 
-void send_node_and_pid_to_tracer(int container_pid,int pid, char* node_name,int if_index){
+void send_node_and_pid_to_tracer(int container_pid,int container_type,int pid, char* node_name,int if_index){
 		char message[256];
 
-		snprintf(message,sizeof(message),"%s,%d,%d,%d\n",node_name,container_pid,pid,if_index);
+		snprintf(message,sizeof(message),"%s,%d,%d,%d,%d\n",node_name,container_pid,pid,if_index,container_type);
 
 		if (write(deployment_tracer->pipe_write_end, message, strlen(message)) == -1) {  // +1 to include the null terminator
         perror("write");
@@ -655,12 +701,9 @@ void print_output(void* args){
 	char inLine[1024];
 	FILE *fp = ((struct process_args*)args)->fp;
 
-	//int pid = ((struct process_fault_args*)args)->pid;
-	//printf("Reading input for pid %d \n",pid);
-
     while (fgets(inLine, sizeof(inLine), fp) != NULL)
     {
-			printf("%s\n", inLine);
+			printf("%s", inLine);
 			fflush(stdout);
     }
 }
@@ -756,27 +799,22 @@ FILE* start_target_process_in_container(int node_number,int *pid){
 	// Initial size of the argument list
 	//TODO: Set sized with a lot of args does not work
 	size_t size = 64;
-	char **nsenter_args = malloc(size * sizeof(char *));
-	if (nsenter_args == NULL) {
-			perror("malloc failed");
-			exit(EXIT_FAILURE);
-	}
 
-	nsenter_args[0] = "nsenter";
-	nsenter_args[1] = "--target";
-	nsenter_args[2] = pid_str; // Example PID
-	nsenter_args[3] = "--mount";
-	nsenter_args[4] = "--uts";
-	nsenter_args[5] = "--ipc";
-	nsenter_args[6] = "--net";
-	nsenter_args[7] = "--pid";
-	nsenter_args[8] = "--";
+	char **nsenter_args = build_nsenter_args(pid_str,nodes[node_number].container_type);
 
 	char *token = strtok(nodes[node_number].script," ");
 
-	nsenter_args[9] = token;
+	int index;
+	if (nodes[node_number].container_type == CONTAINER_TYPE_DOCKER) {
+    	nsenter_args[9] = token;
 
-	int index = 9;
+    	index = 9;
+	}
+	if (nodes[node_number].container_type == CONTAINER_TYPE_LXC) {
+    	nsenter_args[10] = token;
+
+    	index = 10;
+	}
 
 	token = strtok(NULL," ");
 
@@ -868,10 +906,7 @@ void setup_begin_conditions(){
 			if(type == SYSCALL){
 
 				systemcall syscall = faults[i].fault_conditions_begin[j].condition.syscall;
-
 				int syscall_nr = syscall.syscall;
-
-
 				insert_relevant_condition_in_ebpf(i,pid,syscall_nr,syscall.call_count);
 			}
 			if (type == FILE_SYSCALL){
@@ -921,12 +956,14 @@ void setup_begin_conditions(){
 				if(nodes[traced].container){
 
 					//Find the directory in hostnamespace
-					char* dir = get_overlay2_location(nodes[traced].name);
-
+					char* dir;
+					if (nodes[traced].container_type == CONTAINER_TYPE_DOCKER)
+					   dir = get_docker_container_location(nodes[traced].name);
+					if (nodes[traced].container_type == CONTAINER_TYPE_LXC)
+					   dir = get_lxc_container_location(nodes[traced].name);
 					//Combine paths
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
-					//printf("Combined path is %s \n",combined_path);
 
 					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
 				}else{
@@ -961,7 +998,11 @@ void setup_begin_conditions(){
 					continue;
 				if(nodes[i].container){
 					//Find the directory in hostnamespace
-					char* dir = get_overlay2_location(nodes[i].name);
+					char *dir;
+					if (nodes[i].container_type == CONTAINER_TYPE_DOCKER)
+					   dir = get_docker_container_location(nodes[i].name);
+					if (nodes[i].container_type == CONTAINER_TYPE_LXC)
+					   dir = get_lxc_container_location(nodes[i].name);
 
 					//Combine paths
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
@@ -978,7 +1019,11 @@ void setup_begin_conditions(){
 					continue;
 				if(nodes[i].container){
 					//Find the directory in hostnamespace
-					char* dir = get_overlay2_location(nodes[i].name);
+					char *dir;
+					if (nodes[i].container_type == CONTAINER_TYPE_DOCKER)
+					   dir = get_docker_container_location(nodes[i].name);
+					if (nodes[i].container_type == CONTAINER_TYPE_LXC)
+					   dir = get_lxc_container_location(nodes[i].name);
 
 					//Combine paths
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
@@ -1414,10 +1459,7 @@ void handle_event(void *ctx,void *data,size_t data_sz)
 
 			int node_nr = get_node_nr_from_pid(e->pid);
 
-			//send_signal(args->pid,SIGSTOP,nodes[node_nr].name);
-
 			args->duration = fault->duration;
-
 			args->node_to_restart = node_nr;
 
 			printf("NODE: %s, PID: %d, DURATION: %d, FAULT_NR: %d \n",nodes[(args->node_to_restart)].name,(args->pid),(args->duration),fault_nr);
@@ -1515,7 +1557,7 @@ void restart_process(void* args){
 	}
 
 	if (node->container && deployment_tracer){
-		send_node_and_pid_to_tracer(node->container_pid,node->current_pid,node->name,node->if_index);
+		send_node_and_pid_to_tracer(node->container_pid,node->container_type,node->current_pid,node->name,node->if_index);
 	}
 	//Sometimes this is to fast and the process did not yet start
 	update_node_pid_ebpf(node_to_restart,node->current_pid,node->pid,current_pid_pre_restart);
@@ -1578,11 +1620,16 @@ void reinject_uprobes(int node_nr){
 
 	node *node = &nodes[node_nr];
 	if(node->container){
-
-		char* dir = get_overlay2_location(node->name);
-		char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
-		snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes->binary);
-		node->leader_probe = uprobe(nodes->current_pid,nodes->leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode,1,0);
+	    if(node->leader_probe){
+           	char *dir;
+           	if (nodes[node_nr].container_type == CONTAINER_TYPE_DOCKER)
+                dir = get_docker_container_location(nodes[node_nr].name);
+           	if (nodes[node_nr].container_type == CONTAINER_TYPE_LXC)
+                dir = get_lxc_container_location(nodes[node_nr].name);
+      		char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
+      		snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes->binary);
+      		node->leader_probe = uprobe(nodes->current_pid,nodes->leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode,1,0);
+		}
 	}
 
 	for(int i=0;i<FAULT_COUNT;i++){
@@ -1595,12 +1642,14 @@ void reinject_uprobes(int node_nr){
 					faults[i].fault_conditions_begin[j].condition.user_function.cond_nr = user_func_cond_nr+STATE_PROPERTIES_COUNT;
 
 					if(node->container){
-						//Find the directory in hostnamespace
-						char* dir = get_overlay2_location(node->name);
+						char *dir;
+						if (nodes[node_nr].container_type == CONTAINER_TYPE_DOCKER)
+						   dir = get_docker_container_location(nodes[node_nr].name);
+						if (nodes[node_nr].container_type == CONTAINER_TYPE_LXC)
+						   dir = get_lxc_container_location(nodes[node_nr].name);
 						//Combine paths
 						char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 						snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
-						//printf("Combined path is %s \n",combined_path);
 						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
 					}else{
 						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);

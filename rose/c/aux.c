@@ -21,13 +21,13 @@
 #include "aux.h"
 #include <unistd.h>
 #include <sys/types.h>
-#include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <string.h>
 #include <errno.h>
 #include <bpf/bpf.h>
 #include <dirent.h>
+#include <limits.h>
 
 static struct env {
 	bool verbose;
@@ -233,6 +233,20 @@ struct aux_bpf* start_aux_maps(){
 
 }
 
+void bump_memlock_rlimit(void)
+{
+	struct rlimit rlim_new = {
+		.rlim_cur	= RLIM_INFINITY,
+		.rlim_max	= RLIM_INFINITY,
+	};
+
+	if (setrlimit(RLIMIT_MEMLOCK, &rlim_new)) {
+		fprintf(stderr, "Failed to increase RLIMIT_MEMLOCK limit!\n");
+		exit(1);
+	}
+}
+
+
 int get_interface_index(char* if_name){
 	struct ifreq ifr;
 
@@ -400,8 +414,6 @@ void pause_process(void* args){
 	int pid = ((struct process_fault_args*)args)->pid;
 	int duration = ((struct process_fault_args*)args)->duration;
 	char *name = ((struct process_fault_args*)args)->name;
-
-	//send_signal(pid,SIGSTOP,name);
 	printf("Sleeping for %d before sending SIGCONT\n",duration);
 	sleep_for_ms(duration);
 	send_signal(pid,SIGCONT,name);
@@ -483,7 +495,7 @@ void print_fault_schedule(execution_plan* plan, node* nodes, fault * faults,trac
 					break;
 				case 4:
 					int time = faults[i].fault_conditions_begin[j].condition.time;
-					printf("Time is %d \n",time);
+					printf("TIME COND: %d \n",time);
 
 					break;
 			}
@@ -495,7 +507,7 @@ void print_fault_schedule(execution_plan* plan, node* nodes, fault * faults,trac
 #define DOCKER_SOCKET_PATH "/var/run/docker.sock"
 #define CONTAINER_INFO_PATH "/containers/%s/json"
 
-pid_t get_container_pid(const char *container_name) {
+pid_t get_docker_container_pid(const char *container_name) {
     FILE *fp;
     char command[256];
     char output[1024];
@@ -526,7 +538,37 @@ pid_t get_container_pid(const char *container_name) {
     return pid;
 }
 
-char* get_overlay2_location(const char* container_name) {
+pid_t get_lxc_container_pid(const char *container_name) {
+    FILE *fp;
+    char command[256];
+    char output[1024];
+
+    sprintf(command, "lxc list name=%s status=running --format csv -c p", container_name);
+
+    // Open a pipe to read the output of the command
+    fp = popen(command, "r");
+    if (fp == NULL) {
+        fprintf(stderr, "Failed to run command\n");
+        return -1;
+    }
+
+    // Read the output of the command
+    if (fgets(output, sizeof(output), fp) == NULL) {
+        fprintf(stderr, "Failed to read output\n");
+        pclose(fp);
+        return -1;
+    }
+
+    // Close the pipe
+    pclose(fp);
+
+    // Convert the output to PID
+    pid_t pid = atoi(output);
+
+    return pid;
+}
+
+char* get_docker_container_location(const char* container_name) {
     char command[MAX_COMMAND_LEN];
     char response[MAX_RESPONSE_LEN];
 
@@ -557,6 +599,22 @@ char* get_overlay2_location(const char* container_name) {
     }
 
     return overlay2_location;
+}
+
+char* get_lxc_container_location(const char* container_name) {
+    char command[MAX_COMMAND_LEN];
+    char response[MAX_RESPONSE_LEN];
+
+	// Base path
+	const char* base_path = "/var/snap/lxd/common/lxd/storage-pools/default/containers";
+
+	// Allocate a buffer large enough to hold the resulting path
+	static char container_path[1024]; // Adjust size if needed
+
+	// Format the container path
+	snprintf(container_path, sizeof(container_path), "%s/%s/rootfs", base_path, container_name);
+
+	return container_path;
 }
 
 
@@ -692,4 +750,104 @@ int get_jvmso_path(char *path,int pid)
 	}
 
 	return 0;
+}
+
+pid_t find_host_pid_for_container_pid(pid_t target_pid) {
+    DIR *proc_dir;
+    struct dirent *entry;
+    char path[PATH_MAX];
+    char line[256];
+    FILE *status_file;
+    pid_t host_pid = -1;
+
+    // Open /proc directory
+    proc_dir = opendir("/proc");
+    if (!proc_dir) {
+        perror("Failed to open /proc");
+        return -1;
+    }
+
+    // Iterate through all processes
+    while ((entry = readdir(proc_dir)) != NULL) {
+        pid_t current_pid;
+        char *endptr;
+
+        // Skip non-numeric directory names
+        current_pid = strtol(entry->d_name, &endptr, 10);
+        if (*endptr != '\0')
+            continue;
+
+        // Build path to process's status file
+        snprintf(path, sizeof(path), "/proc/%s/status", entry->d_name);
+
+        // Open the status file
+        status_file = fopen(path, "r");
+        if (!status_file)
+            continue;
+
+        // Search for NStgid line
+        while (fgets(line, sizeof(line), status_file)) {
+            if (strncmp(line, "NStgid:", 7) == 0) {
+                char *token = strtok(line + 7, "\t");
+                int position = 0;
+
+                // Parse all PIDs in the namespace hierarchy
+                while (token != NULL) {
+                    pid_t ns_pid = atoi(token);
+
+                    // The last PID is the one in the container's namespace
+                    if (ns_pid == target_pid) {
+                        // The first PID is the host PID
+                        host_pid = current_pid;
+                        fclose(status_file);
+                        closedir(proc_dir);
+                        return host_pid;
+                    }
+                    token = strtok(NULL, "\t");
+                    position++;
+                }
+                break;
+            }
+        }
+        fclose(status_file);
+    }
+
+    closedir(proc_dir);
+    return -1;
+}
+
+char **build_nsenter_args(const char *pid_str,int container_type) {
+    size_t size = 64;
+    char **nsenter_args = malloc(size * sizeof(char *));
+    if (nsenter_args == NULL) {
+        perror("malloc failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (container_type == CONTAINER_TYPE_DOCKER) {
+        nsenter_args[0] = "nsenter";
+        nsenter_args[1] = "--target";
+        nsenter_args[2] = (char *)pid_str;
+        nsenter_args[3] = "--mount";
+        nsenter_args[4] = "--uts";
+        nsenter_args[5] = "--ipc";
+        nsenter_args[6] = "--net";
+        nsenter_args[7] = "--pid";
+        nsenter_args[8] = "--";
+        nsenter_args[9] = NULL;
+    }
+    if (container_type == CONTAINER_TYPE_LXC) {
+        nsenter_args[0] = "nsenter";
+        nsenter_args[1] = "--target";
+        nsenter_args[2] = (char *)pid_str;
+        nsenter_args[3] = "--mount";
+        nsenter_args[4] = "--uts";
+        nsenter_args[5] = "--ipc";
+        nsenter_args[6] = "--net";
+        nsenter_args[7] = "--pid";
+        nsenter_args[8] = "--user";
+        nsenter_args[9] = "--";
+        nsenter_args[10] = NULL;
+    }
+    return nsenter_args;
 }

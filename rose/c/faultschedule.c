@@ -16,8 +16,8 @@
 #include "faultschedule.h"
 #include "aux.h"
 
-#define NODE_COUNT 1
-#define FAULT_COUNT 1
+#define NODE_COUNT 5
+#define FAULT_COUNT 6
 #define MAXIMUM_TIME 60
 
 char* get_veth_interface_name(const char* container_name);
@@ -58,11 +58,13 @@ void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup
     exe_plan->cleanup.pid = 0;
     exe_plan->cleanup.duration = cleanup_time;
 }
-void create_node(node* node, char* name,int pid, char* veth, char* ip, char* script,char* env,int container,char *binary,char *leader_symbol,int leader){
+void create_node(node* node, char* name,int pid,char* pid_file, char* veth, char* ip, char* script,char* env,int container,int container_type,char *binary,char *leader_symbol,int leader){
 
     // memset(node->name,'\0',strlen(name));
     strcpy(node->name,name);
     node->pid = pid;
+
+    strcpy(node->pid_file,pid_file);
 
     // memset(node->veth,'\0',strlen(veth));
     strcpy(node->veth,veth);
@@ -83,6 +85,8 @@ void create_node(node* node, char* name,int pid, char* veth, char* ip, char* scr
     strcpy(node->leader_symbol,leader_symbol);
 
     node->container = container;
+
+    node->container_type = container_type;
 
     node->leader_probe = NULL;
 
@@ -254,37 +258,112 @@ char* get_veth_interface_name(const char* container_name) {
 
 execution_plan* build_execution_plan(){
     execution_plan* exe_plan = ( execution_plan*)malloc(1 * sizeof(execution_plan));
-    create_execution_plan(exe_plan,"",0,"","",60,0);
+    create_execution_plan(exe_plan,"/vagrant/schedules/reproducedbugs/redisraft/scripts/startrediscluster2d1cf30.sh",5,"/vagrant/schedules/reproducedbugs/redisraft/scripts/runworkload.sh","",30,15);
     return exe_plan;
 }
  tracer* build_tracer(){
     tracer* deployment_tracer = (tracer*)malloc(1 * sizeof(tracer));
-    create_tracer(deployment_tracer,"/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer","/tmp/containerpid","","","production_trace,process_controlled");
+    create_tracer(deployment_tracer,"/vagrant/rosetracer/target/release/rosetracer","/tmp/containerpid","/vagrant/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt","/redisraft.so","production_trace,container_controlled");
 
     return deployment_tracer;
 }
 node* build_nodes(){
     node* nodes = ( node*)malloc(NODE_COUNT * sizeof(node));
-    create_node(&nodes[0],"kafka",0,"","","/home/sebastiaoamaro/phd/torefidevel/rw/Anduril/experiment/kafka-12508/run-original-test.sh","",0,"","",0);
+    create_node(&nodes[0],"redis1",0,"0_file","","172.19.1.10","./startredis.sh 1 172.19.1.10","",1,1,"/redisraft.so","raft_become_leader",1);
+    create_node(&nodes[1],"redis2",0,"0_file","","172.19.1.11","./startredis.sh 2 172.19.1.11","",1,1,"/redisraft.so","raft_become_leader",0);
+    create_node(&nodes[2],"redis3",0,"0_file","","172.19.1.12","./startredis.sh 3 172.19.1.12","",1,1,"/redisraft.so","raft_become_leader",0);
+    create_node(&nodes[3],"redis4",0,"0_file","","172.19.1.13","./startredis.sh 4 172.19.1.13","",1,1,"/redisraft.so","raft_become_leader",0);
+    create_node(&nodes[4],"redis5",0,"0_file","","172.19.1.14","./startredis.sh 5 172.19.1.14","",1,1,"/redisraft.so","raft_become_leader",0);
 
     return nodes;
 }
 fault* build_faults_extra(){
     fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));
     fault_details fault_details0;
-    syscall_operation syscall0;
-    syscall0.syscall = OPENAT_FAULT;
-    syscall0.success = 0;
-    syscall0.return_value = -5;
-    fault_details0.syscall = syscall0;
-    create_fault(&faults[0],"read_fail",0,0,OPENAT_FAULT,2,fault_details0,0,0,0,1,0);
+    block_ips block_ips0;
+    add_ip_to_block_extra(&block_ips0,"172.19.1.10",0,1);
+    add_ip_to_block_extra(&block_ips0,"172.19.1.10",0,2);
+    fault_details0.block_ips = block_ips0;
+    fault_details0.block_ips.count_in = 1;
+    fault_details0.block_ips.count_out = 1;
+    create_fault(&faults[0],"block_ips_redis2",1,1,5,0,fault_details0,0,0,25000,1,0);
 
     fault_condition fault_condition_0_0;
-    file_system_call file_syscall_0_0;
-    fault_condition_0_0.type = FILE_SYSCALL;
-    build_file_syscall(&file_syscall_0_0,OPENAT_SPECIFIC,"","syscall_check_1",1);
-    fault_condition_0_0.condition.file_system_call = file_syscall_0_0;
+    int time_0_0 = 10000;
+    fault_condition_0_0.type = TIME;
+    fault_condition_0_0.condition.time = time_0_0;
     add_begin_condition(&faults[0],fault_condition_0_0,0);
+    fault_details fault_details1;
+    block_ips block_ips1;
+    add_ip_to_block_extra(&block_ips1,"172.19.1.10",0,1);
+    add_ip_to_block_extra(&block_ips1,"172.19.1.10",0,2);
+    fault_details1.block_ips = block_ips1;
+    fault_details1.block_ips.count_in = 1;
+    fault_details1.block_ips.count_out = 1;
+    create_fault(&faults[1],"block_ips_redis3",2,2,5,0,fault_details1,0,0,25000,1,0);
+
+    fault_condition fault_condition_1_0;
+    int time_1_0 = 10000;
+    fault_condition_1_0.type = TIME;
+    fault_condition_1_0.condition.time = time_1_0;
+    add_begin_condition(&faults[1],fault_condition_1_0,0);
+    fault_details fault_details2;
+    block_ips block_ips2;
+    add_ip_to_block_extra(&block_ips2,"172.19.1.10",0,1);
+    add_ip_to_block_extra(&block_ips2,"172.19.1.10",0,2);
+    fault_details2.block_ips = block_ips2;
+    fault_details2.block_ips.count_in = 1;
+    fault_details2.block_ips.count_out = 1;
+    create_fault(&faults[2],"block_ips_redis4",3,3,5,0,fault_details2,0,0,25000,1,0);
+
+    fault_condition fault_condition_2_0;
+    int time_2_0 = 10000;
+    fault_condition_2_0.type = TIME;
+    fault_condition_2_0.condition.time = time_2_0;
+    add_begin_condition(&faults[2],fault_condition_2_0,0);
+    fault_details fault_details3;
+    block_ips block_ips3;
+    add_ip_to_block_extra(&block_ips3,"172.19.1.10",0,1);
+    add_ip_to_block_extra(&block_ips3,"172.19.1.10",0,2);
+    fault_details3.block_ips = block_ips3;
+    fault_details3.block_ips.count_in = 1;
+    fault_details3.block_ips.count_out = 1;
+    create_fault(&faults[3],"block_ips_redis5",4,4,5,0,fault_details3,0,0,25000,1,0);
+
+    fault_condition fault_condition_3_0;
+    int time_3_0 = 10000;
+    fault_condition_3_0.type = TIME;
+    fault_condition_3_0.condition.time = time_3_0;
+    add_begin_condition(&faults[3],fault_condition_3_0,0);
+    fault_details fault_details4;
+    process_fault process_kill4;
+    process_kill4.type = 11;
+    fault_details4.process_fault = process_kill4;
+    create_fault(&faults[4],"process_kill_1",0,0,11,1,fault_details4,0,0,0,1,0);
+
+    fault_condition fault_condition_4_0;
+    int time_4_0 = 20000;
+    fault_condition_4_0.type = TIME;
+    fault_condition_4_0.condition.time = time_4_0;
+    add_begin_condition(&faults[4],fault_condition_4_0,0);
+    fault_details fault_details5;
+    process_fault process_kill5;
+    process_kill5.type = 11;
+    fault_details5.process_fault = process_kill5;
+    create_fault(&faults[5],"process_kill_1_2",0,0,11,1,fault_details5,0,0,0,2,1);
+
+    fault_condition fault_condition_5_0;
+    user_function user_func_5_0;
+    fault_condition_5_0.type = USER_FUNCTION;
+    build_user_function(&user_func_5_0,"/redisraft.so","handleLoadSnapshot",1,0);
+    fault_condition_5_0.condition.user_function = user_func_5_0;
+    add_begin_condition(&faults[5],fault_condition_5_0,0);
+    fault_condition fault_condition_5_1;
+    user_function user_func_5_1;
+    fault_condition_5_1.type = USER_FUNCTION;
+    build_user_function(&user_func_5_1,"/redisraft.so","storeSnapshotData",1,209);
+    fault_condition_5_1.condition.user_function = user_func_5_1;
+    add_begin_condition(&faults[5],fault_condition_5_1,1);
 
     return faults;
 }

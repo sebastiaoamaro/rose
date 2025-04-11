@@ -262,7 +262,7 @@ def main():
 
         if fault.type == "process_kill" or "process_pause" or "block_ips":
             #The first attempt already uses count = 1
-            count = 1
+            count = 2
             last_event_counter_value = 0
             time_conditions = deepcopy(fault.begin_conditions)
             last_used_conditions = deepcopy(fault.begin_conditions)
@@ -296,7 +296,6 @@ def main():
                     cond = time_cond()
                     cond.time = fault.start_time
                     fault.begin_conditions.append(cond)
-
                 #Test schedule with new conditions
                 new_schedule_location = write_new_schedule(bug_reproduction.schedule,faults_for_schedule)
                 run_reproduction(new_schedule_location)
@@ -321,23 +320,32 @@ def main():
                         if fault.name == fault_injected_event.name:
                             print("FAULT:",fault_injected_event.name,"OCCURRED")
                             fault_occuring = True
-                            last_used_conditions = deepcopy(fault.begin_conditions)
                             print("LUC",last_used_conditions)
                             correct_fault_order = history.check_fault_order(faults_for_schedule)
                             print("CORRECT ORDER:",correct_fault_order)
-                            if not correct_fault_order:
+                            condition_order = history.check_last_condition(fault_injected_event,count,functions_before[2])
+                            print("CONDITION ORDER:",condition_order)
+                            if not condition_order:
+                                fault.begin_conditions = deepcopy(last_used_conditions)
+                            if correct_fault_order > 0:
+                                fault.begin_conditions = deepcopy(last_used_conditions)
+                            elif correct_fault_order < 0:
                                 fault.begin_conditions = deepcopy(time_conditions)
+                            else:
+                                last_used_conditions = deepcopy(fault.begin_conditions)
                             break
                         fault_occuring = False
 
-                    if not fault_occuring:
+                    if not fault_occuring :
                         fault_counter += 1
                         fault.begin_conditions = deepcopy(last_used_conditions)
                         print("Fault is not occurring anymore last_used_conditions is :", fault.begin_conditions)
-
-                    if not correct_fault_order:
-                        fault.begin_conditions = deepcopy(time_conditions)
-                        print("Faults are not in correct order use time conditions are:", fault.begin_conditions)
+                        #Need to set this if not we use value in next iteration
+                        correct_fault_order=0
+                    # if correct_fault_order > 0:
+                    #     fault.begin_conditions = deepcopy(last_used_conditions)
+                    # elif correct_fault_order < 0:
+                    #     fault.begin_conditions = deepcopy(time_conditions)
 
         if reproduction_rate > 75:
             end_reproduction(reproduction_rate,runs_counter,new_schedule_location,start_time)
@@ -346,7 +354,7 @@ def main():
     print("Starting 3rd phase ")
     new_schedule_location = write_new_schedule(bug_reproduction.schedule,faults_for_schedule)
     #Thrid attempts run schedules based on third level context information
-    for fault in faults_for_schedule:
+    for fault in reversed(faults_for_schedule):
         #No bugs we reproduce need this
         if fault.type == "syscall":
             continue

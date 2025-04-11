@@ -1,11 +1,11 @@
-use anyhow::{Ok, Result};
+use anyhow::Result;
 use libc::{rlimit, setrlimit, RLIMIT_NOFILE};
-use std::{env, process::exit};
-
 use rosetracer::auxiliary;
 use rosetracer::production_tracer;
-use rosetracer::statisticstracer;
+use rosetracer::rw_tracer;
+use rosetracer::statistics_tracer;
 use rosetracer::tracer;
+use std::{env, process::exit};
 
 fn main() -> Result<()> {
     let new_limit = rlimit {
@@ -41,9 +41,7 @@ fn main() -> Result<()> {
         }
 
         let binary_path = args[3].to_string();
-
         let node_and_pid = args[4].to_string();
-
         let mut network_interface = "".to_string();
         if args.len() > 5 {
             network_interface = args[5].to_string();
@@ -60,23 +58,62 @@ fn main() -> Result<()> {
 
         //exit(1);
     }
-    if tracing_type == "stats_trace" {
-        println!("Started stats_tracer");
+    if tracing_type == "rw_trace" {
+        println!("Started RW_TRACER");
 
         let functions_file = &args[2];
 
-        let functions = auxiliary::read_names_from_file(&functions_file)
-            .unwrap()
-            .clone();
+        let mut functions = vec![];
+        if functions_file.len() > 0 {
+            functions = auxiliary::read_names_from_file(&functions_file)
+                .unwrap()
+                .clone();
+        }
 
         let binary_path = args[3].to_string();
-
         let node_and_pid = args[4].to_string();
+        let mut network_interface = "".to_string();
+        if args.len() > 5 {
+            network_interface = args[5].to_string();
+        }
 
-        statisticstracer::run_tracing(mode.to_string(), functions, binary_path, node_and_pid)
-            .expect("Something went wrong with tracer");
+        rw_tracer::run_tracing(
+            mode.to_string(),
+            functions,
+            binary_path,
+            node_and_pid,
+            network_interface,
+        )
+        .expect("Something went wrong with tracer");
+    }
 
-        //exit(1);
+    if tracing_type == "stats_trace" {
+        println!("Started STATS_TRACER");
+
+        let functions_file = &args[2];
+
+        let mut functions = vec![];
+        if functions_file.len() > 0 {
+            functions = auxiliary::read_names_from_file(&functions_file)
+                .unwrap()
+                .clone();
+        }
+
+        let binary_path = args[3].to_string();
+        let node_and_pid = args[4].to_string();
+        let mut network_interface = "".to_string();
+        if args.len() > 5 {
+            network_interface = args[5].to_string();
+        }
+
+        statistics_tracer::run_tracing(
+            mode.to_string(),
+            functions,
+            binary_path,
+            node_and_pid,
+            network_interface,
+        )
+        .expect("Something went wrong with tracer");
     }
 
     //This is the tracer that runs in production, it has mode container and process
@@ -93,9 +130,7 @@ fn main() -> Result<()> {
         }
 
         let binary_path = args[3].to_string();
-
         let node_and_pid = args[4].to_string();
-
         let mut network_interface = "".to_string();
         if args.len() > 5 {
             network_interface = args[5].to_string();

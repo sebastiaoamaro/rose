@@ -176,6 +176,7 @@ class History:
                         self.function_calls_by_node[node_id][event.name] = [event]
                     else:
                         self.function_calls_by_node[node_id][event.name].append(event)
+
                 if event.name in self.event_counter:
                     self.event_counter[event.name].append(event)
                 else:
@@ -192,6 +193,8 @@ class History:
                 self.ids[node_id]+= 1
 
             event.id = self.ids[node_id]
+            if event.type == "Fault":
+                print("Assigned id",event.id," to ", event.name)
 
             if node_id not in self.pids and node_id != "any":
                 self.pids[node_id] = []
@@ -212,23 +215,21 @@ class History:
                     self.sys_exit_errors[event.name]=1
 
 
-    def order_events(self):
-        for node_id in self.events_by_node:
-            self.events_by_node[node_id].sort(key=lambda x: x.time)
-
+    def order_all_events(self):
         self.events.sort(key=lambda x: x.time)
-
         self.faults_injected.sort(key=lambda x: x.time)
-
-
         for event in self.events:
             event.relative_time = event.time - self.start_time
+
 
     def process_history(self,history_file):
         self.read_and_parse_events(history_file)
         self.count_sys_exit_errors()
+        self.order_all_events()
         self.get_events_by_node()
-        self.order_events()
+        #Order events_by_node
+        for node_id in self.events_by_node:
+            self.events_by_node[node_id].sort(key=lambda x: x.time)
         self.experiment_time = (self.end_time - self.start_time)/1000000000
 
     def parse_schedule(self,schedule_file):
@@ -514,11 +515,11 @@ class History:
         #Checks for unique events in all of the history, maybe it should be in the window?
         for function_call in function_calls:
             #if function_call.name in function_calls_counter and len(self.function_calls_by_node[node_name][function_call.name]) > unique_value:
-            if function_call.name in function_calls_counter and function_calls_counter[function_call.name] > unique_value:
+            if function_call.name in function_calls_counter and function_calls_counter[function_call.name] > 1:
                  function_calls_counter.pop(function_call.name)
 
         #Returns number of events found: int and the important events: dict
-        return (event_counter,function_calls_counter)
+        return (event_counter,function_calls_counter,function_calls)
 
     #TODO: Needs to look in the normal trace if the event is common
     def get_context_syscall_before(self,node_name,event_id):
@@ -540,13 +541,38 @@ class History:
                 count += 1
         return count
 
-    def check_fault_order(self,faults_for_schedule):
-        print(self.faults_injected)
-        return all(
-#            obj1.arg1 <= obj2.arg1
-            faults_for_schedule[int(obj1.arg1)].start_time <= faults_for_schedule[int(obj2.arg1)].start_time
-            for obj1, obj2 in zip(self.faults_injected, self.faults_injected[1:])
-        )
+    def check_fault_order(self, faults_for_schedule):
+        #print("FAULTS FOR SCHEDULE")
+        #print(faults_for_schedule)
+        #print("FAULTS INJECTED")
+        #print(self.faults_injected)
+
+        order_score = 0
+
+        for obj1, obj2 in zip(self.faults_injected, self.faults_injected[1:]):
+            start1 = faults_for_schedule[int(obj1.arg1)].start_time
+            start2 = faults_for_schedule[int(obj2.arg1)].start_time
+
+            if start1 > start2:
+                # obj1 came too early (ahead)
+                order_score += 1
+            elif start1 < start2:
+                # obj1 came too late (behind)
+                order_score -= 1
+            # else: correct order, no change
+
+        return order_score
+
+    def check_last_condition(self,fault_injected_event,count,origin_order):
+        print("CHECKING CONDITION ORDER FOR FAULT:",fault_injected_event.name,"ID:",fault_injected_event.id)
+
+        if fault_injected_event.id == 0:
+            return False
+        functions_before = self.get_functions_before(fault_injected_event.node,fault_injected_event.id,count,count*10)
+        new_order = functions_before[2]
+
+        print("COMPARING",new_order[0].name,"AND",origin_order[0].name)
+        return new_order[0].name == origin_order[0].name
 
     def check_syscall_support(self,syscall_name):
         return check_if_syscall_supported(syscall_name) != "TEMP_EMPTY"
@@ -571,7 +597,7 @@ def write_new_schedule(base_schedule,faults):
             fault_dict = fault.to_yaml()
             faults_dict["faults"][fault.name] = fault_dict
 
-        yaml.dump(faults_dict, file, default_flow_style=False)
+        yaml.dump(faults_dict, file, default_flow_style=False,sort_keys=False)
 
     return schedule_location
 

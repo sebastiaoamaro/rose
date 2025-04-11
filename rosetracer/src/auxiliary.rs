@@ -1,22 +1,39 @@
-use anyhow::{bail, Result};
-use libbpf_rs::MapCore;
-use libbpf_rs::MapFlags;
+use crate::skel_types::{SkelAttachUprobe, SkelEndTraceTrait, SkelEnum, SkelUpdatePidTrait};
+use anyhow::bail;
+use anyhow::Result;
+use libbpf_rs::skel::OpenSkel as _;
+use libbpf_rs::skel::SkelBuilder as _;
+use libbpf_rs::Link;
+use libbpf_rs::{MapCore, MapFlags};
+use nix::net::if_::if_nametoindex;
+use nix::sys::signal::kill;
+use nix::sys::signal::Signal;
+use nix::unistd::Pid;
 use pin_maps::PinMapsSkel;
-use procfs::process::ProcState::{Running, Stopped, Waiting};
+use procfs::process::ProcState::{Stopped, Waiting};
 use procfs::process::Process;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ffi::CStr;
 use std::fs::File;
 use std::fs::OpenOptions;
+use std::fs::{self};
 use std::io::{self, BufRead, BufReader, Write};
+use std::mem::MaybeUninit;
 use std::path::Path;
 use std::process::Command;
 use std::str;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+use std::sync::Arc;
 use std::thread;
+use std::thread::{sleep, JoinHandle};
 use std::time;
-
+use std::time::Duration;
+pub const CONTAINER_TYPE_DOCKER: i32 = 1;
+pub const CONTAINER_TYPE_LXC: i32 = 2;
+pub const LOCATION_TRACEPOINT_VECTOR: i32 = 0;
 pub mod pin_maps {
     include!(concat!(env!("OUT_DIR"), "/pin_maps.skel.rs"));
 }
@@ -88,6 +105,558 @@ static _NETWORK_SYSCALLS_WITH_FD: [u64; 10] = [
     49, // bind
 ];
 
+pub mod xdp {
+    include!(concat!(env!("OUT_DIR"), "/xdp.skel.rs"));
+}
+
+pub fn start_tracing(
+    mode: String,
+    functions: Vec<String>,
+    binary_path: String,
+    nodes_info: String,
+    network_device: String,
+    skel_enum: &mut SkelEnum<'_, 'static>,
+    skel_maps: &mut PinMapsSkel,
+    hashmap_pid_to_node: &mut HashMap<i32, String>,
+    hashmap_node_to_pid: &mut HashMap<String, i32>,
+    hashmap_links: &mut HashMap<i32, Vec<Link>>,
+) -> Result<()> {
+    let _xdp_prog;
+
+    if mode == "container" {
+        trace_containers(
+            nodes_info,
+            skel_enum,
+            hashmap_pid_to_node,
+            hashmap_links,
+            functions.clone(),
+            binary_path,
+        )
+        .expect("Failed to trace containers");
+    } else if mode == "container_controlled" {
+        trace_containers_controlled(
+            nodes_info.clone(),
+            skel_enum,
+            hashmap_pid_to_node,
+            hashmap_node_to_pid,
+            hashmap_links,
+            functions.clone(),
+            binary_path,
+        )
+        .expect("Failed to trace containers controlled");
+
+        // Attempt to delete the file
+        match fs::remove_file(nodes_info.clone()) {
+            Ok(_) => println!("File deleted successfully."),
+            Err(e) => println!("Failed to delete the file: {}", e),
+        }
+    } else if mode == "process" {
+        trace_processes(
+            nodes_info,
+            skel_enum,
+            hashmap_pid_to_node,
+            hashmap_links,
+            functions.clone(),
+            binary_path,
+        )
+        .expect("Failed to trace processes");
+        let skel_builder = xdp::XdpSkelBuilder::default();
+        let mut open_object_tracer = MaybeUninit::uninit();
+        let open_skel = skel_builder.open(&mut open_object_tracer)?;
+        let skel = open_skel.load()?;
+        if network_device.len() > 0 {
+            let if_index = if_nametoindex(network_device.as_str())
+                .map_err(|e| e.to_string())
+                .unwrap();
+            _xdp_prog = skel
+                .progs
+                .xdp_pass
+                .attach_xdp((if_index) as i32)
+                .expect("Failed to attach xdp");
+        }
+    } else if mode == "process_controlled" {
+        let skel_builder = xdp::XdpSkelBuilder::default();
+        let mut open_object_tracer = MaybeUninit::uninit();
+        let open_skel = skel_builder.open(&mut open_object_tracer)?;
+        let skel_xdp = open_skel.load()?;
+        if network_device.len() > 0 {
+            let if_index = if_nametoindex(network_device.as_str())
+                .map_err(|e| e.to_string())
+                .unwrap();
+            _xdp_prog = skel_xdp
+                .progs
+                .xdp_pass
+                .attach_xdp((if_index) as i32)
+                .expect("Failed to attach xdp");
+        }
+        trace_processes_controlled(
+            nodes_info,
+            skel_enum,
+            hashmap_pid_to_node,
+            hashmap_node_to_pid,
+            hashmap_links,
+            functions.clone(),
+            binary_path,
+        )
+        .expect("Failed to trace processes controlled");
+    }
+    skel_enum.end_trace(skel_maps, hashmap_pid_to_node, functions);
+
+    Ok(())
+}
+pub fn trace_processes(
+    nodes_info: String,
+    skel: &mut SkelEnum,
+    hashmap_pid_to_node: &mut HashMap<i32, String>,
+    hashmap_links: &mut HashMap<i32, Vec<Link>>,
+    functions: Vec<String>,
+    binary_path: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut join_handles = vec![];
+    let mut tx_handles = vec![];
+    let path = nodes_info;
+    let file: File = File::open(&path)?;
+    let reader = BufReader::new(file);
+
+    for line in reader.lines() {
+        let line = line?;
+        let parts: Vec<&str> = line.split(',').collect();
+        if parts.len() == 2 {
+            let node_name = parts[0].trim();
+            let pid: i32 = match parts[1].trim().parse() {
+                Ok(num) => num,
+                Err(_) => {
+                    println!("Failed to parse integer on line: {}", line);
+                    continue;
+                }
+            };
+
+            let pid_vec = u32_to_u8_array_little_endian(pid);
+            let one = u32_to_u8_array_little_endian(1);
+
+            skel.update(&pid_vec, &one);
+            hashmap_pid_to_node.insert(pid, node_name.to_string().clone());
+            let (tx, rx) = mpsc::channel();
+            tx_handles.push(tx);
+            start_tracing_process(
+                pid,
+                node_name.to_string(),
+                hashmap_links,
+                functions.clone(),
+                binary_path.clone(),
+                skel,
+                rx,
+                &mut join_handles,
+            );
+        } else {
+            println!("Incorrect format on line: {}", line);
+        }
+    }
+
+    write_to_file("check.txt".to_string(), "ready".to_string()).expect("Failed to write to file");
+
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })?;
+
+    while running.load(Ordering::SeqCst) {
+        sleep(Duration::from_secs(1));
+    }
+
+    Ok(())
+}
+pub fn start_tracing_process(
+    pid: i32,
+    container_name: String,
+    hashmap_links: &mut HashMap<i32, Vec<Link>>,
+    functions: Vec<String>,
+    binary_path: String,
+    skel: &mut SkelEnum,
+    rx: Receiver<()>,
+    join_handles: &mut Vec<JoinHandle<()>>,
+) {
+    println!(
+        "Started tracing for pid {} with node_name {}",
+        pid, container_name
+    );
+
+    hashmap_links.insert(pid, vec![]);
+
+    let handle = thread::spawn(move || {
+        monitor_pid(pid, rx).expect("Monitoring failed");
+    });
+
+    join_handles.push(handle);
+
+    for (index_function, function) in functions.clone().iter().enumerate() {
+        skel.attach_uprobe(
+            index_function,
+            function,
+            binary_path.clone(),
+            pid,
+            hashmap_links,
+        );
+    }
+}
+
+pub fn trace_containers(
+    nodes_info: String,
+    skel: &mut SkelEnum<'_, 'static>,
+    hashmap_pid_to_node: &mut HashMap<i32, String>,
+    mut hashmap_links: &mut HashMap<i32, Vec<Link>>,
+    functions: Vec<String>,
+    binary_path: String,
+) -> Result<()> {
+    let mut join_handles = vec![];
+    let mut tx_handles = vec![];
+
+    let path = nodes_info;
+    let file: File = File::open(&path).expect("File not found");
+    let reader = BufReader::new(file);
+    for line in reader.lines() {
+        let line = line?;
+        let parts: Vec<&str> = line.split(',').collect();
+
+        if parts.len() == 3 {
+            let node_name = parts[0].trim();
+            let pid: i32 = match parts[1].trim().parse() {
+                Ok(num) => num,
+                Err(_) => {
+                    println!("Failed to parse integer on line: {}", line);
+                    continue;
+                }
+            };
+            let veth = parts[2].trim();
+
+            let veth_index = if_nametoindex(veth).map_err(|e| e.to_string()).unwrap();
+
+            let pid_vec = u32_to_u8_array_little_endian(pid);
+            let one = u32_to_u8_array_little_endian(1);
+            skel.update(&pid_vec, &one);
+
+            hashmap_pid_to_node.insert(pid, node_name.to_string().clone());
+
+            let (tx, rx) = mpsc::channel();
+            tx_handles.push(tx);
+            //CONTAINER_TYPE_DOCKER is temporary
+            start_tracing_container(
+                pid,
+                CONTAINER_TYPE_DOCKER,
+                node_name.to_string(),
+                &mut hashmap_links,
+                functions.clone(),
+                binary_path.clone(),
+                skel,
+                rx,
+                &mut join_handles,
+            );
+            start_xdp_in_container(pid, (veth_index) as i32, CONTAINER_TYPE_DOCKER);
+        } else {
+            println!("Incorrect format on line: {}", line);
+        }
+    }
+
+    write_to_file("check.txt".to_string(), "ready".to_string()).expect("Failed to write to file");
+
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })?;
+
+    while running.load(Ordering::SeqCst) {
+        //TODO: Check for bug
+        sleep(Duration::from_secs(1));
+    }
+
+    for tx in tx_handles {
+        let send_res = tx.send(());
+
+        match send_res {
+            Ok(_) => println!("Sent successfully"),
+            Err(e) => println!("Error sending: {}", e),
+        }
+    }
+
+    for handle in join_handles {
+        let result = handle.join();
+
+        match result {
+            Ok(_) => println!("Thread finished successfully"),
+            Err(_e) => println!("Thread finished with an error"),
+        }
+    }
+
+    Ok(())
+}
+
+pub fn start_tracing_container(
+    pid: i32,
+    container_type: i32,
+    container_name: String,
+    hashmap_links: &mut HashMap<i32, Vec<Link>>,
+    functions: Vec<String>,
+    binary_path: String,
+    skel: &mut SkelEnum<'_, 'static>,
+    rx: Receiver<()>,
+    join_handles: &mut Vec<JoinHandle<()>>,
+) {
+    println!(
+        "Started tracing for pid {} with node_name {}",
+        pid, container_name
+    );
+    hashmap_links.insert(pid, vec![]);
+
+    let handle = thread::spawn(move || {
+        monitor_pid(pid, rx).expect("Monitoring failed");
+    });
+
+    join_handles.push(handle);
+
+    println!("container_type is {}", container_type);
+    let mut container_location = "".to_string();
+    if container_type == CONTAINER_TYPE_DOCKER {
+        container_location = get_overlay2_location(&container_name).unwrap();
+    }
+    if container_type == CONTAINER_TYPE_LXC {
+        container_location = get_lxc_rootfs_location(&container_name);
+    }
+
+    let binary_location = format!("{}{}", container_location, binary_path);
+
+    println!(
+        "binary_location for {} is {}",
+        container_name, binary_location
+    );
+    for (index_function, function) in functions.clone().iter().enumerate() {
+        skel.attach_uprobe(
+            index_function,
+            function,
+            binary_location.clone(),
+            pid,
+            hashmap_links,
+        );
+    }
+}
+
+pub fn trace_containers_controlled(
+    nodes_info: String,
+    skel: &mut SkelEnum<'_, 'static>,
+    hashmap_pid_to_node: &mut HashMap<i32, String>,
+    hashmap_node_to_pid: &mut HashMap<String, i32>,
+    hashmap_links: &mut HashMap<i32, Vec<Link>>,
+    functions: Vec<String>,
+    binary_path: String,
+) -> Result<()> {
+    let mut join_handles = vec![];
+    let mut xdp_pids = vec![];
+    let mut tx_handles = vec![];
+    //Loop read from a pipe to get pid+container
+    if Path::new(&nodes_info).exists() {
+        println!("Opening FIFO for reading...");
+
+        let file = File::open(nodes_info.clone()).unwrap();
+
+        println!("FIFO open in read_mode");
+        let reader = BufReader::new(file);
+
+        println!("Reader started");
+        for line in reader.lines() {
+            let line = line?;
+
+            //println!("Received:{}", line);
+
+            if line == "finished" {
+                break;
+            }
+
+            let parts: Vec<&str> = line.split(',').collect();
+
+            let node_name = parts[0].to_string();
+
+            let container_pid: i32 = parts[1].parse().unwrap();
+
+            let pid: i32 = parts[2].parse().unwrap();
+
+            let if_index: i32 = parts[3].parse().unwrap();
+
+            let container_type: i32 = parts[4].parse().unwrap();
+
+            let pid_vec = u32_to_u8_array_little_endian(pid);
+            let one = u32_to_u8_array_little_endian(1);
+
+            skel.update(&pid_vec, &one);
+
+            let node_already_traced = hashmap_node_to_pid.get(&node_name.clone()).is_some();
+
+            hashmap_pid_to_node.insert(pid, node_name.clone());
+            hashmap_node_to_pid.insert(node_name.clone(), pid);
+            let (tx, rx) = mpsc::channel();
+            tx_handles.push(tx);
+            start_tracing_container(
+                pid,
+                container_type,
+                node_name.clone(),
+                hashmap_links,
+                functions.clone(),
+                binary_path.clone(),
+                skel,
+                rx,
+                &mut join_handles,
+            );
+
+            if !node_already_traced {
+                if if_index != 0 {
+                    let pid = start_xdp_in_container(container_pid, if_index, container_type);
+                    xdp_pids.push(pid);
+                }
+            }
+        }
+    } else {
+        println!("FIFO does not exist.");
+    }
+
+    for tx in tx_handles {
+        let send_res = tx.send(());
+
+        match send_res {
+            Ok(_) => println!("Sent successfully"),
+            Err(e) => println!("Error sending: {}", e),
+        }
+    }
+
+    for handle in join_handles {
+        let result = handle.join();
+
+        match result {
+            Ok(_) => println!("Thread finished successfully"),
+            Err(_e) => println!("Thread finished with an error"),
+        }
+    }
+
+    for pid in xdp_pids {
+        let pid = Pid::from_raw(pid as i32); // Convert the PID to a Pid type
+        kill(pid, Signal::SIGKILL).expect("Failed to kill xdp_pid");
+    }
+    println!("Finished tracing containers");
+
+    Ok(())
+}
+
+pub fn trace_processes_controlled(
+    nodes_info: String,
+    skel: &mut SkelEnum<'_, 'static>,
+    hashmap_pid_to_node: &mut HashMap<i32, String>,
+    hashmap_node_to_pid: &mut HashMap<String, i32>,
+    hashmap_links: &mut HashMap<i32, Vec<Link>>,
+    functions: Vec<String>,
+    binary_path: String,
+) -> Result<()> {
+    let mut join_handles = vec![];
+    let mut tx_handles = vec![];
+    if Path::new(&nodes_info).exists() {
+        println!("Opening FIFO for reading...");
+
+        let file = File::open(nodes_info.clone()).unwrap();
+
+        println!("FIFO open in read_mode");
+        let reader = BufReader::new(file);
+
+        println!("Reader started");
+        for line in reader.lines() {
+            let line = line?;
+
+            println!("Received:{}", line);
+
+            if line == "finished" {
+                break;
+            }
+
+            let parts: Vec<&str> = line.split(',').collect();
+
+            let node_name = parts[0].to_string();
+
+            let _container_pid: i32 = parts[1].parse().unwrap();
+
+            let pid: i32 = parts[2].parse().unwrap();
+
+            let _if_index: i32 = parts[3].parse().unwrap();
+
+            let pid_vec = u32_to_u8_array_little_endian(pid);
+
+            let one = u32_to_u8_array_little_endian(1);
+
+            skel.update(&pid_vec, &one);
+
+            hashmap_pid_to_node.insert(pid, node_name.clone());
+            hashmap_node_to_pid.insert(node_name.clone(), pid);
+
+            let (tx, rx) = mpsc::channel();
+            tx_handles.push(tx);
+            start_tracing_process(
+                pid,
+                node_name.clone(),
+                hashmap_links,
+                functions.clone(),
+                binary_path.clone(),
+                skel,
+                rx,
+                &mut join_handles,
+            );
+        }
+    } else {
+        println!("FIFO does not exist.");
+    }
+
+    for tx in tx_handles {
+        let send_res = tx.send(());
+
+        match send_res {
+            Ok(_) => println!("Sent successfully"),
+            Err(e) => println!("Error sending: {}", e),
+        }
+    }
+
+    for handle in join_handles {
+        let result = handle.join();
+
+        match result {
+            Ok(_) => println!("Thread finished successfully"),
+            Err(_e) => println!("Thread finished with an error"),
+        }
+    }
+
+    Ok(())
+}
+
+pub fn end_trace(
+    pid_tree: &libbpf_rs::Map,
+    fd_to_name: &libbpf_rs::Map,
+    dup_map: &libbpf_rs::Map,
+    network_information: &libbpf_rs::Map,
+    history_delays: &libbpf_rs::Map,
+    history: &libbpf_rs::Map,
+    hashmap_pid_to_node: &mut HashMap<i32, String>,
+    functions: Vec<String>,
+) {
+    create_pid_tree(pid_tree, hashmap_pid_to_node);
+
+    let mut filenames = collect_fd_map(fd_to_name, dup_map);
+
+    collect_network_info(network_information);
+
+    collect_network_delays(history_delays);
+
+    collect_events(
+        history,
+        functions.clone(),
+        hashmap_pid_to_node,
+        &mut filenames,
+    );
+}
+
 pub fn bump_memlock_rlimit() -> Result<()> {
     let rlimit = libc::rlimit {
         rlim_cur: 128 << 20,
@@ -129,27 +698,20 @@ pub fn u32_to_u8_array_little_endian(value: i32) -> [u8; 4] {
 }
 
 pub fn vec_to_i32(bytes: Vec<u8>) -> i32 {
-    // Ensure the Vec<u8> has exactly 4 bytes
     let byte_array: [u8; 4] = bytes
         .try_into()
         .expect("Vec<u8> must have exactly 4 elements");
-
-    // Convert the [u8; 4] array into an i32
-    i32::from_le_bytes(byte_array) // Converts assuming little-endian byte order
+    i32::from_le_bytes(byte_array)
 }
 
 pub fn write_to_file(filename: String, content: String) -> std::io::Result<()> {
-    // Open a file in write mode, creating it if it doesn't exist
     let mut file = OpenOptions::new()
         .write(true)
         .append(true)
-        .create(true) // Create the file if it doesn't exist
+        .create(true)
         .open(filename)?;
-
-    // Write the content to the file
     file.write_all(content.as_bytes())?;
 
-    // Flush the buffer to ensure all data is written to the file
     file.flush()?;
 
     Ok(())
@@ -183,15 +745,16 @@ pub fn get_overlay2_location(container_name: &str) -> Result<String, io::Error> 
     Ok(response)
 }
 
+pub fn get_lxc_rootfs_location(container_name: &str) -> String {
+    let base_path = "/var/snap/lxd/common/lxd/storage-pools/default/containers";
+    let container_path = format!("{}/{}/rootfs", base_path, container_name);
+    return container_path;
+}
+
 pub fn read_names_from_file(filename: &str) -> io::Result<Vec<String>> {
-    // Open the file
     let file = File::open(filename)?;
-    // Create a buffered reader
     let reader = BufReader::new(file);
-
-    // Collect lines into a vector
     let lines: Vec<String> = reader.lines().collect::<Result<_, _>>()?;
-
     Ok(lines)
 }
 
@@ -229,11 +792,6 @@ pub fn collect_fd_map(
                         .to_str()
                         .expect("Failed to convert to rust_string")
                         .to_owned();
-
-                    // println!(
-                    //     "Pid is {} fd is {} at ts {} with name {}",
-                    //     process_fd.pid, process_fd.fd, process_fd.ts, name
-                    // );
 
                     let pid = process_fd.pid;
 
@@ -305,7 +863,6 @@ pub fn collect_fd_map(
                                     && (current_ts < filename_and_ts.timestamp)
                                 {
                                     name = filename_and_ts.name.to_string();
-                                    //println!("Found name {} at ts {} for fd {}",filename_and_ts.name,filename_and_ts.timestamp,old_fd);
                                     current_ts = filename_and_ts.timestamp;
                                 }
                             }
@@ -407,7 +964,7 @@ pub fn create_pid_tree(pids: &libbpf_rs::Map, hashmap_pid_to_node: &mut HashMap<
 pub fn collect_events(
     called_functions: &libbpf_rs::Map,
     functions: Vec<String>,
-    hashmap_pid_to_node: HashMap<i32, String>,
+    hashmap_pid_to_node: &mut HashMap<i32, String>,
     filenames: &mut HashMap<FdData, Vec<NameAtTimestamp>>,
 ) {
     let keys = called_functions.keys();
@@ -525,12 +1082,12 @@ pub fn process_uprobes_array_map(uprobes_array: &libbpf_rs::Map) {
         }
     }
 
-    File::create("/tmp/uprobe_stats.txt").expect("Failed to create file");
+    File::create("/tmp/function_stats.txt").expect("Failed to create file");
 
     for (index, value) in uprobes_counters.iter().enumerate() {
         if *value > 0 {
             write_to_file(
-                "/tmp/uprobe_stats.txt".to_string(),
+                "/tmp/function_stats.txt".to_string(),
                 format!("{},{}\n", index, value),
             )
             .expect("Failed to write to stats file");
@@ -618,13 +1175,11 @@ pub fn collect_network_delays(network_delays: &libbpf_rs::Map) {
     let keys = network_delays.keys();
 
     let mut history: Vec<&Event> = vec![];
-    let mut key_count = 0;
     for key in keys {
         let result = network_delays.lookup(&key, MapFlags::ANY);
 
         match result {
             Ok(result) => {
-                key_count += 1;
                 let event = result.unwrap().clone();
 
                 unsafe {
@@ -657,8 +1212,6 @@ pub fn collect_network_delays(network_delays: &libbpf_rs::Map) {
 }
 pub fn collect_network_info(network_info: &libbpf_rs::Map) {
     let keys = network_info.keys();
-
-    let mut key_count = 0;
     for key in keys {
         unsafe {
             let net_pair = key.as_ptr() as *const Pair;
@@ -692,7 +1245,6 @@ pub fn collect_network_info(network_info: &libbpf_rs::Map) {
                         arg4: 0,
                         extra: [0; 256],
                     };
-                    key_count += 1;
                     write_event_to_history(
                         &event,
                         "any".to_string(),
@@ -722,22 +1274,18 @@ pub fn write_event_to_history(
     node_name,event.pid,event.tid,event_type,event_name,event.ret,event.timestamp,event.arg1,event.arg2,event.arg3,event.arg4,filename)).expect("Failed to dump history");
 }
 
-pub fn start_xdp_in_container(container_pid: i32, if_index: i32) -> u32 {
+pub fn start_xdp_in_container(container_pid: i32, if_index: i32, container_type: i32) -> u32 {
     // Create the `nsenter` command
-    //println!("Starting XDP in container with PID: {} and if_index {}", container_pid,if_index);
-
     let child = Command::new("nsenter")
         .arg(format!("-t {}", container_pid)) // Specify the network namespace
         .arg("-n")
-        //.arg("/home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/xdp")
         .arg("/vagrant/rosetracer/target/release/xdp")
-        .arg(format!("{}", if_index)) // List network interfaces as an example
+        .arg(format!("{}", if_index))
+        .arg(format!("{}", container_type))
         .spawn()
         .expect("Failed to start XDP");
 
     let child_pid = child.id();
-
-    //println!("Child process ID: {}", child_pid);
 
     return child_pid;
 }
