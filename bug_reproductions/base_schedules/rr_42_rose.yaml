@@ -10,7 +10,7 @@ execution_plan:
   tracer:
     tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
-    functions_file: /home/sebastiaoamaro/phd/torefidevel/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
+    functions_file: /vagrant/function_analyzer/redisraft/functions.txt
     binary_to_examine: /redisraft.so
 nodes:
   redis1:

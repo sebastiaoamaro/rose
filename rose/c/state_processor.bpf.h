@@ -103,7 +103,7 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 			for (int i=0;i<fault_count;i++){
 				if (current_state->relevant_states[i]){
 					u64 relevant_value = current_state->relevant_states[i];
-					if (relevant_value == value && relevant_value != 0){
+					if ((value % relevant_value == 0) && relevant_value != 0){
 						process_counter(state_key,value,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
 					}
 					if(current_state->repeat && (value % relevant_value == 0)){
@@ -119,13 +119,13 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 	if(time_mode){
 		struct info_key information = {
 			pid_to_use,
-			TIME_FAULT
+			TIME_STATE
 		};
 		struct info_state *current_state;
 
 		current_state = bpf_map_lookup_elem(relevant_state_info,&information);
 		if (current_state){
-			process_counter(TIME_FAULT,0,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
+			process_counter(TIME_STATE,0,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
 		}
 	}
 
@@ -135,7 +135,7 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 	if (node_status){
 		if (*node_status == 2){
 			if(time_mode)
-				process_counter(TIME_FAULT,0,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
+				process_counter(TIME_STATE,0,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
 			else
 				process_counter(state_key,0,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
 			return 0;
@@ -252,7 +252,12 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 			int *conditions = fault->initial.fault_type_conditions;
 			if (conditions[state_condition]){
 				int condition_value = conditions[state_condition];
-				if(state_condition_value > 0){
+				int time = conditions[TIME_STATE];
+				int time_true = 1;
+				if (time){
+				    time_true = fault->initial.conditions_match[TIME_STATE];
+				}
+				if(state_condition_value > 0 && time_true){
 					if (!(fault->initial.conditions_match[state_condition])){
 						//Needed because in the above function we do not know for what fault the relevant fault is
 						if (condition_value == state_condition_value){
@@ -376,20 +381,20 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 			fault->done++;
 			if (fault_type == PROCESS_KILL){
 				bpf_printk("KILLING PID: %d\n", pid_to_target);
+				bpf_send_signal(9);
 				__u64 time = bpf_ktime_get_ns();
 				__u64 time_ms = time / 1000000;
 				fault->start_time = time_ms;
 				fault->timestamp = time;
-				bpf_send_signal(9);
 			}
 			if (fault_type == PROCESS_STOP){
 				bpf_printk("STOPPING PID: %d\n", pid_to_target);
+				bpf_send_signal(19);
 				__u64 time = bpf_ktime_get_ns();
 				__u64 time_ms = time / 1000000;
 				fault->start_time = time_ms;
 				fault->timestamp = time;
 				//TODO: Change and confirm this works
-				bpf_send_signal(19);
 			}
 
 			//Send message to user space to restart process
@@ -422,12 +427,12 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 			}
 
 		}else{
-			bpf_printk("FAULT:%d READY, TYPE: %d, PID: %d\n",fault->fault_nr,fault_type,pid_to_target);
+			bpf_printk("FAULT:%d STARTING, TYPE: %d, PID: %d\n",fault->fault_nr,fault_type,pid_to_target);
 			__u64 time = bpf_ktime_get_ns();
 			__u64 time_ms = time / 1000000;
 			fault->start_time = time_ms;
 			fault->timestamp = time;
-			bpf_printk("Changed timestamp to %llu\n",fault->timestamp);
+			//bpf_printk("Changed timestamp to %llu\n",fault->timestamp);
 			int error = bpf_map_update_elem(maps->faults_specification,&fault_to_inject,&description_of_fault,BPF_ANY);
 			if (error)
 				bpf_printk("Error of update is %d, faulttype->%d / value-> %d\n",error,fault_type,1);
@@ -439,7 +444,6 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 		}
 
 		if (fault->repeat){
-			bpf_printk("REPEAT: ON\n");
 			fault->done = 0;
 			for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
 				fault->initial.conditions_match[i] = 0;

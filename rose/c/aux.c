@@ -1,6 +1,5 @@
 #include <argp.h>
 #include <signal.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <sys/resource.h>
@@ -242,6 +241,19 @@ void bump_memlock_rlimit(void)
 
 	if (setrlimit(RLIMIT_MEMLOCK, &rlim_new)) {
 		fprintf(stderr, "Failed to increase RLIMIT_MEMLOCK limit!\n");
+		exit(1);
+	}
+}
+
+void bump_file_rlimit(void)
+{
+	struct rlimit rlim_new = {
+		.rlim_cur	= 1048576,
+		.rlim_max	= 1048576,
+	};
+
+	if (setrlimit(RLIMIT_NOFILE, &rlim_new)) {
+		fprintf(stderr, "Failed to increase RLIMIT_FILELOCK limit!\n");
 		exit(1);
 	}
 }
@@ -850,4 +862,10 @@ char **build_nsenter_args(const char *pid_str,int container_type) {
         nsenter_args[10] = NULL;
     }
     return nsenter_args;
+}
+
+long long get_nanoseconds() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }

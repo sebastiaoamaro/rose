@@ -97,6 +97,7 @@ handleCompact
 initializeSnapshotInfo
 rdbSaveSnapshotInfo
 quorum_msg_id
+handleLoadSnapshot
 raft_set_heap_functions
 raft_become_candidate
 raft_send_requestvote
@@ -156,4 +157,3 @@ raft_randomize_election_timeout
 raft_poll_entry
 raft_set_callbacks
 raft_handle_append_cfg_change
-handleLoadSnapshot

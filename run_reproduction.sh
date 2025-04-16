@@ -11,7 +11,8 @@ if [ "$#" -eq 1 ]; then
         # If checks pass, proceed
         echo "Arguments provided: $1"
         schedule=$1
-        sudo rm /tmp/containerpid
+        sudo rm /tmp/containerpid_read
+        sudo rm /tmp/containerpid_write
         sudo rm /tmp/history.txt
         sudo insmod rose/kernelmodule/rose.ko
         python3 schedule_parser.py $schedule
@@ -22,15 +23,20 @@ if [ "$#" -eq 1 ]; then
     fi
 fi
 
-#Runs all schedules in folder $1, moves histories and logs to folder $2, $3 is the script which check for bugs and moves logs to folder $2
-if [ "$#" -eq 3 ]; then
-    if [ -d "$1" ]; then
-        echo "Arguments provided: $1,$2,$3"
-        dir="$1"
+if [ "$#" -gt 4 ]; then
+    mode=$1
+    #Runs all schedules in folder
+    if [ "$1" = "folder" ]; then
+        dir=$2
+        output_folder=$3
+        oracle=$4
+        cleanup=$5
+        echo "Arguments provided: $1,$2,$3,$4"
         for file in "$dir"/*; do
             if [ -f "$file" ]; then
                 schedule=$file
-                sudo rm /tmp/containerpid
+                sudo rm /tmp/containerpid_read
+                sudo rm /tmp/containerpid_write
                 sudo rm /tmp/history.txt
                 sudo insmod rose/kernelmodule/rose.ko
                 python3 schedule_parser.py $schedule
@@ -40,9 +46,34 @@ if [ "$#" -eq 3 ]; then
                 sudo -E ./main/main
                 cd ../../
                 filename=$(basename $file)
-                sudo mv /tmp/history.txt $2/$filename.txt
-                sh $3 $filename $2
+                sudo mv /tmp/history.txt $output_folder/$filename.txt
+                sh $oracle $filename $output_folder
+                sh $cleanup
             fi
+        done
+    fi
+    #Runs schedule a set amount of times
+    if [ "$1" = "runs" ]; then
+        runs=$2
+        schedule=$3
+        output_folder=$4
+        oracle=$5
+        cleanup=$6
+        echo "Arguments provided: $1,$2,$3,$4,$5"
+        for ((i = 1; i <= $runs; i++)); do
+            sudo rm /tmp/containerpid_read
+            sudo rm /tmp/containerpid_write
+            sudo rm /tmp/history.txt
+            sudo insmod rose/kernelmodule/rose.ko
+            python3 schedule_parser.py $schedule
+            mv faultschedule.c rose/c/
+            cd rose/c/
+            make -j$(nproc)
+            sudo -E ./main/main
+            cd ../../
+            sudo mv /tmp/history.txt $output_folder/$i.txt
+            sh $oracle $i $output_folder
+            sh $cleanup
         done
     fi
 fi

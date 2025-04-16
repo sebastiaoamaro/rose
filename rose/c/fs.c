@@ -1,10 +1,1 @@
-#include <argp.h>
-#include <signal.h>
-#include <stdio.h>
-#include <time.h>
-#include <sys/resource.h>
-#include <bpf/libbpf.h>
-#include "aux.h"
-#include "fs.h"
-#include "fs.skel.h"
-#include <pthread.h>
+

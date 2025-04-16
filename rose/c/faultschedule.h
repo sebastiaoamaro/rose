@@ -22,6 +22,7 @@ typedef struct Tracer{
     char functions_file[STRING_SIZE];
     char binary_path[STRING_SIZE];
     int pipe_write_end;
+    int pipe_read_end;
     int pid;
     char tracing_type[STRING_SIZE];
 

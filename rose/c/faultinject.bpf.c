@@ -167,7 +167,7 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 		struct file *file = get_file_from_fd(fd);
 
 		if(!file){
-			bpf_printk("File not found \n");
+			//bpf_printk("File not found \n");
 			return 2;
 		}
 
@@ -292,7 +292,7 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 		struct file *file = get_file_from_fd(fd);
 
 		if(!file){
-			bpf_printk("File not found \n");
+			//bpf_printk("File not found \n");
 			return 2;
 		}
 
@@ -326,7 +326,7 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 			if (fi.size == 0){
 				return 0;
 			}
-			bpf_printk("PID:%d, READ_FILE: %s, FILE_COND: %s \n",pid,&(fi.filename[fi.offset]),file_open->filename);
+			//bpf_printk("PID:%d, READ_FILE: %s, FILE_COND: %s \n",pid,&(fi.filename[fi.offset]),file_open->filename);
 
 			if(string_contains(file_open->filename,&(fi.filename[fi.offset]),file_open->size)){
 				struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);

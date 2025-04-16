@@ -35,9 +35,7 @@ fn main() -> Result<()> {
 
         let mut functions = vec![];
         if functions_file.len() > 0 {
-            functions = auxiliary::read_names_from_file(&functions_file)
-                .unwrap()
-                .clone();
+            functions = auxiliary::parse_file_to_pairs(&functions_file).clone();
         }
 
         let binary_path = args[3].to_string();
@@ -65,9 +63,7 @@ fn main() -> Result<()> {
 
         let mut functions = vec![];
         if functions_file.len() > 0 {
-            functions = auxiliary::read_names_from_file(&functions_file)
-                .unwrap()
-                .clone();
+            functions = auxiliary::parse_file_to_pairs(&functions_file).clone();
         }
 
         let binary_path = args[3].to_string();
@@ -94,9 +90,7 @@ fn main() -> Result<()> {
 
         let mut functions = vec![];
         if functions_file.len() > 0 {
-            functions = auxiliary::read_names_from_file(&functions_file)
-                .unwrap()
-                .clone();
+            functions = auxiliary::parse_file_to_pairs(&functions_file).clone();
         }
 
         let binary_path = args[3].to_string();
@@ -124,9 +118,7 @@ fn main() -> Result<()> {
 
         let mut functions = vec![];
         if functions_file.len() > 0 {
-            functions = auxiliary::read_names_from_file(&functions_file)
-                .unwrap()
-                .clone();
+            functions = auxiliary::parse_file_to_pairs(&functions_file).clone();
         }
 
         let binary_path = args[3].to_string();

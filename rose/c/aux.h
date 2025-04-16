@@ -8,7 +8,7 @@
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 128
 #define FUNCNAME_MAX 512
-#define MAX_FUNCTIONS 16
+#define MAX_FUNCTIONS 32
 #define FILENAME_MAX_SIZE 64
 #define FAULTSSUPPORTED 26
 #define MAX_RELEVANT_FILES 256
@@ -150,7 +150,7 @@ enum stateinfo{
     // VFS_FSTATAT_SPECIFIC = 18,
     NEWFSTATAT_FILE_STATE = 19,
     OPENAT_SPECIFIC = 20,
-    TIME_FAULT = 21,
+    TIME_STATE = 21,
     FDATASYNC_STATE = 24,
     FDATASYNCFILE_STATE = 25,
     FSYNC_STATE = 27,
@@ -187,7 +187,6 @@ struct process_fault_args{
     char* name;
 };
 
-
 struct aux_bpf* start_aux_maps();
 int get_interface_index(char*);
 void build_fault(struct fault* ,int,int,int,int,int,int,char**,int,char *);
@@ -211,6 +210,8 @@ long get_children_pids(pid_t pid);
 void kill_child_processes(pid_t parent_pid);
 int get_jvmso_path(char *path,int pid);
 void bump_memlock_rlimit(void);
+void bump_file_rlimit(void);
 pid_t find_host_pid_for_container_pid(pid_t target_pid);
 char **build_nsenter_args(const char *pid_str,int container_type);
+long long get_nanoseconds();
 #endif /* __AUX_H */

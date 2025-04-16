@@ -1,7 +1,8 @@
 execution_plan:
-  maximum_time: 600
+  maximum_time: 120
   setup:
     script: /vagrant/schedules/reproducedbugs/redpanda/lxc/scripts/start_redpanda_cluster.sh
+    duration: 60
   workload:
     script: /vagrant/schedules/reproducedbugs/redpanda/lxc/scripts/signal_jepsen_start.sh
     wait_workload: true
@@ -11,80 +12,42 @@ execution_plan:
     tracer_location: /vagrant/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
     binary_to_examine: /opt/redpanda/libexec/redpanda
+    functions_file: /vagrant/function_analyzer/redpanda/functions.txt
     tracing_type: production_trace,container_controlled
 
 nodes:
   n1:
     container: true
     container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
     pid_file: /var/lib/redpanda/data/pid.lock
     script: /start_redpanda.sh
   n2:
     container: true
     container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
     pid_file: /var/lib/redpanda/data/pid.lock
     script: /start_redpanda.sh
   n3:
     container: true
     container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
     pid_file: /var/lib/redpanda/data/pid.lock
     script: /start_redpanda.sh
   n4:
     container: true
     container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
     pid_file: /var/lib/redpanda/data/pid.lock
     script: /start_redpanda.sh
   n5:
     container: true
     container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
     pid_file: /var/lib/redpanda/data/pid.lock
     script: /start_redpanda.sh
 
 faults:
-  process_kill1:
-    type: process_kill
-    target: n1
-    traced: n1
-    begin_conditions:
-      - condition0:
-          type: time
-          time: 10000
-  process_kill2:
-    type: process_kill
-    target: n2
-    traced: n2
-    begin_conditions:
-      - condition0:
-          type: time
-          time: 30000
-
-  process_kill3:
-    type: process_kill
-    target: n3
-    traced: n3
-    begin_conditions:
-      - condition0:
-          type: time
-          time: 50000
-
-  process_kill4:
-    type: process_kill
-    target: n4
-    traced: n4
-    begin_conditions:
-      - condition0:
-          type: time
-          time: 70000
-
-  process_kill5:
-    type: process_kill
-    target: n5
-    traced: n5
-    begin_conditions:
-      - condition0:
-          type: time
-          time: 90000
-
   process_pause1:
     type: process_pause
     target: n1
@@ -93,7 +56,7 @@ faults:
     begin_conditions:
       - condition0:
           type: time
-          time: 60000
+          time: 10000
   process_pause2:
     type: process_pause
     target: n2
@@ -102,8 +65,7 @@ faults:
     begin_conditions:
       - condition0:
           type: time
-          time: 80000
-
+          time: 20000
   process_pause3:
     type: process_pause
     target: n3
@@ -112,7 +74,7 @@ faults:
     begin_conditions:
       - condition0:
           type: time
-          time: 100000
+          time: 30000
 
   process_pause4:
     type: process_pause
@@ -122,7 +84,7 @@ faults:
     begin_conditions:
       - condition0:
           type: time
-          time: 130000
+          time: 40000
 
   process_pause5:
     type: process_pause
@@ -132,4 +94,4 @@ faults:
     begin_conditions:
       - condition0:
           type: time
-          time: 140000
+          time: 50000

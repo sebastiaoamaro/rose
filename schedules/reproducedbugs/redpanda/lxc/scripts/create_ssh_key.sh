@@ -2,6 +2,7 @@
 
 # Directory and key file paths
 SSH_DIR="/root/.ssh"
+mkdir $SSH_DIR
 PRIVATE_KEY="$SSH_DIR/id_rsa"
 PUBLIC_KEY="$SSH_DIR/id_rsa.pub"
 

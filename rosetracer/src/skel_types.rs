@@ -34,6 +34,7 @@ pub trait SkelAttachUprobe {
         &mut self,
         index_function: usize,
         function: &String,
+        function_offset: usize,
         binary_path: String,
         pid: i32,
         hashmap_links: &mut HashMap<i32, Vec<Link>>,
@@ -45,7 +46,7 @@ pub trait SkelEndTraceTrait {
         &mut self,
         skel_maps: &mut PinMapsSkel,
         hashmap_pid_to_node: &mut HashMap<i32, String>,
-        functions: Vec<String>,
+        functions: Vec<(String, usize)>,
     );
 }
 
@@ -95,30 +96,30 @@ impl<'a, 'obj> SkelAttachUprobe for SkelEnum<'a, 'obj> {
         &mut self,
         index_function: usize,
         function: &String,
+        function_offset: usize,
         binary_path: String,
         pid: i32,
         hashmap_links: &mut HashMap<i32, Vec<Link>>,
     ) {
         match self {
             SkelEnum::Production(skel_instance) => {
+                //libbpf-rs is broken and miscalculates offsets
                 let opts = UprobeOpts {
                     cookie: index_function as u64,
                     retprobe: false,
-                    func_name: Some(function.clone()),
                     ..Default::default()
                 };
-
                 let uprobe = skel_instance.progs.handle_uprobe.attach_uprobe_with_opts(
                     pid,
                     binary_path.clone(),
-                    0,
+                    function_offset,
                     opts,
                 );
 
                 match uprobe {
                     Ok(uprobe_injected) => {
                         hashmap_links.get_mut(&pid).unwrap().push(uprobe_injected);
-                        println!("Injected in pos {} in pid {}", index_function, pid);
+                        //println!("Injected in pos {} in pid {}", index_function, pid);
                     }
                     Err(e) => {
                         println!("Failed:{}, err:{}", function.clone(), e);
@@ -126,17 +127,16 @@ impl<'a, 'obj> SkelAttachUprobe for SkelEnum<'a, 'obj> {
                 }
             }
             SkelEnum::Tracer(skel_instance) => {
+                //libbpf-rs is broken and miscalculates offsets
                 let opts = UprobeOpts {
                     cookie: index_function as u64,
                     retprobe: false,
-                    func_name: Some(function.clone()),
                     ..Default::default()
                 };
-
                 let uprobe = skel_instance.progs.handle_uprobe.attach_uprobe_with_opts(
                     pid,
                     binary_path.clone(),
-                    0,
+                    function_offset,
                     opts,
                 );
 
@@ -151,16 +151,16 @@ impl<'a, 'obj> SkelAttachUprobe for SkelEnum<'a, 'obj> {
                 }
             }
             SkelEnum::RwTracer(skel_instance) => {
+                //libbpf-rs is broken and miscalculates offsets
                 let opts = UprobeOpts {
                     cookie: index_function as u64,
                     retprobe: false,
-                    func_name: Some(function.clone()),
                     ..Default::default()
                 };
                 let uprobe = skel_instance.progs.handle_uprobe.attach_uprobe_with_opts(
                     pid,
                     binary_path.clone(),
-                    0,
+                    function_offset,
                     opts,
                 );
                 match uprobe {
@@ -175,28 +175,15 @@ impl<'a, 'obj> SkelAttachUprobe for SkelEnum<'a, 'obj> {
             }
             SkelEnum::StatisticsTracer(skel_instance) => {
                 //libbpf-rs is broken and miscalculates offsets
-                // let opts = UprobeOpts {
-                //     cookie: index_function as u64,
-                //     retprobe: false,
-                //     func_name: function.clone(),
-                //     ..Default::default()
-                // };
-                // let uprobe = skel_instance.progs.handle_uprobe.attach_uprobe_with_opts(
-                //     pid,
-                //     binary_path.clone(),
-                //     0,
-                //     opts,
-                // );
                 let opts = UprobeOpts {
                     cookie: index_function as u64,
                     retprobe: false,
                     ..Default::default()
                 };
-                let offset: usize = function.parse().unwrap();
                 let uprobe = skel_instance.progs.handle_uprobe.attach_uprobe_with_opts(
                     pid,
                     binary_path.clone(),
-                    offset,
+                    function_offset,
                     opts,
                 );
                 match uprobe {
@@ -207,11 +194,11 @@ impl<'a, 'obj> SkelAttachUprobe for SkelEnum<'a, 'obj> {
                     Err(e) => {
                         println!(
                             "Failed to inject uprobe in pos: {} offet: {}: pid:{}, error:{}",
-                            index_function, offset, pid, e
+                            index_function, function_offset, pid, e
                         );
                         write_to_file(
                             "/tmp/failed_probes.txt".to_string(),
-                            format!("{},{}\n", offset.clone(), index_function,),
+                            format!("{},{}\n", function.clone(), index_function,),
                         )
                         .expect("Failed to write to failed_probes.txt");
                     }
@@ -225,7 +212,7 @@ impl<'a, 'obj> SkelEndTraceTrait for SkelEnum<'a, 'obj> {
         &mut self,
         skel_maps: &mut PinMapsSkel,
         hashmap_pid_to_node: &mut HashMap<i32, String>,
-        functions: Vec<String>,
+        functions: Vec<(String, usize)>,
     ) {
         match self {
             SkelEnum::Production(skel_instance) => {
@@ -237,7 +224,7 @@ impl<'a, 'obj> SkelEndTraceTrait for SkelEnum<'a, 'obj> {
                     &mut skel_maps.maps.history_delays,
                     &mut skel_instance.maps.history,
                     hashmap_pid_to_node,
-                    functions,
+                    &functions,
                 );
             }
             SkelEnum::Tracer(skel_instance) => {
@@ -249,7 +236,7 @@ impl<'a, 'obj> SkelEndTraceTrait for SkelEnum<'a, 'obj> {
                     &mut skel_maps.maps.history_delays,
                     &mut skel_instance.maps.history,
                     hashmap_pid_to_node,
-                    functions,
+                    &functions,
                 );
             }
             SkelEnum::RwTracer(skel_instance) => {
@@ -261,7 +248,7 @@ impl<'a, 'obj> SkelEndTraceTrait for SkelEnum<'a, 'obj> {
                     &mut skel_maps.maps.history_delays,
                     &mut skel_instance.maps.history,
                     hashmap_pid_to_node,
-                    functions,
+                    &functions,
                 );
             }
             SkelEnum::StatisticsTracer(skel_instance) => {
@@ -273,9 +260,9 @@ impl<'a, 'obj> SkelEndTraceTrait for SkelEnum<'a, 'obj> {
                     &mut skel_maps.maps.history_delays,
                     &mut skel_instance.maps.history,
                     hashmap_pid_to_node,
-                    functions,
+                    &functions,
                 );
-                process_uprobes_array_map(&mut skel_instance.maps.uprobes_counters);
+                process_uprobes_array_map(&mut skel_instance.maps.uprobes_counters, &functions);
             }
         }
     }

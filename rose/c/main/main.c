@@ -32,8 +32,6 @@
 #include <popen.h>
 #include <faultschedule.h>
 #include <aux.h>
-
-
 void process_counter(const struct event *event,int stateinfo);
 int process_tc(const struct event*);
 void process_fs(const struct event*);
@@ -63,9 +61,10 @@ int get_node_nr_from_pid(int pid);
 void reinject_uprobes(int node_nr);
 void send_info_to_tracer();
 void send_node_and_pid_to_tracer(int container_pid,int container_type, int pid, char* node_name,int if_index);
-void create_tracer_pipe();
+void create_pipes();
 void start_tracer();
 void open_tracer_pipe();
+void write_start_event();
 
 const char *argp_program_version = "Tool for FI 0.01";
 const char *argp_program_bug_address = "sebastiao.amaro@ŧecnico.ulisboa.pt";
@@ -76,8 +75,6 @@ const char argp_program_doc[] = "eBPF Fault Injection Tool.\n"
 
 //TODO: remove non_used rename to maps
 static struct constants {
-	int verbose;
-	long min_duration_ms;
 	int faulttype_fd;
 	int relevant_state_info_fd;
 	int blocked_ips;
@@ -91,7 +88,6 @@ static struct constants {
 	int faultsverbose;
 	int target_pid;
 	int maintainpid;
-	int time;
 	int time_map_fd;
 	int timemode;
 	int auxiliary_info_map_fd;
@@ -102,11 +98,7 @@ static struct constants {
 
 } constants;
 
-struct process_args {
-	int *pid;
-	FILE* fp;
-};
-
+//Main structs for reproduction
 static fault* faults;
 static node* nodes;
 static execution_plan* plan;
@@ -120,43 +112,24 @@ int *majority;
 
 static pthread_t tracer_output;
 
-
-static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
-{
-	if (level == LIBBPF_DEBUG && !constants.verbose)
-		return 0;
-	return vfprintf(stderr, format, args);
-}
-
-static void bump_file_rlimit(void)
-{
-	struct rlimit rlim_new = {
-		.rlim_cur	= 1048576,
-		.rlim_max	= 1048576,
-	};
-
-	if (setrlimit(RLIMIT_NOFILE, &rlim_new)) {
-		fprintf(stderr, "Failed to increase RLIMIT_FILELOCK limit!\n");
-		exit(1);
-	}
-}
-
-//Variable to exit
+//Handle exits
 static volatile bool exiting = false;
-
 static void sig_handler(int sig)
 {
 	exiting = true;
 }
 
+//Handles output of created processes
+struct process_args {
+	int *pid;
+	FILE* fp;
+};
 
 int main()
 {
     print_block("ROSE STARTED");
 	bump_memlock_rlimit();
 	bump_file_rlimit();
-	/* Set up libbpf errors and debug info callback */
-	libbpf_set_print(libbpf_print_fn);
 
 	/* Cleaner handling of Ctrl-C */
 	signal(SIGINT, sig_handler);
@@ -169,41 +142,39 @@ int main()
 	}
 
 	get_fd_of_maps(aux_bpf);
-	deployment_tracer = build_tracer();
 
+	//Start ROSEtracer
+	deployment_tracer = build_tracer();
 	if (deployment_tracer){
-		create_tracer_pipe();
+		create_pipes();
 		print_block("Started tracer");
 		start_tracer();
 		open_tracer_pipe();
 	}
 
-
+	//Build structs in fault_schedule.c
 	plan = build_execution_plan();
-
 	run_setup();
-
 	nodes = build_nodes();
 	faults = build_faults_extra();
 	NODE_COUNT = get_node_count();
 	QUORUM = (NODE_COUNT/2)+1;
 	FAULT_COUNT = get_fault_count();
+	majority = (int *)malloc(QUORUM*sizeof(int));
 
+	//Setup deployment nodes
 	print_fault_schedule(plan,nodes,faults,deployment_tracer);
 	print_block("SETTING UP NODES");
 	collect_container_pids();
-
 	setup_node_scripts();
 	collect_container_processes();
 	setup_begin_conditions();
-
+	send_info_to_tracer();
 	add_faults_to_bpf();
-
-	majority = (int *)malloc(QUORUM*sizeof(int));
-
 	choose_leader();
 	setup_tc_progs();
 
+	//Start eBPF prog
 	struct faultinject_bpf* faultinject_bpf;
 
 	faultinject_bpf = fault_inject(FAULT_COUNT,constants.timemode);
@@ -217,18 +188,18 @@ int main()
 	struct ring_buffer *rb = NULL;
 	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
 
-	constants.time=0;
-
 	//If they are containers with start before the workload
 	start_container_nodes_scripts();
-	start_nodes_scripts();
+
 	if(plan->workload.wait_time > 0 ){
 		printf("SLEEPING: %d, BEFORE WORKLOAD\n",plan->workload.wait_time);
 		sleep(plan->workload.wait_time);
 	}
 	pthread_t thread_id;
 	pthread_create(&thread_id, NULL, (void *)count_time, NULL);
+	write_start_event();
 
+	start_nodes_scripts();
 	start_workload();
 
 	while (!exiting) {
@@ -275,19 +246,18 @@ int main()
 	if(!rb)
 		ring_buffer__free(rb);
 
-
-	for (int i = 0;i<FAULT_COUNT;i++){
-		for (int j=0;j<MAX_FUNCTIONS;j++){
-			if(faults[i].list_of_functions[j] != NULL){
-				uprobes_bpf__destroy(faults[i].list_of_functions[j]);
-			}
-		}
-	}
-
-	for (int i = 0; i< NODE_COUNT;i++){
-		if(nodes[i].leader_probe != NULL)
-			uprobes_bpf__destroy(nodes[i].leader_probe);
-	}
+	//TODO: Refactor
+	// for (int i = 0;i<FAULT_COUNT;i++){
+	// 	for (int j=0;j<MAX_FUNCTIONS;j++){
+	// 		if(faults[i].list_of_functions[j] != NULL){
+	// 			uprobes_bpf__destroy(faults[i].list_of_functions[j]);
+	// 		}
+	// 	}
+	// }
+	// for (int i = 0; i< NODE_COUNT;i++){
+	// 	if(nodes[i].leader_probe != NULL)
+	// 		uprobes_bpf__destroy(nodes[i].leader_probe);
+	// }
 
 	if (plan){
 		if(strcmp(plan->cleanup.script,"")){
@@ -301,8 +271,8 @@ int main()
 		}
 	}
 
+	//Add ROSE faults to ROSEtracer and close it
 	if(deployment_tracer){
-
 		int key;
 		struct simplified_fault value = {};
 		int next_key;
@@ -320,7 +290,6 @@ int main()
 				printf("Did not find elem in count_time errno is %d \n",errno);
 			}
 			if (fault.timestamp > 0){
-			    printf("Wrote Fault to history\n");
 				int fault_nr = fault.fault_nr;
 				int target = fault.target;
 				printf("Fault name is %s \n",faults[fault_nr].name);
@@ -334,7 +303,6 @@ int main()
 		}
 		fclose(fptr);
 		char message[] = "finished\n";
-
 		if (write(deployment_tracer->pipe_write_end, message, strlen(message)+1) == -1) {  // +1 to include the null terminator
         perror("write");
         exit(EXIT_FAILURE);
@@ -348,16 +316,13 @@ int main()
 	for(int i =0; i< NODE_COUNT;i++){
 
 		if(strlen(nodes[i].script)){
-			//printf("Going to kill script %s with pid %d \n",nodes[i].script,nodes[i].current_pid);
 			kill(nodes[i].current_pid,SIGKILL);
 		}
 
 		if(nodes[i].pid_tc_in > 0){
-			//printf("Going to kill pid_tc_in %d \n",nodes[i].pid_tc_in);
 			kill(nodes[i].pid_tc_in,SIGINT);
 		}
 		if(nodes[i].pid_tc_out > 0){
-			//printf("Going to kill pid_tc_out %d \n",nodes[i].pid_tc_out);
 			kill(nodes[i].pid_tc_out,SIGINT);
 		}
 	}
@@ -369,72 +334,97 @@ int main()
 }
 
 void start_tracer(){
-
-
 	char *args_script[6];
 
-	char *env_script[1];
-
 	args_script[0] = (char*)malloc(STRING_SIZE*sizeof(char));
-
 	strcpy(args_script[0],deployment_tracer->tracer_location);
-
 	args_script[1] = (char*)malloc(STRING_SIZE*sizeof(char));
-
 	strcpy(args_script[1],deployment_tracer->tracing_type);
-
 	args_script[2] = (char*)malloc(STRING_SIZE*sizeof(char));
-
 	strcpy(args_script[2],deployment_tracer->functions_file);
-
 	args_script[3] = (char*)malloc(STRING_SIZE*sizeof(char));
-
 	strcpy(args_script[3],deployment_tracer->binary_path);
-
 	args_script[4] = (char*)malloc(STRING_SIZE*sizeof(char));
-
 	strcpy(args_script[4],deployment_tracer->pipe_location);
-
 	args_script[5]=(char*)malloc(1*sizeof(char));
-
 	args_script[5]= NULL;
 
+	char *env_script[1];
 	env_script[0]=(char*)malloc(1*sizeof(char));
-
 	env_script[0]= NULL;
 
 	FILE *fp = custom_popen(deployment_tracer->tracer_location,args_script,env_script,'r',&deployment_tracer->pid,0);
 
 	struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
-
 	args->fp= fp;
 	args->pid = deployment_tracer->pid;
 	pthread_create(&tracer_output, NULL, (void *)print_output, (void*)args);
-
 	sleep(1);
-
 	send_signal(deployment_tracer->pid,SIGUSR1,"tracer");
 
 }
 
-void create_tracer_pipe(){
-	// Step 1: Create the FIFO with read/write permissions (0666)
-	if (mkfifo(deployment_tracer->pipe_location, 0666) == -1) {
-			perror("mkfifo");
-			exit(EXIT_FAILURE);
-	}
+void create_pipes(){
+    char write_pipe[FILENAME_MAX_SIZE];
+    char read_pipe[FILENAME_MAX_SIZE];
+
+    if (snprintf(write_pipe, sizeof(write_pipe), "%s_write", deployment_tracer->pipe_location) < 0) {
+        perror("snprintf for write_pipe");
+        exit(EXIT_FAILURE);
+    }
+    if (snprintf(read_pipe, sizeof(read_pipe), "%s_read", deployment_tracer->pipe_location) < 0) {
+        perror("snprintf for read_pipe");
+        exit(EXIT_FAILURE);
+    }
+    if (mkfifo(write_pipe, 0666) == -1) {
+        perror("mkfifo (write pipe)");
+        exit(EXIT_FAILURE);
+    }
+    if (mkfifo(read_pipe, 0666) == -1) {
+        perror("mkfifo (read pipe)");
+        exit(EXIT_FAILURE);
+    }
+    printf("Created FIFO for write: %s\n", write_pipe);
+    printf("Created FIFO for read: %s\n", read_pipe);
 }
 void open_tracer_pipe(){
-
 	int fd;
-
+    char write_pipe[FILENAME_MAX_SIZE];
+    char read_pipe[FILENAME_MAX_SIZE];
 	// Step 2: Open the FIFO in write-only mode
-	fd = open(deployment_tracer->pipe_location, O_WRONLY);
+    if (snprintf(write_pipe, sizeof(write_pipe), "%s_write", deployment_tracer->pipe_location) < 0) {
+        perror("snprintf for write_pipe");
+        exit(EXIT_FAILURE);
+    }
+    if (snprintf(read_pipe, sizeof(read_pipe), "%s_read", deployment_tracer->pipe_location) < 0) {
+        perror("snprintf for read_pipe");
+        exit(EXIT_FAILURE);
+    }
+
+	fd = open(write_pipe, O_WRONLY);
 	if (fd == -1) {
-			perror("open");
-			exit(EXIT_FAILURE);
+	    printf("Failed to open FIFO for write: %s\n", write_pipe);
+		perror("open");
+		exit(EXIT_FAILURE);
 	}
 	deployment_tracer->pipe_write_end = fd;
+
+	fd = open(read_pipe, O_RDONLY);
+	if (fd == -1) {
+	    printf("Failed to open FIFO for read: %s\n", read_pipe);
+		perror("open");
+		exit(EXIT_FAILURE);
+	}
+	deployment_tracer->pipe_read_end = fd;
+
+}
+
+void write_start_event() {
+    FILE *fptr;
+    fptr = fopen("/tmp/history.txt", "a");
+    long long ts = get_nanoseconds();
+    fprintf(fptr,"Node:ROSE,Pid:0,Tid:0,event_type:start,event_name:start,ret:0,time:%llu,arg1:0,arg2:0,arg3:0,arg4:0,arg5:na\n",ts);
+    fclose(fptr);
 
 }
 
@@ -503,7 +493,8 @@ void run_setup(){
 
 	//Sleep while we wait for setup to start
 	if(plan->setup.duration > 0){
-		sleep(plan->setup.duration);
+	   printf("WAITING FOR SETUP TO START \n");
+	   sleep(plan->setup.duration);
 	}
 }
 
@@ -635,14 +626,14 @@ void collect_container_processes(){
                 printf("HOST PID IS %d\n",host_pid);
                 nodes[i].pid = host_pid;
                 nodes[i].current_pid = host_pid;
+                send_signal(host_pid,SIGSTOP,nodes[i].name);
+                int one = 1;
+			    bpf_map_update_elem(constants.pids, &nodes[i].current_pid, &one, BPF_ANY);
                 fclose(file);
                 continue;
             }
 		}
 	}
-
-	if (deployment_tracer)
-		send_info_to_tracer();
 }
 
 
@@ -662,15 +653,21 @@ void send_info_to_tracer(){
 
 void send_node_and_pid_to_tracer(int container_pid,int container_type,int pid, char* node_name,int if_index){
 		char message[256];
-
 		snprintf(message,sizeof(message),"%s,%d,%d,%d,%d\n",node_name,container_pid,pid,if_index,container_type);
-
 		if (write(deployment_tracer->pipe_write_end, message, strlen(message)) == -1) {  // +1 to include the null terminator
-        perror("write");
-        close(deployment_tracer->pipe_write_end);
-        exit(EXIT_FAILURE);
-    }
+            perror("write");
+            close(deployment_tracer->pipe_write_end);
+            exit(EXIT_FAILURE);
+        }
 
+		//Here we wait until ROSEtracer created the structs until we proceed
+        char buffer[8];
+        ssize_t bytesRead = read(deployment_tracer->pipe_read_end, buffer, sizeof(buffer) - 1);
+        if (bytesRead == -1) {
+            perror("read");
+            close(deployment_tracer->pipe_read_end);
+            exit(EXIT_FAILURE);
+        }
     printf("ROSE->TRACER: %s\n", message);
 }
 
@@ -793,7 +790,6 @@ FILE* start_target_process_in_container(int node_number,int *pid){
 	// Prepare the nsenter command and arguments
 	char *pid_str = malloc(16);
 	snprintf(pid_str, 16, "%d", nodes[node_number].container_pid);
-
 	char *env_script[STRING_SIZE];
 
 	// Initial size of the argument list
@@ -820,38 +816,25 @@ FILE* start_target_process_in_container(int node_number,int *pid){
 
 	while( token != NULL ) {
 		index++;
-
 		nsenter_args[index]=token;
-
-		//printf("Added %s to arg of %s",nsenter_args[index],nodes[node_number].name);
-
 		token = strtok(NULL," ");
    	}
 	index++;
 	nsenter_args[index] = NULL;
-
 
 	//Create ENV variables
 	char *token_env = strtok(nodes[node_number].env," ");
 	env_script[0]=(char*)malloc(STRING_SIZE*sizeof(char));
 
 	int pos_env = 1;
-
 	if(token_env != NULL){
 		strcpy(env_script[0],token_env);
 		pos_env = 0;
 	}
-
 	token_env = strtok(NULL," ");
-
 	while(token_env != NULL ) {
-
-
 		env_script[pos_env]=(char*)malloc(STRING_SIZE*sizeof(char));
 		strcpy(env_script[pos_env],token_env);
-
-		//printf("Added %s to env of %s",env_script[pos_env],nodes[node_number].name);
-
 		token_env = strtok(NULL," ");
 		pos_env++;
    	}
@@ -865,25 +848,18 @@ FILE* start_target_process_in_container(int node_number,int *pid){
 		nodes[node_number].running = 1;
 		nodes[node_number].args = nsenter_args;
 	}
-
 	if (!fp)
     {
         perror("popen failed:");
         exit(1);
     }
 
-
-
 	printf("Started process in node:%s with pid %d and with script:%s\n",nodes[node_number].name,*pid,nodes[node_number].script);
-
 	pthread_t thread_id;
-
 	struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
-
 	args->fp= fp;
 	args->pid = pid;
 	pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
-
 	return fp;
 }
 
@@ -891,17 +867,14 @@ FILE* start_target_process_in_container(int node_number,int *pid){
 void setup_begin_conditions(){
 
 	print_block("Adding relevant conditions, file_names and uprobes to kernel");
-
+	int user_func_cond_nr = 0;
 	for(int i = 0; i < FAULT_COUNT; i++){
-
-		int user_func_cond_nr = 0;
 		int has_time_condition = 0;
 		for(int j = 0; j <faults[i].relevant_conditions;j++){
 			int type = faults[i].fault_conditions_begin[j].type;
 			int traced = faults[i].traced;
 			int pid = nodes[traced].pid;
 			int error;
-
 
 			if(type == SYSCALL){
 
@@ -974,15 +947,15 @@ void setup_begin_conditions(){
 			}
 			if(type == TIME){
 				int time = faults[i].fault_conditions_begin[j].condition.time;
-				faults[i].initial.fault_type_conditions[TIME_FAULT] = time;
+				faults[i].initial.fault_type_conditions[TIME_STATE] = time;
 				has_time_condition = time;
 
 				if (faults[i].target == -2){
 					for (int i = 0; i < NODE_COUNT; i++){
-						insert_relevant_condition_in_ebpf(i,nodes[i].current_pid,TIME_FAULT,1);
+						insert_relevant_condition_in_ebpf(i,nodes[i].current_pid,TIME_STATE,1);
 					}
 				}else{
-					insert_relevant_condition_in_ebpf(i,pid,TIME_FAULT,1);
+					insert_relevant_condition_in_ebpf(i,pid,TIME_STATE,1);
 				}
 			}
 		}
@@ -1056,8 +1029,7 @@ void insert_relevant_condition_in_ebpf(int fault_nr,int pid,int cond_nr,int call
 
 	new_information_state->repeat = faults[fault_nr].repeat;
 
-	if (constants.faultsverbose)
-		printf("FAULT %d state info pos[%d] is %d conditions match is [%d] with pid %d \n",fault_nr,cond_nr,new_information_state->relevant_states[fault_nr],faults[fault_nr].initial.conditions_match[fault_nr],pid);
+	printf("FAULT %d state info pos[%d] is %d conditions match is [%d] with pid %d \n",fault_nr,cond_nr,new_information_state->relevant_states[fault_nr],faults[fault_nr].initial.conditions_match[fault_nr],pid);
 	struct info_state *old_information_state = (struct info_state*)malloc(sizeof(struct info_state));
 
 	old_information_state->current_value = 0;
@@ -1130,8 +1102,8 @@ void add_faults_to_bpf(){
 				printf("Fault %d has condition user_function name: %s id:%d with call_count %d \n",i,user_function.symbol,cond_nr,user_function.call_count);
 			}
 			if(type == TIME){
-				new_fault.initial.fault_type_conditions[TIME_FAULT] = faults[i].fault_conditions_begin[j].condition.time;
-				printf("Fault %d has condition time %d with time %d \n",i,TIME_FAULT,faults[i].fault_conditions_begin[j].condition.time);
+				new_fault.initial.fault_type_conditions[TIME_STATE] = faults[i].fault_conditions_begin[j].condition.time;
+				printf("Fault %d has condition time %d with time %d \n",i,TIME_STATE,faults[i].fault_conditions_begin[j].condition.time);
 			}
 		}
 
@@ -1337,15 +1309,16 @@ int setup_tc_progs(){
 
 void count_time(){
 
+    int time=0;
 	int maximum_time = 1000 * get_maximum_time();
 	printf("COUNT_TIME: STARTED %d \n",maximum_time);
 	while(1){
 		sleep_for_ms(10);
-		constants.time += 10;
+		time += 10;
 
 		for (int i = 0; i< FAULT_COUNT;i++){
-			int fault_time = faults[i].initial.fault_type_conditions[TIME_FAULT];
-			if (constants.time >= fault_time && faults[i].initial.fault_type_conditions[TIME_FAULT]){
+			int fault_time = faults[i].initial.fault_type_conditions[TIME_STATE];
+			if (time >= fault_time && faults[i].initial.fault_type_conditions[TIME_STATE]){
 
 				struct simplified_fault fault;
 				int err_lookup;
@@ -1357,12 +1330,12 @@ void count_time(){
 				if (fault.done){
 					continue;
 				}
-				if (fault.initial.conditions_match[TIME_FAULT] > 0){
+				if (fault.initial.conditions_match[TIME_STATE] > 0){
 					continue;
 				}
-				//printf("Time value property is %d \n",fault.initial.conditions_match[TIME_FAULT]);
+				//printf("Time value property is %d \n",fault.initial.conditions_match[TIME_STATE]);
 				printf("TIME:TRUE, FAULT:%d \n",fault.fault_nr);
-				fault.initial.conditions_match[TIME_FAULT] = 1;
+				fault.initial.conditions_match[TIME_STATE] = 1;
 				fault.run+=1;
 				int error = bpf_map_update_elem(constants.bpf_map_fault_fd,&i,&fault,BPF_ANY);
 				if(error)
@@ -1392,7 +1365,7 @@ void count_time(){
 		}
 
 
-		if (constants.time >= maximum_time){
+		if (time >= maximum_time){
 			printf("ROSE: MAXIMUM TIME REACHED \n");
 			exiting = true;
 			break;
@@ -1526,26 +1499,16 @@ void choose_leader(){
 
 void restart_process(void* args){
 
-	//int pid = ((struct process_fault_args*)args)->pid;
-
 	int duration = ((struct process_fault_args*)args)->duration;
-
 	int node_to_restart = ((struct process_fault_args*)args)->node_to_restart;
-
 	node *node = &nodes[node_to_restart];
-
-	//send_signal(pid,SIGKILL,node->name);
-
 	if (duration){
-		printf("Sleeping for %d \n",duration/1000);
+		printf("SLEEPING FOR  %d BEFORE START \n",duration/1000);
 		sleep(duration/1000);
 	}
-
-
 	int current_pid_pre_restart = node->current_pid;
-
 	int temp_pid;
-	printf("Starting node %s \n",node->name);
+	printf("STARTING NODE %s \n",node->name);
 	if(node->container){
 		start_target_process_in_container(node_to_restart,&temp_pid);
 		retrieve_new_pid_container(node_to_restart,temp_pid);
@@ -1555,14 +1518,12 @@ void restart_process(void* args){
 		start_target_process(node_to_restart,&temp_pid);
 		node->current_pid = temp_pid;
 	}
-
-	if (node->container && deployment_tracer){
-		send_node_and_pid_to_tracer(node->container_pid,node->container_type,node->current_pid,node->name,node->if_index);
-	}
 	//Sometimes this is to fast and the process did not yet start
 	update_node_pid_ebpf(node_to_restart,node->current_pid,node->pid,current_pid_pre_restart);
 	reinject_uprobes(node_to_restart);
-
+	if (node->container && deployment_tracer){
+		send_node_and_pid_to_tracer(node->container_pid,node->container_type,node->current_pid,node->name,node->if_index);
+	}
 	if(node->container)
 		send_signal(node->current_pid,SIGCONT,node->name);
 	else{
@@ -1572,13 +1533,11 @@ void restart_process(void* args){
 
 void retrieve_new_pid_container(int node_nr,int nsenter_pid){
 	int child_pid = get_children_pids(nsenter_pid);
-
 	while(!child_pid){
 		child_pid = get_children_pids(nsenter_pid);
 	}
 
 	int script_pid = get_children_pids(child_pid);
-
 	while(!script_pid){
 		script_pid = get_children_pids(child_pid);
 	}
@@ -1588,7 +1547,6 @@ void retrieve_new_pid_container(int node_nr,int nsenter_pid){
 
 //new_pid is the pid of the new script, boot_pid the pid that information is based in the maps, old pid is the pid pre restart
 void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
-
 	printf("PID TRANSLATED: NEW: %d, OLD: %d\n",new_pid,boot_pid);
 	int error = bpf_map_update_elem(constants.nodes_translator_map_fd,&new_pid,&boot_pid,BPF_ANY);
 	if(error){
@@ -1596,7 +1554,6 @@ void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
 	}
 
 	int zero = 0;
-
 	error = bpf_map_update_elem(constants.nodes_status_map_fd,&new_pid,&zero,BPF_ANY);
 	if(error){
 		printf("Error inserting in node_status %d \n",error);
@@ -1607,7 +1564,6 @@ void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
 	if(error){
 		printf("Error deleting pid in node_status %d \n",error);
 	}
-
 	//+2 is because the first two positions are reserved for other information
 	int pos = node_nr + 2;
 	error = bpf_map_update_elem(constants.auxiliary_info_map_fd,&pos,&new_pid,BPF_ANY);
@@ -1617,7 +1573,6 @@ void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
 }
 
 void reinject_uprobes(int node_nr){
-
 	node *node = &nodes[node_nr];
 	if(node->container){
 	    if(node->leader_probe){
@@ -1631,9 +1586,8 @@ void reinject_uprobes(int node_nr){
       		node->leader_probe = uprobe(nodes->current_pid,nodes->leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode,1,0);
 		}
 	}
-
+	int user_func_cond_nr = 0;
 	for(int i=0;i<FAULT_COUNT;i++){
-		int user_func_cond_nr = 0;
 		if(faults[i].traced == node_nr){
 			for(int j = 0; j <faults[i].relevant_conditions;j++){
 				int type = faults[i].fault_conditions_begin[j].type;
@@ -1662,7 +1616,6 @@ void reinject_uprobes(int node_nr){
 }
 
 int get_node_nr_from_pid(int pid){
-
 	for(int i=0;i < NODE_COUNT; i++){
 		if (nodes[i].current_pid == pid){
 			return i;

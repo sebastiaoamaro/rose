@@ -134,21 +134,6 @@ static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *f
 	int ret = -1;
 	long err;
 
-
-	// if (!binary) {
-	// 	warn("strdup failed");
-	// 	return -1;
-	// }
-	// function = strchr(binary, ':');
-	// if (!function) {
-	// 	warn("Binary should have contained ':' (internal bug!)\n");
-	// 	return -1;
-	// }
-	// *function = '\0';
-	// function++;
-
-	//printf("Binary location in uprobe is %s and pid %d and the elvis operator result is %d \n",binary_location,env.pid,env.pid ?: -1);
-
 	if (binary_location)
 		strcpy(bin_path,binary_location);
 	else if(resolve_binary_path(binary_location, env.pid, bin_path, sizeof(bin_path)))
@@ -160,24 +145,16 @@ static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *f
 		goto out_binary;
 	}
 
-	
+
 	obj->links.dummy_kprobe =
 		bpf_program__attach_uprobe(obj->progs.dummy_kprobe, false,
 					   env.pid, bin_path, func_off+offset);
+	//printf("Injected probe for function %s at offset %d\n",function,func_off+offset);
 	if (!obj->links.dummy_kprobe) {
 		err = -errno;
-		warn("Failed to attach uprobe: %ld\n", err);
+		printf("Failed to attach uprobe: %ld\n", err);
 		goto out_binary;
 	}
-
-	// obj->links.dummy_kretprobe =
-	// 	bpf_program__attach_uprobe(obj->progs.dummy_kretprobe, true,
-	// 				   env.pid ?: -1, bin_path, func_off);
-	// if (!obj->links.dummy_kretprobe) {
-	// 	err = -errno;
-	// 	warn("Failed to attach uretprobe: %ld\n", err);
-	// 	goto out_binary;
-	// }
 
 	ret = 0;
 
@@ -190,7 +167,7 @@ out_binary:
 struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faultcount,int cond_pos,int timemode, int primary_function,int offset)
 {
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
-	
+
 	struct uprobes_bpf *obj;
 	int i, err;
 	struct tm *tm;
@@ -221,7 +198,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 	env.pid = pid;
 
 	//used_fentry = try_fentry(obj);
-	
+
 
 	err = uprobes_bpf__load(obj);
 	if (err) {

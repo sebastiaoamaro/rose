@@ -19,7 +19,7 @@ class Fault:
     trigger_statement_end = ""
     exit = 0
     start_time = 0
-    state_score = 0
+    state_score = 0.0
     event_id = 0
 
     def to_yaml(self):
@@ -58,10 +58,10 @@ class Fault:
 
             if len(self.begin_conditions) > 0:
                 if self.begin_conditions[0] is file_syscall_condition:
-                    details = details + " " + self.self.begin_conditions[0].file_name
+                    details = details + " " + self.begin_conditions[0].file_name
         else:
             details = self.type
-        return (f"Fault (state_score = {self.state_score}, type={self.type},details={details},target={self.target},traced={self.traced},start_time={self.start_time},duration={self.duration})\n")
+        return (f"Fault (name={self.name}, state_score = {self.state_score}, type={self.type},details={details},target={self.target},traced={self.traced},start_time={self.start_time},duration={self.duration})\n")
 
 #Type of faults
 class file_system_operation:

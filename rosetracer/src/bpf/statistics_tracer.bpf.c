@@ -30,7 +30,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__type(key, int);
 	__type(value, int);
-	__uint(max_entries, 512);
+	__uint(max_entries, 4096);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } uprobes_counters SEC(".maps");
 
@@ -131,7 +131,6 @@ int handle_uprobe(struct pt_regs *ctx) {
 		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
 		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
 
-		bpf_printk("Pid %d &Found func %d\n", pid, cookie);
 		u64 timestamp = bpf_ktime_get_ns();
 
 		int *counter = bpf_map_lookup_elem(&uprobes_counters,&cookie);

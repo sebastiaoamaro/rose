@@ -1,5 +1,4 @@
 import random
-from types import new_class
 import yaml
 import signal
 import sys
@@ -11,9 +10,17 @@ import shutil
 import time
 import math
 from copy import deepcopy
+import os
 from reproduce_bug import BugReproduction, parse_bug_reproduction,run_reproduction,run_cleanup,collect_history,Run
+from pathlib import Path
 
 def parse_file_split_by_comma(file_path, skip_empty=True, strip_items=True):
+
+    file_path = Path(file_path)
+    if not file_path.exists():
+        print("File {} does not exist".format(file_path))
+        return []
+
     with open(file_path, 'r') as file:
         lines = []
         for line in file:
@@ -25,8 +32,32 @@ def parse_file_split_by_comma(file_path, skip_empty=True, strip_items=True):
             lines.append(items)
         return lines
 
+def delete_function_from_file(filename: str, target: str) -> None:
+    with open(filename, 'r') as file:
+        lines = file.readlines()
+
+    with open(filename, 'w') as file:
+        for line in lines:
+            if target not in line:
+                file.write(line)
+
 def main():
     filename = sys.argv[1]
+    bug_reproduction = parse_bug_reproduction(filename)
+        #cleanup last runs
+    try:
+        os.remove("/tmp/failed_probes.txt")
+    except FileNotFoundError:
+        print("Failed to remove failed_probes not found")
+    except PermissionError:
+        print("Failed to remove files no perms")
+    try:
+        os.remove("/tmp/function_stats.txt")
+    except FileNotFoundError:
+        print("Failed to remove function_stats not found")
+    except PermissionError:
+        print("Failed to remove files no perms")
+
     bug_reproduction = parse_bug_reproduction(filename)
     #Run faultless schedule
     start_time = time.time()
@@ -38,18 +69,20 @@ def main():
     elapsed_time = end_time - start_time
 
     failed_probes = parse_file_split_by_comma("/tmp/failed_probes.txt")
-    print(failed_probes)
 
     function_stats = parse_file_split_by_comma("/tmp/function_stats.txt")
-    print(function_stats)
 
     frequent_functions = []
     for function in function_stats:
-        if function[1]/elapsed_time > 1:
+        ratio = int(function[2])/elapsed_time
+        print("Ratio is {}, total calls is {} time_elasped is {}".format(ratio, function[2],elapsed_time))
+        if ratio >2:
             frequent_functions.append(function[0])
-            print(f"Function {function[0]} was called {function[1]} times in {elapsed_time} seconds")
 
 
+    for frequent_function in frequent_functions:
+        print(f"Removing function {frequent_function}")
+        delete_function_from_file(bug_reproduction.functions_file, frequent_function)
 
 if __name__ == "__main__":
     main()

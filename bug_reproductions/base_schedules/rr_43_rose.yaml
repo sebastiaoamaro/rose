@@ -11,9 +11,9 @@ execution_plan:
   tracer:
     tracer_location: "/vagrant/rosetracer/target/release/rosetracer"
     pipe_location: "/tmp/containerpid"
-    functions_file: /vagrant/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
+    functions_file: /vagrant/function_analyzer/redisraft/functions_b9ee410.txt
     binary_to_examine: "/redisraft.so"
-    tracing_type: full_trace,container_controlled
+    tracing_type: production_trace,container_controlled
 
 nodes:
   redis1:

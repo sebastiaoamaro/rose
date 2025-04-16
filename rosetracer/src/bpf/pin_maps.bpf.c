@@ -12,7 +12,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__type(key, int);
 	__type(value, int);
-	__uint(max_entries, 512);
+	__uint(max_entries, 4096);
 } uprobes_counters SEC(".maps");
 
 struct {

@@ -10,7 +10,7 @@ use nix::sys::signal::kill;
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use pin_maps::PinMapsSkel;
-use procfs::process::ProcState::{Stopped, Waiting};
+use procfs::process::ProcState::{Running, Stopped, Waiting};
 use procfs::process::Process;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -111,7 +111,7 @@ pub mod xdp {
 
 pub fn start_tracing(
     mode: String,
-    functions: Vec<String>,
+    functions: Vec<(String, usize)>,
     binary_path: String,
     nodes_info: String,
     network_device: String,
@@ -144,12 +144,6 @@ pub fn start_tracing(
             binary_path,
         )
         .expect("Failed to trace containers controlled");
-
-        // Attempt to delete the file
-        match fs::remove_file(nodes_info.clone()) {
-            Ok(_) => println!("File deleted successfully."),
-            Err(e) => println!("Failed to delete the file: {}", e),
-        }
     } else if mode == "process" {
         trace_processes(
             nodes_info,
@@ -209,7 +203,7 @@ pub fn trace_processes(
     skel: &mut SkelEnum,
     hashmap_pid_to_node: &mut HashMap<i32, String>,
     hashmap_links: &mut HashMap<i32, Vec<Link>>,
-    functions: Vec<String>,
+    functions: Vec<(String, usize)>,
     binary_path: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut join_handles = vec![];
@@ -271,7 +265,7 @@ pub fn start_tracing_process(
     pid: i32,
     container_name: String,
     hashmap_links: &mut HashMap<i32, Vec<Link>>,
-    functions: Vec<String>,
+    functions: Vec<(String, usize)>,
     binary_path: String,
     skel: &mut SkelEnum,
     rx: Receiver<()>,
@@ -293,7 +287,8 @@ pub fn start_tracing_process(
     for (index_function, function) in functions.clone().iter().enumerate() {
         skel.attach_uprobe(
             index_function,
-            function,
+            &function.0,
+            function.1,
             binary_path.clone(),
             pid,
             hashmap_links,
@@ -306,7 +301,7 @@ pub fn trace_containers(
     skel: &mut SkelEnum<'_, 'static>,
     hashmap_pid_to_node: &mut HashMap<i32, String>,
     mut hashmap_links: &mut HashMap<i32, Vec<Link>>,
-    functions: Vec<String>,
+    functions: Vec<(String, usize)>,
     binary_path: String,
 ) -> Result<()> {
     let mut join_handles = vec![];
@@ -397,7 +392,7 @@ pub fn start_tracing_container(
     container_type: i32,
     container_name: String,
     hashmap_links: &mut HashMap<i32, Vec<Link>>,
-    functions: Vec<String>,
+    functions: Vec<(String, usize)>,
     binary_path: String,
     skel: &mut SkelEnum<'_, 'static>,
     rx: Receiver<()>,
@@ -409,13 +404,6 @@ pub fn start_tracing_container(
     );
     hashmap_links.insert(pid, vec![]);
 
-    let handle = thread::spawn(move || {
-        monitor_pid(pid, rx).expect("Monitoring failed");
-    });
-
-    join_handles.push(handle);
-
-    println!("container_type is {}", container_type);
     let mut container_location = "".to_string();
     if container_type == CONTAINER_TYPE_DOCKER {
         container_location = get_overlay2_location(&container_name).unwrap();
@@ -433,12 +421,18 @@ pub fn start_tracing_container(
     for (index_function, function) in functions.clone().iter().enumerate() {
         skel.attach_uprobe(
             index_function,
-            function,
+            &function.0,
+            function.1,
             binary_location.clone(),
             pid,
             hashmap_links,
         );
     }
+    let handle = thread::spawn(move || {
+        monitor_pid(pid, rx).expect("Monitoring failed");
+    });
+    join_handles.push(handle);
+    println!("Finished adding uprobes for node {}", container_name);
 }
 
 pub fn trace_containers_controlled(
@@ -447,27 +441,28 @@ pub fn trace_containers_controlled(
     hashmap_pid_to_node: &mut HashMap<i32, String>,
     hashmap_node_to_pid: &mut HashMap<String, i32>,
     hashmap_links: &mut HashMap<i32, Vec<Link>>,
-    functions: Vec<String>,
+    functions: Vec<(String, usize)>,
     binary_path: String,
 ) -> Result<()> {
     let mut join_handles = vec![];
     let mut xdp_pids = vec![];
     let mut tx_handles = vec![];
     //Loop read from a pipe to get pid+container
-    if Path::new(&nodes_info).exists() {
-        println!("Opening FIFO for reading...");
-
-        let file = File::open(nodes_info.clone()).unwrap();
-
-        println!("FIFO open in read_mode");
+    let read_pipe_name = format!("{}_write", nodes_info.clone());
+    let write_pipe_name = format!("{}_read", nodes_info.clone());
+    if Path::new(&read_pipe_name).exists() {
+        let file = File::open(read_pipe_name.clone()).unwrap();
+        println!("Opening FIFO for reading...{}", read_pipe_name.clone());
         let reader = BufReader::new(file);
+
+        let mut file_write = OpenOptions::new()
+            .write(true)
+            .open(&write_pipe_name)
+            .unwrap();
 
         println!("Reader started");
         for line in reader.lines() {
             let line = line?;
-
-            //println!("Received:{}", line);
-
             if line == "finished" {
                 break;
             }
@@ -513,6 +508,9 @@ pub fn trace_containers_controlled(
                     xdp_pids.push(pid);
                 }
             }
+
+            let buf = vec![0; 8];
+            file_write.write(&buf).expect("Failed to send ping to ROSE");
         }
     } else {
         println!("FIFO does not exist.");
@@ -537,7 +535,7 @@ pub fn trace_containers_controlled(
     }
 
     for pid in xdp_pids {
-        let pid = Pid::from_raw(pid as i32); // Convert the PID to a Pid type
+        let pid = Pid::from_raw(pid as i32);
         kill(pid, Signal::SIGKILL).expect("Failed to kill xdp_pid");
     }
     println!("Finished tracing containers");
@@ -551,7 +549,7 @@ pub fn trace_processes_controlled(
     hashmap_pid_to_node: &mut HashMap<i32, String>,
     hashmap_node_to_pid: &mut HashMap<String, i32>,
     hashmap_links: &mut HashMap<i32, Vec<Link>>,
-    functions: Vec<String>,
+    functions: Vec<(String, usize)>,
     binary_path: String,
 ) -> Result<()> {
     let mut join_handles = vec![];
@@ -639,7 +637,7 @@ pub fn end_trace(
     history_delays: &libbpf_rs::Map,
     history: &libbpf_rs::Map,
     hashmap_pid_to_node: &mut HashMap<i32, String>,
-    functions: Vec<String>,
+    functions: &Vec<(String, usize)>,
 ) {
     create_pid_tree(pid_tree, hashmap_pid_to_node);
 
@@ -868,7 +866,7 @@ pub fn collect_fd_map(
                             }
                         }
                         None => {
-                            println!("This is not supposed to happen");
+                            println!("FD with no matching file, probably a read from socket");
                         }
                     };
 
@@ -963,7 +961,7 @@ pub fn create_pid_tree(pids: &libbpf_rs::Map, hashmap_pid_to_node: &mut HashMap<
 
 pub fn collect_events(
     called_functions: &libbpf_rs::Map,
-    functions: Vec<String>,
+    functions: Vec<(String, usize)>,
     hashmap_pid_to_node: &mut HashMap<i32, String>,
     filenames: &mut HashMap<FdData, Vec<NameAtTimestamp>>,
 ) {
@@ -1044,7 +1042,7 @@ pub fn collect_events(
                             event,
                             node_name.clone(),
                             "function_call".to_string(),
-                            event_name.clone(),
+                            event_name.0.clone(),
                             "na".to_string(),
                         );
                     }
@@ -1058,10 +1056,10 @@ pub fn collect_events(
 }
 
 //Used for stats and to remove useless probes
-pub fn process_uprobes_array_map(uprobes_array: &libbpf_rs::Map) {
+pub fn process_uprobes_array_map(uprobes_array: &libbpf_rs::Map, functions: &Vec<(String, usize)>) {
     let keys = uprobes_array.keys();
 
-    let mut uprobes_counters: Vec<i32> = vec![0; 512];
+    let mut uprobes_counters: Vec<i32> = vec![0; 4096];
 
     for key in keys {
         let result = uprobes_array.lookup(&key, MapFlags::ANY);
@@ -1088,7 +1086,7 @@ pub fn process_uprobes_array_map(uprobes_array: &libbpf_rs::Map) {
         if *value > 0 {
             write_to_file(
                 "/tmp/function_stats.txt".to_string(),
-                format!("{},{}\n", index, value),
+                format!("{},{},{}\n", functions[index].0, functions[index].1, value),
             )
             .expect("Failed to write to stats file");
         }
@@ -1103,6 +1101,8 @@ pub fn monitor_pid(
     let mut events_process_pause = vec![];
     let process = Process::new(pid)?;
     let mut duration = 0;
+    let mut state = Running;
+    let mut timestamp = 0;
     //Default process is Running
     loop {
         if stop_signal.try_recv().is_ok() {
@@ -1115,10 +1115,8 @@ pub fn monitor_pid(
 
         match p_info {
             Ok(p_info) => {
-                let state: procfs::process::ProcState = p_info.state().unwrap();
-
-                let pid = p_info.pid;
-                let timestamp = std::time::Duration::from(nix::time::clock_gettime(
+                state = p_info.state().unwrap();
+                timestamp = std::time::Duration::from(nix::time::clock_gettime(
                     nix::time::ClockId::CLOCK_MONOTONIC,
                 )?)
                 .as_nanos();
@@ -1149,7 +1147,22 @@ pub fn monitor_pid(
                 thread::sleep(sleep_duration);
             }
             Err(e) => {
-                //println!("Process with PID {} does not exist.", e);
+                if duration > 3 {
+                    let event = Event {
+                        event_type: 5,
+                        id: 0,
+                        pid: pid as u32,
+                        tid: 0,
+                        timestamp: timestamp as u64,
+                        ret: 0,
+                        arg1: state as u32,
+                        arg2: duration,
+                        arg3: 0,
+                        arg4: 0,
+                        extra: [0; 256],
+                    };
+                    events_process_pause.push(event);
+                }
                 break;
             }
         }
@@ -1321,6 +1334,39 @@ pub fn find_filename(
     };
     //println!("Filename: {} for fd {} and pid {}",filename,fd,pid);
     return filename;
+}
+
+pub fn parse_file_to_pairs(filename: &str) -> Vec<(String, usize)> {
+    println!("Collecting function pairs from file: {}", filename);
+    let file = File::open(filename).expect("Failed to open file");
+    let reader = io::BufReader::new(file);
+    reader
+        .lines()
+        .filter_map(|line| {
+            let line = line.expect("Failed to read line");
+            let trimmed = line.trim();
+            // Skip empty lines and comments
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                return None;
+            }
+            let parts: Vec<&str> = trimmed.split(',').map(|s| s.trim()).collect();
+            // Ensure we have exactly 2 parts
+            if parts.len() != 2 {
+                eprintln!(
+                    "Warning: Invalid line format (expected 'string,number'): {}",
+                    trimmed
+                );
+                return None;
+            }
+            match parts[1].parse::<usize>() {
+                Ok(number) => Some((parts[0].to_string(), number)),
+                Err(e) => {
+                    eprintln!("Warning: Failed to parse number '{}': {}", parts[1], e);
+                    None
+                }
+            }
+        })
+        .collect()
 }
 
 pub fn pin_maps(skel: &mut PinMapsSkel) {

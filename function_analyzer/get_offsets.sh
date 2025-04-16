@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # This script is used to convert a file of function names to their offset
 gcc -o find_function find_function_offset.c -lelf
 if [ $# -ne 3 ]; then
@@ -16,5 +15,5 @@ fi
 while IFS= read -r function_name; do
     echo "Finding offset of: $function_name"
     offset=$(sudo ./find_function $1 $function_name)
-    echo $offset >> $3
+    echo $function_name,$offset >> $3
 done < $2
