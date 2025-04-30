@@ -104,10 +104,11 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 				if (current_state->relevant_states[i]){
 					u64 relevant_value = current_state->relevant_states[i];
 					if ((value % relevant_value == 0) && relevant_value != 0){
-						process_counter(state_key,value,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
+					   //bpf_printk("Found relevant value \n");
+					   process_counter(state_key,relevant_value,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
 					}
 					if(current_state->repeat && (value % relevant_value == 0)){
-						process_counter(state_key,relevant_value,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
+					   process_counter(state_key,relevant_value,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
 					}
 				}
 			}
@@ -233,6 +234,7 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 		//If it is not leave since we can not do anything in this pid
 		else{
 			if(fault->pid != pid_to_use){
+			    //bpf_printk("Different pid in fault%d and pid%d\n",fault->pid,pid_to_use);
 				return 0;
 			}
 		}
@@ -257,17 +259,21 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 				if (time){
 				    time_true = fault->initial.conditions_match[TIME_STATE];
 				}
-				if(state_condition_value > 0 && time_true){
-					if (!(fault->initial.conditions_match[state_condition])){
-						//Needed because in the above function we do not know for what fault the relevant fault is
-						if (condition_value == state_condition_value){
-								bpf_printk("FAULT: %d, COND: %d, CURRENT_VALUE: %d, NEEDED: %d\n",*pos,state_condition,condition_value,state_condition_value);
-								__sync_fetch_and_add(&(fault->initial.conditions_match[state_condition]),1);
-								run+=1;
-								fault->run = run;
-							}
-						}
+				if (time_true){
+    				if(state_condition_value > 0){
+    					if (!(fault->initial.conditions_match[state_condition])){
+    						//Needed because in the above function we do not know for what fault the relevant fault is
+    						if (condition_value == state_condition_value){
+    								bpf_printk("FAULT: %d, COND: %d, CURRENT_VALUE: %d, NEEDED: %d\n",*pos,state_condition,condition_value,state_condition_value);
+    								__sync_fetch_and_add(&(fault->initial.conditions_match[state_condition]),1);
+    								run+=1;
+    								fault->run = run;
+    							}
+    						}
 
+    				}
+				}else{
+					//bpf_printk("Time is not set to true\n");
 				}
 			}
 		}

@@ -2,6 +2,7 @@ execution_plan:
   maximum_time: 120
   setup:
     script: /vagrant/schedules/reproducedbugs/redpanda/lxc/scripts/start_redpanda_cluster.sh
+    duration: 60
   workload:
     script: /vagrant/schedules/reproducedbugs/redpanda/lxc/scripts/signal_jepsen_start.sh
     wait_workload: true
@@ -18,26 +19,31 @@ nodes:
   n1:
     container: true
     container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
     pid_file: /var/lib/redpanda/data/pid.lock
     script: /start_redpanda.sh
   n2:
     container: true
     container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
     pid_file: /var/lib/redpanda/data/pid.lock
     script: /start_redpanda.sh
   n3:
     container: true
     container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
     pid_file: /var/lib/redpanda/data/pid.lock
     script: /start_redpanda.sh
   n4:
     container: true
     container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
     pid_file: /var/lib/redpanda/data/pid.lock
     script: /start_redpanda.sh
   n5:
     container: true
     container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
     pid_file: /var/lib/redpanda/data/pid.lock
     script: /start_redpanda.sh
 

@@ -188,18 +188,17 @@ int main()
 	struct ring_buffer *rb = NULL;
 	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
 
-	//If they are containers with start before the workload
+	//TODO: MISSING WAIT_FOR_SETUP
+	//If they are containers we start before the workload
+	write_start_event();
 	start_container_nodes_scripts();
-
+	start_nodes_scripts();
 	if(plan->workload.wait_time > 0 ){
 		printf("SLEEPING: %d, BEFORE WORKLOAD\n",plan->workload.wait_time);
 		sleep(plan->workload.wait_time);
 	}
 	pthread_t thread_id;
 	pthread_create(&thread_id, NULL, (void *)count_time, NULL);
-	write_start_event();
-
-	start_nodes_scripts();
 	start_workload();
 
 	while (!exiting) {
@@ -626,7 +625,8 @@ void collect_container_processes(){
                 printf("HOST PID IS %d\n",host_pid);
                 nodes[i].pid = host_pid;
                 nodes[i].current_pid = host_pid;
-                send_signal(host_pid,SIGSTOP,nodes[i].name);
+                //TODO: This basically means redpanda can't setup in time for our experiment messes everything up
+                //send_signal(host_pid,SIGSTOP,nodes[i].name);
                 int one = 1;
 			    bpf_map_update_elem(constants.pids, &nodes[i].current_pid, &one, BPF_ANY);
                 fclose(file);

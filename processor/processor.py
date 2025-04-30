@@ -88,6 +88,7 @@ class History:
         self.new_pid_events = {}
         self.event_counter = {}
         self.start_time = 0
+        self.start_time_event = False
         self.end_time = -1
         self.faults = []
         self.network_history = {}
@@ -118,15 +119,16 @@ class History:
 
         # Create an Event object using the parsed data
 
-        # First event we see
-        # if self.start_time == 0:
-        #     self.start_time = int(event_data['time'])
+        #First event we see
+        if self.start_time == 0 and not self.start_time_event:
+            self.start_time = int(event_data['time'])
 
-        # if self.start_time > int(event_data['time']):
-        #     self.start_time = int(event_data['time'])
+        if self.start_time > int(event_data['time']) and not self.start_time_event:
+            self.start_time = int(event_data['time'])
 
         if event_data['event_name'] == 'start':
             self.start_time = int(event_data['time'])
+            self.start_time_event = True
 
         if self.end_time < int(event_data['time']):
             self.end_time = int(event_data['time'])
@@ -367,11 +369,11 @@ class History:
                     fault_nr += 1
                     fault.state_score = 1.0
                     time = int((event.time - self.start_time)/1000000)
-                    time_rounded = math.floor(time / 1000) * 1000
+                    time_rounded = math.floor(time/10) * 10
                     fault.start_time = time_rounded
 
                     time = int((event.time - self.start_time)/1000000)
-                    time_rounded = math.floor(time / 1000) * 1000
+                    time_rounded = math.floor(time/10) * 10
                     fault.start_time = time_rounded
 
                     cond = time_cond()
@@ -402,7 +404,7 @@ class History:
 
                 time = int((event.time - self.start_time)/1000000)
                 #We add a pause event after it is finished thus its start is at -duration
-                time_rounded = math.floor(time / 1000) * 1000 - fault.duration
+                time_rounded = math.floor(time/10) * 10 - fault.duration
                 fault.start_time = time_rounded
 
                 #Processes are stopped by us to setup other things, thus pauses at the start are detected but are not real
@@ -450,7 +452,7 @@ class History:
 
                     fault_timestamp = int(event[2]) - event[1]*1000000
                     time = int((event[2]-self.start_time)/1000000)
-                    time_rounded = math.floor(time / 1000) * 1000
+                    time_rounded = math.floor(time/10) * 10
                     fault.start_time = time_rounded - event[1]
                     fault.event_id = self.find_event_by_id_by_time(fault_timestamp, node)
 
@@ -488,7 +490,7 @@ class History:
                     fault.event_id = last_event_before_crash.id
 
                     time = int((last_event_before_crash.time - self.start_time)/1000000)
-                    time_rounded = math.floor(time / 1000) * 1000
+                    time_rounded = math.floor(time/10) * 1000
                     fault.start_time = time_rounded
                     if len(fault.begin_conditions) == 0:
                         cond = time_cond()
@@ -520,7 +522,8 @@ class History:
                 if event_counter == event_size_list:
                     break
 
-        #Checks for unique events in all of the history, maybe it should be in the window?
+        #Checks for unique events in window
+        #print("Function calls in window:\n", function_calls)
         for function_call in function_calls:
             if function_call.name in function_calls_counter and function_calls_counter[function_call.name] > 1:
                  function_calls_counter.pop(function_call.name)
@@ -574,9 +577,9 @@ class History:
         functions_before = self.get_functions_before(fault_injected_event.node,fault_injected_event.id,window)
         new_order = functions_before[2]
 
-        print("COMPARING",new_order[0].name,"AND",origin_order[0].name)
-        print("NEW_ORDER ",new_order)
-        print("ORIGIN_ORDER ",origin_order)
+        #print("COMPARING",new_order[0].name,"AND",origin_order[0].name)
+        #print("NEW_ORDER ",new_order)
+        #print("ORIGIN_ORDER ",origin_order)
         return new_order[0].name == origin_order[0].name
 
     def check_syscall_support(self,syscall_name):

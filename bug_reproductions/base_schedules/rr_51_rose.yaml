@@ -1,5 +1,5 @@
 execution_plan:
-  maximum_time: 90
+  maximum_time: 60
   setup:
     script: /vagrant/schedules/reproducedbugs/redisraft/scripts/startrediscluster2d1cf30.sh
     duration: 5

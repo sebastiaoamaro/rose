@@ -45,11 +45,10 @@ nodes:
     script: /start_redpanda.sh
 
 faults:
-  process_pause11:
-    type: process_pause
+  process_kill11:
+    type: process_kill
     target: n1
     traced: n1
-    duration: 20000
     begin_conditions:
       - condition1:
           type: user_function
@@ -60,11 +59,10 @@ faults:
       #     type: time
       #     time: 3500
   #
-  process_pause:
-    type: process_pause
+  process_kill:
+    type: process_kill
     target: n2
     traced: n2
-    duration: 20000
     begin_conditions:
       - condition1:
           type: user_function
@@ -74,11 +72,10 @@ faults:
       # - condition0:
       #     type: time
       #     time: 35000
-  process_pause1:
-    type: process_pause
+  process_kill1:
+    type: process_kill
     target: n3
     traced: n3
-    duration: 20000
     begin_conditions:
       - condition1:
           type: user_function
@@ -88,11 +85,10 @@ faults:
   #     # - condition0:
   #     #     type: time
   #     #     time: 35000
-  process_pause2:
-    type: process_pause
+  process_kill2:
+    type: process_kill
     target: n4
     traced: n4
-    duration: 20000
     begin_conditions:
       - condition1:
           type: user_function
@@ -102,11 +98,10 @@ faults:
       # - condition0:
       #     type: time
       #     time: 35000
-  process_pause3:
-    type: process_pause
+  process_kill3:
+    type: process_kill
     target: n5
     traced: n5
-    duration: 20000
     begin_conditions:
       - condition1:
           type: user_function

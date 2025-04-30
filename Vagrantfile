@@ -19,8 +19,8 @@ Vagrant.configure("2") do |config|
         test2.vm.synced_folder "~/shared/test2/", "/shared",type:"virtualbox"
         test2.disksize.size = '128GB'
         test2.vm.provider "virtualbox" do |v|
-            v.cpus = 8       # Set number of CPUs
-            v.memory = "16384"
+            v.cpus = 4       # Set number of CPUs
+            v.memory = "8192"
         end
     end
 
@@ -34,13 +34,12 @@ Vagrant.configure("2") do |config|
         end
     end
 
-    config.vm.define "remote" do |remote|
-        remote.vm.box = "bento/ubuntu-24.04"
-        remote.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["target","build","ycsb-0.17.0","Anduril",
+    config.vm.define "remote1" do |remote1|
+        remote1.vm.box = "bento/ubuntu-24.04"
+        remote1.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["target","build","ycsb-0.17.0","Anduril",
         "schedules/tracing_tests/redis/traces","tests/bugdetection/redisraft/*","temp_sched.yaml"]
-        remote.vm.synced_folder "~/shared/remote/", "/shared",type:"virtualbox"
-        remote.disksize.size = '128GB'
-        remote.vm.provider "virtualbox" do |v|
+        remote1.vm.synced_folder "~/shared/remote1/", "/shared",type:"virtualbox"
+        remote1.vm.provider "virtualbox" do |v|
             v.cpus = 8        # Set number of CPUs
             v.memory = "8194"
         end

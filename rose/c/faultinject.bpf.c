@@ -203,16 +203,16 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 			//bpf_printk("Comparing %s and %s \n with offset %d",&(fi.filename[fi.offset]),file_open->filename,fi.size);
 			if(string_contains(file_open->filename,&(fi.filename[fi.offset]),fi.size)){
 
-				struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);
-				if(fds){
-					u64 position = fds->size;
-					if(position < MAX_RELEVANT_FILES){
-						fds->fds[position] = fd;
-						fds->size = fds->size + 1;
-					}
-				}else{
-					bpf_printk("This should not happen, main should init the structures \n");
-				}
+				// struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&origin_pid);
+				// if(fds){
+				// 	u64 position = fds->size;
+				// 	if(position < MAX_RELEVANT_FILES){
+				// 		fds->fds[position] = fd;
+				// 		fds->size = fds->size + 1;
+				// 	}
+				// }else{
+				// 	bpf_printk("This should not happen, main should init the structures \n");
+				// }
 				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
 					&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 				inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
@@ -329,18 +329,18 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 			//bpf_printk("PID:%d, READ_FILE: %s, FILE_COND: %s \n",pid,&(fi.filename[fi.offset]),file_open->filename);
 
 			if(string_contains(file_open->filename,&(fi.filename[fi.offset]),file_open->size)){
-				struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);
+				// struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&origin_pid);
 
 				//bpf_printk("In read found %s and %s \n",&(fi.filename[fi.offset]),file_open->filename);
-				if(fds){
-					u64 position = fds->size;
-					if(position < MAX_RELEVANT_FILES){
-						fds->fds[position] = fd;
-						fds->size = fds->size + 1;
-					}
-				}else{
-					bpf_printk("This should not happen, main should init the structures \n");
-				}
+				// if(fds){
+				// 	u64 position = fds->size;
+				// 	if(position < MAX_RELEVANT_FILES){
+				// 		fds->fds[position] = fd;
+				// 		fds->size = fds->size + 1;
+				// 	}
+				// }else{
+				// 	bpf_printk("This should not happen, main should init the structures \n");
+				// }
 				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
 					&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 				inject_override(pid,sys_info.file_specific_code,(struct pt_regs *) ctx,0,&faults_specification);
@@ -374,7 +374,7 @@ int BPF_KPROBE(__x64_sys_close,struct pt_regs *regs)
 
 	//Remove relevant fd from map if it was closed
 
-	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&pid);
+	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&origin_pid);
 
 	if(fdrelevant){
 		for (int i=0;i<fdrelevant->size;i++){
@@ -827,7 +827,7 @@ int BPF_KPROBE(__x64_sys_fdatasync,struct pt_regs *regs)
 
 			bpf_printk("In fdatasync comparing %s and %s \n",&(fi.filename[fi.offset]),file_open->filename);
 			if(string_contains(file_open,&(fi.filename[fi.offset]),fi.size)){
-				struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);
+				struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&origin_pid);
 				if(fds){
 					u64 position = fds->size;
 					if(position < MAX_RELEVANT_FILES){

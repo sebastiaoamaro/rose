@@ -1,11 +1,11 @@
 execution_plan:
-  maximum_time: 180
+  maximum_time: 60
   setup:
     script: /vagrant/schedules/reproducedbugs/redisraft/scripts/startrediscluster2d1cf30.sh
     duration: 5
   cleanup:
     #script: /vagrant/schedules/reproducedbugs/redisraft/scripts/cleanup.sh
-    duration: 30
+    duration: 15
   workload:
     wait_time: 15
     script: /vagrant/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
@@ -133,33 +133,3 @@ faults:
           binary_location: "/redisraft.so"
           symbol: raftSendSnapshot
           call_count: 1
-
-  # process_pause5:
-  #   type: process_pause
-  #   target: redis3
-  #   traced: redis3
-  #   duration: 20000
-  #   begin_conditions:
-  #     - condition1:
-  #         type: time
-  #         time: 10000
-  #     - condition1:
-  #         type: user_function
-  #         binary_location: "/redisraft.so"
-  #         symbol: raftSendSnapshot
-  #         call_count: 1
-
-  # process_pause6:
-  #   type: process_pause
-  #   target: redis4
-  #   traced: redis4
-  #   duration: 20000
-  #   begin_conditions:
-  #     - condition1:
-  #         type: time
-  #         time: 10000
-  #     - condition1:
-  #         type: user_function
-  #         binary_location: "/redisraft.so"
-  #         symbol: raftSendSnapshot
-  #         call_count: 1

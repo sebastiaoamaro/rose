@@ -1,19 +1,19 @@
 execution_plan:
-  cleanup:
-    duration: 15
   maximum_time: 90
   setup:
+    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/startrediscluster2d1cf30.sh
     duration: 5
-    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/startredisclusterb9ee410.sh
-  tracer:
-    binary_to_examine: /redisraft.so
-    functions_file: /vagrant/function_analyzer/redisraft/functions_b9ee410.txt
-    pipe_location: /tmp/containerpid
-    tracer_location: /vagrant/rosetracer/target/release/rosetracer
-    tracing_type: production_trace,container_controlled
+  cleanup:
+    duration: 15
   workload:
-    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
     wait_time: 15
+    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
+  tracer:
+    tracer_location: /vagrant/rosetracer/target/release/rosetracer
+    pipe_location: /tmp/containerpid
+    functions_file: /vagrant/function_analyzer/redisraft/functions_2d1cf30.txt
+    binary_to_examine: /redisraft.so
+    tracing_type: production_trace,container_controlled
 nodes:
   redis1:
     container: true

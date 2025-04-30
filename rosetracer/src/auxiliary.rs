@@ -1099,10 +1099,16 @@ pub fn monitor_pid(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_duration = time::Duration::from_millis(1000);
     let mut events_process_pause = vec![];
-    let process = Process::new(pid)?;
+    let check_process = Process::new(pid);
+    let process = match check_process {
+        Ok(process_alive) => process_alive,
+        Err(e) => {
+            println!("Process with PID {} not found: {}", pid, e);
+            return Ok(());
+        }
+    };
     let mut duration = 0;
     let mut state = Running;
-    let mut timestamp = 0;
     //Default process is Running
     loop {
         if stop_signal.try_recv().is_ok() {
@@ -1112,14 +1118,13 @@ pub fn monitor_pid(
 
         // Fetch process information
         let p_info = process.stat();
-
+        let timestamp = std::time::Duration::from(nix::time::clock_gettime(
+            nix::time::ClockId::CLOCK_MONOTONIC,
+        )?)
+        .as_nanos();
         match p_info {
             Ok(p_info) => {
                 state = p_info.state().unwrap();
-                timestamp = std::time::Duration::from(nix::time::clock_gettime(
-                    nix::time::ClockId::CLOCK_MONOTONIC,
-                )?)
-                .as_nanos();
                 if state == Waiting || state == Stopped {
                     duration += 1;
                 }
@@ -1143,7 +1148,6 @@ pub fn monitor_pid(
                 } else if state != Waiting && state != Stopped {
                     duration = 0;
                 }
-
                 thread::sleep(sleep_duration);
             }
             Err(e) => {

@@ -16,33 +16,19 @@ execution_plan:
     wait_time: 15
 nodes:
   redis1:
-    container: true
     binary: /redisraft.so
-    leader_symbol: raft_become_leader
+    container: true
     ip: 172.19.1.10
     leader: true
+    leader_symbol: raft_become_leader
     script: ./startredis.sh 1 172.19.1.10
-  redis2:
-    container: true
-    binary: /redisraft.so
-    leader_symbol: raft_become_leader
-    ip: 172.19.1.11
-    script: ./startredis.sh 2 172.19.1.11
-  redis3:
-    container: true
-    binary: /redisraft.so
-    leader_symbol: raft_become_leader
-    ip: 172.19.1.12
-    script: ./startredis.sh 3 172.19.1.12
-  redis4:
-    container: true
-    binary: /redisraft.so
-    leader_symbol: raft_become_leader
-    ip: 172.19.1.13
-    script: ./startredis.sh 4 172.19.1.13
-  redis5:
-    container: true
-    binary: /redisraft.so
-    leader_symbol: raft_become_leader
-    ip: 172.19.1.14
-    script: ./startredis.sh 5 172.19.1.14
+faults:
+  process_pause985:
+    type: process_kill
+    target: redis1
+    traced: redis1
+    duration: 0
+    begin_conditions:
+      - condition_nr0:
+          type: time
+          time: 10500
