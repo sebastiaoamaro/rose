@@ -10,7 +10,7 @@ fn main() {
     build_bpf_file("count_syscalls", "src/bpf/count_syscalls.bpf.c");
     build_bpf_file("save_info", "src/bpf/save_info.bpf.c");
     build_bpf_file("save_io", "src/bpf/save_io.bpf.c");
-    build_bpf_file("tracer", "src/bpf/tracer.bpf.c");
+    build_bpf_file("sys_all_tracer", "src/bpf/sys_all_tracer.bpf.c");
     build_bpf_file("statistics_tracer", "src/bpf/statistics_tracer.bpf.c");
     build_bpf_file("production_tracer", "src/bpf/production_tracer.bpf.c");
     build_bpf_file("rw_tracer", "src/bpf/rw_tracer.bpf.c");

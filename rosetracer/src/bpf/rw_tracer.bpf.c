@@ -78,6 +78,12 @@ struct {
 	__uint(max_entries, HISTORY_SIZE);
 }important_arguments SEC(".maps");
 
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 8192);
+    __type(key, int);
+    __type(value, struct operation_info);
+} map_buff_addrs SEC(".maps");
 
 enum type { SYSCALL_ENTER = 1,SYSCALL_EXIT = 2, UPROBE = 3, OPEN = 5};
 
@@ -120,7 +126,70 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 	long id = ctx->id;
 	u64 pid_tgid = bpf_get_current_pid_tgid();
 
-	if (id == 0 || id == 1 || id == 3 || id == 32 || id == 33 || id == 292){
+	//read
+	if (id == 0){
+	    int pid_relevant = check_pid_prog(pid_tgid);
+
+    	if (!pid_relevant)
+    		return 0;
+        int fd = (int)ctx->args[0];
+
+		bpf_map_update_elem(&pid_tgid_fd, &pid_tgid, &fd, BPF_ANY);
+
+   		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
+        u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
+        // Store buffer address from arguments in map
+    	long unsigned int buff_addr = ctx->args[1];
+
+    	struct operation_info op_info = {
+    		pid,
+    		buff_addr
+    	};
+
+        bpf_map_update_elem(&map_buff_addrs, &pid, &op_info, BPF_ANY);
+	}
+	//write
+	if (id == 1){
+    	int pid_relevant = check_pid_prog(pid_tgid);
+
+    	if (!pid_relevant)
+    		return 0;
+        int fd = (int)ctx->args[0];
+
+		bpf_map_update_elem(&pid_tgid_fd, &pid_tgid, &fd, BPF_ANY);
+
+   		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
+		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
+
+    	long unsigned int buff_addr = ctx->args[1];
+
+    	const unsigned int local_buff_size = 128;
+    	char local_buff[local_buff_size] = { 0x00 };
+
+    	bpf_probe_read_user(&local_buff, 128, (void*)buff_addr);
+
+
+		u64 timestamp = bpf_ktime_get_ns();
+
+		struct event key = {
+			SYSCALL_ENTER,
+			timestamp,
+			id,
+			pid,
+			tid,
+			0,
+			0,
+			0,
+			0,
+			0
+		};
+		bpf_probe_read(&(key.extra),128,local_buff);
+		//bpf_printk("WRITE BUF: %s",local_buff);
+		bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
+		update_event_counter();
+
+	}
+	if (id == 3 || id == 32 || id == 33 || id == 292){
 
 		int pid_relevant = check_pid_prog(pid_tgid);
 
@@ -197,9 +266,50 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 
 	if (!pid_relevant)
 		return 0;
+
 	long int ret = ctx->ret;
 
-	//Failing opens has its own special handling since they we need the filename
+	if (id == 0){
+    	u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
+    	u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
+        u64 timestamp = bpf_ktime_get_ns();
+       	struct operation_info *op_info = bpf_map_lookup_elem(&map_buff_addrs, &pid);
+
+    	if (!op_info){
+            //bpf_printk("No op_info \n");
+    		return 0;
+        }
+
+    	long unsigned int pbuff_addr = op_info->buff_addr;
+
+        if (pbuff_addr == 0) {
+            //bpf_printk("No pbuff_addr \n");
+            return 0;
+        }
+
+    	long int buff_size = ctx->ret;
+
+    	long unsigned int buff_addr = pbuff_addr;
+    	const unsigned int local_buff_size = 128;
+
+    	long int read_size = 128;
+   		struct event key = {
+			SYSCALL_ENTER,
+			timestamp,
+			id,
+			pid,
+			tid,
+			0,
+			0,
+			0,
+			0,
+			0
+		};
+    	bpf_probe_read(&key.extra, read_size, (void*)buff_addr);
+        //bpf_printk("READ BUF: %s",&key.extra);
+   		bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
+		update_event_counter();
+	}
 	if (ret<0 && id !=9 && id != 12){
 		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
 		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)

@@ -395,7 +395,6 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 	else if (id ==32 || id == 33 || id == 292){
 
 			int fd = 0;
-			//bpf_printk("Looking at pid_tgid %d ",pid_tgid);
 			int *fd_in_map = bpf_map_lookup_elem(&pid_tgid_fd,&pid_tgid);
 
 			if (fd_in_map){
@@ -410,7 +409,6 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 
 			};
 			bpf_map_update_elem(&dup_map,&fd_info,&ret, BPF_ANY);
-			//bpf_printk("Added pid %d, fd %d, ts %llu, new_fd %d",pid_relevant,fd,timestamp,ret);
 
 	}
     return 0;

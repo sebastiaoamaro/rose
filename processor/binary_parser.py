@@ -15,17 +15,76 @@ def hex_subtract(hex1, hex2):
     return result
 
 def extract_address(line):
-    """ Extract the address from a disassembly line. """
-    # Define regex pattern to capture the address up to the colon
-    pattern = re.compile(r'^\s*([0-9a-fA-F]+):')
+    """Extract the address from a disassembly line, ignoring padding (all 00 bytes)."""
+    # Regex pattern to capture the address at the start of the line
+    address_pattern = re.compile(r'^\s*([0-9a-fA-F]+):')
+    address_match = address_pattern.match(line)
 
-    match = pattern.match(line)
-    if match:
-        # Return the address as a string
-        return match.group(1)
-    else:
-        # Return None or an empty string if no match
+    if not address_match:
+        return None  # No address found
+
+    # Extract the address
+    address = address_match.group(1)
+
+    # Check if the rest of the line contains only "00" bytes (padding)
+    # Split the line after the address to isolate machine code bytes
+    machine_code_part = line[address_match.end():].strip()
+    # Split into individual bytes (e.g., ["00", "01", ...])
+    bytes_list = machine_code_part.split()
+
+    # Return None if all bytes are "00"
+    if all(byte == "00" for byte in bytes_list):
         return None
+
+    return address
+
+def check_plt_address(line):
+    """Extract the address from a disassembly line, ignoring padding (all 00 bytes) and lines without @plt or call."""
+    # Regex pattern to capture the address at the start of the line
+    address_pattern = re.compile(r'^\s*([0-9a-fA-F]+):')
+    address_match = address_pattern.match(line)
+
+    if not address_match:
+        return None  # No address found
+
+    # Extract the address
+    address = address_match.group(1)
+
+    # Check if the rest of the line contains only "00" bytes (padding)
+    machine_code_part = line[address_match.end():].strip()
+    bytes_list = machine_code_part.split()
+    if all(byte == "00" for byte in bytes_list):
+        return None
+
+    # Check if line contains "@plt" or "call" (case-insensitive)
+    if '@plt' not in line:
+        return None
+
+    return address
+
+def check_call_address(line):
+    """Extract the address from a disassembly line, ignoring padding (all 00 bytes) and lines without @plt or call."""
+    # Regex pattern to capture the address at the start of the line
+    address_pattern = re.compile(r'^\s*([0-9a-fA-F]+):')
+    address_match = address_pattern.match(line)
+
+    if not address_match:
+        return None  # No address found
+
+    # Extract the address
+    address = address_match.group(1)
+
+    # Check if the rest of the line contains only "00" bytes (padding)
+    machine_code_part = line[address_match.end():].strip()
+    bytes_list = machine_code_part.split()
+    if all(byte == "00" for byte in bytes_list):
+        return None
+
+    # Check if line contains "@plt" or "call" (case-insensitive)
+    if 'call' not in line.lower():
+        return None
+
+    return address
 
 def run_objdump(binary_path):
     """ Run objdump to disassemble the binary and return the output. """
@@ -72,7 +131,49 @@ def calculate_offsets(binary_path, function_name):
     addresses = []
     for instruction in instructions:
         addr = extract_address(instruction)
-        addresses.append(addr)
+        if not addr is None:
+            addresses.append(addr)
+
+    offsets = []
+    base = addresses[0]
+    for addr in addresses[1:]:
+        offset = hex_subtract(base,addr)
+        offsets.append(offset)
+
+    return offsets
+
+
+def calculate_call_offsets(binary_path, function_name):
+    # Open the binary file
+    disassembly = run_objdump(binary_path)
+    instructions = extract_instructions(disassembly, function_name)
+
+    addresses = []
+    addresses.append(extract_address(instructions[0]))
+    for instruction in instructions[1:]:
+        addr = check_call_address(instruction)
+        if not addr is None:
+            addresses.append(addr)
+
+    offsets = []
+    base = addresses[0]
+    for addr in addresses[1:]:
+        offset = hex_subtract(base,addr)
+        offsets.append(offset)
+
+    return offsets
+
+def calculate_plt_offsets(binary_path, function_name):
+    # Open the binary file
+    disassembly = run_objdump(binary_path)
+    instructions = extract_instructions(disassembly, function_name)
+
+    addresses = []
+    addresses.append(extract_address(instructions[0]))
+    for instruction in instructions[1:]:
+        addr = check_plt_address(instruction)
+        if not addr is None:
+            addresses.append(addr)
 
     offsets = []
     base = addresses[0]

@@ -32,6 +32,7 @@
 #include <popen.h>
 #include <faultschedule.h>
 #include <aux.h>
+#include <sys/wait.h>
 void process_counter(const struct event *event,int stateinfo);
 int process_tc(const struct event*);
 void process_fs(const struct event*);
@@ -168,6 +169,7 @@ int main()
 	collect_container_pids();
 	setup_node_scripts();
 	collect_container_processes();
+	sleep_for_ms(500);
 	setup_begin_conditions();
 	send_info_to_tracer();
 	add_faults_to_bpf();
@@ -188,17 +190,16 @@ int main()
 	struct ring_buffer *rb = NULL;
 	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
 
-	//TODO: MISSING WAIT_FOR_SETUP
 	//If they are containers we start before the workload
 	write_start_event();
 	start_container_nodes_scripts();
 	start_nodes_scripts();
+	pthread_t thread_id;
+	pthread_create(&thread_id, NULL, (void *)count_time, NULL);
 	if(plan->workload.wait_time > 0 ){
 		printf("SLEEPING: %d, BEFORE WORKLOAD\n",plan->workload.wait_time);
 		sleep(plan->workload.wait_time);
 	}
-	pthread_t thread_id;
-	pthread_create(&thread_id, NULL, (void *)count_time, NULL);
 	start_workload();
 
 	while (!exiting) {
@@ -230,7 +231,9 @@ int main()
 
 	if(plan){
 		if (plan->workload.pid){
-			kill(plan->workload.pid,SIGKILL);
+		    printf("KILLING WORKLOAD(PID:%d)\n",plan->workload.pid);
+			kill(plan->workload.pid,SIGTERM);
+			waitpid(plan->workload.pid,NULL,0);
 		}
 	}
 
@@ -303,11 +306,11 @@ int main()
 		fclose(fptr);
 		char message[] = "finished\n";
 		if (write(deployment_tracer->pipe_write_end, message, strlen(message)+1) == -1) {  // +1 to include the null terminator
-        perror("write");
-        exit(EXIT_FAILURE);
-    }
+            perror("write");
+            exit(EXIT_FAILURE);
+        }
 		printf("TRACER: WAITING TO FINISH %d \n",deployment_tracer->pid);
-		waitpid(deployment_tracer->pid);
+		waitpid(deployment_tracer->pid,NULL,0);
 		printf("TRACER: FINISHED\n");
 	}
 
@@ -315,21 +318,26 @@ int main()
 	for(int i =0; i< NODE_COUNT;i++){
 
 		if(strlen(nodes[i].script)){
-			kill(nodes[i].current_pid,SIGKILL);
+			kill(nodes[i].current_pid,SIGTERM);
+			waitpid(nodes[i].current_pid,NULL,0);
 		}
 
 		if(nodes[i].pid_tc_in > 0){
 			kill(nodes[i].pid_tc_in,SIGINT);
+			waitpid(nodes[i].pid_tc_in,NULL,0);
 		}
 		if(nodes[i].pid_tc_out > 0){
 			kill(nodes[i].pid_tc_out,SIGINT);
+			waitpid(nodes[i].pid_tc_in,NULL,0);
 		}
 	}
-
 	printf("REAPING CHILD PROCESSES\n");
 	kill_child_processes(getpid());
+    kill(-getpid(), SIGTERM);  // Negative PID targets group
+    // Wait for all children to exit
+    while (waitpid(-1, NULL, 0) > 0);
 	printf("FINISHED CLEANUP\n");
-	exit(1);
+	return 0;
 }
 
 void start_tracer(){
@@ -539,7 +547,6 @@ void collect_container_pids(){
 
 void setup_node_scripts(){
 	for(int i=0;i<NODE_COUNT;i++){
-
 		if(!nodes[i].script[0]){
 			//printf("No command in this node %d \n",i);
 			continue;
@@ -548,10 +555,12 @@ void setup_node_scripts(){
 			printf("Empty command \n");
 			continue;
 		}
-		//printf("Starting processes with command %s \n",nodes[i].script);
+		printf("Starting processes with command %s \n",nodes[i].script);
 
-		if (nodes[i].container && !strlen(nodes[i].pid_file)){
-			start_target_process_in_container(i,&nodes[i].pid);
+		if (nodes[i].container){
+		    if (!strlen(nodes[i].pid_file)){
+				start_target_process_in_container(i,&nodes[i].pid);
+			}
 		}
 		else if (!nodes[i].container){
 			start_target_process(i,&nodes[i].pid);
@@ -564,6 +573,7 @@ void setup_node_scripts(){
 }
 
 void collect_container_processes(){
+    printf("Collecting container processes \n");
 	for(int i = 0; i< NODE_COUNT; i++){
 		if (nodes[i].container && strlen(nodes[i].script) > 0 && !(strlen(nodes[i].pid_file))){
 			int child_pid = get_children_pids(nodes[i].pid);
@@ -672,6 +682,7 @@ void send_node_and_pid_to_tracer(int container_pid,int container_type,int pid, c
 }
 
 void start_nodes_scripts(){
+    printf("NODES: STARTED\n");;
 	for(int i=0;i<NODE_COUNT;i++){
 		if (!(nodes[i].container)){
 			kill(nodes[i].pid,SIGUSR1);
@@ -707,7 +718,7 @@ void print_output(void* args){
 
 FILE* start_target_process(int node_number, int *pid){
 
-	//printf("Starting target script for node:%s with script:%s\n",nodes[node_number].name,nodes[node_number].script);
+	printf("Starting target script for node:%s with script:%s\n",nodes[node_number].name,nodes[node_number].script);
 
 	char script[STRING_SIZE];
 
@@ -854,7 +865,7 @@ FILE* start_target_process_in_container(int node_number,int *pid){
         exit(1);
     }
 
-	printf("Started process in node:%s with pid %d and with script:%s\n",nodes[node_number].name,*pid,nodes[node_number].script);
+	printf("STARTED NODE%s,NS_PID:%d,PID:%d,SCRIPT:%s\n",nodes[node_number].name,nodes[node_number].container_pid,*pid,nodes[node_number].script);
 	pthread_t thread_id;
 	struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
 	args->fp= fp;
@@ -1210,10 +1221,18 @@ int setup_tc_progs(){
 				}
 			}
 			//In containers the index inside is always -1 from the one in the host namespace
-			__u32 index_in_unsigned = (__u32)index-1;
+			__u32 index_in_unsigned = 0;
+			int key_for_fault = 0;
+			if (nodes[target].container){
+			    if (nodes[target].container_type == CONTAINER_TYPE_DOCKER){
+			        index_in_unsigned = (__u32)2;
+			    }if(nodes[target].container_type == CONTAINER_TYPE_LXC){
+					index_in_unsigned = (__u32)index-1;
+				}
+			}
 
 			struct tc_key egress_key = {
-				index_in_unsigned,
+				index-1,
 				BPF_TC_EGRESS,
 				i
 			};
@@ -1225,7 +1244,7 @@ int setup_tc_progs(){
 
 			sprintf(nsenter_args[2], "%d", nodes[target].container_pid);
 			sprintf(nsenter_args[5], "%u", index_in_unsigned);
-			sprintf(nsenter_args[6], "%d", tc_ebpf_progs_counter);
+			sprintf(nsenter_args[6], "%d", index-1);
 			sprintf(nsenter_args[7], "%d", tc_ebpf_progs_counter+handle);
 			sprintf(nsenter_args[8], "%d", FAULT_COUNT);
 			sprintf(nsenter_args[9], "%d", BPF_TC_EGRESS);
@@ -1267,7 +1286,7 @@ int setup_tc_progs(){
 
 
 			struct tc_key ingress_key = {
-				index_in_unsigned,
+				index-1,
 				BPF_TC_INGRESS,
 				i
 			};
@@ -1278,7 +1297,7 @@ int setup_tc_progs(){
 			}
 
 
-			sprintf(nsenter_args[6], "%d", tc_ebpf_progs_counter);
+			sprintf(nsenter_args[6], "%d", index-1);
 			sprintf(nsenter_args[7], "%d", tc_ebpf_progs_counter+handle);
 			sprintf(nsenter_args[9], "%d", BPF_TC_INGRESS);
 
@@ -1512,21 +1531,24 @@ void restart_process(void* args){
 	if(node->container){
 		start_target_process_in_container(node_to_restart,&temp_pid);
 		retrieve_new_pid_container(node_to_restart,temp_pid);
-		send_signal(node->current_pid,SIGSTOP,node->name);
+		//Sometimes this is to fast and the process did not yet start
+		//sleep_for_ms(25);
+		if (node->container_type == CONTAINER_TYPE_DOCKER){
+		    send_signal(node->current_pid,SIGSTOP,node->name);
+		}
 	}
 	else{
 		start_target_process(node_to_restart,&temp_pid);
 		node->current_pid = temp_pid;
 	}
-	//Sometimes this is to fast and the process did not yet start
 	update_node_pid_ebpf(node_to_restart,node->current_pid,node->pid,current_pid_pre_restart);
 	reinject_uprobes(node_to_restart);
 	if (node->container && deployment_tracer){
 		send_node_and_pid_to_tracer(node->container_pid,node->container_type,node->current_pid,node->name,node->if_index);
 	}
-	if(node->container)
+	if((node->container) && (node->container_type == CONTAINER_TYPE_DOCKER))
 		send_signal(node->current_pid,SIGCONT,node->name);
-	else{
+	else if (!node->container){
 		send_signal(node->current_pid,SIGUSR1,node->name);
 	}
 }

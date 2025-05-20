@@ -554,13 +554,17 @@ pub fn trace_processes_controlled(
 ) -> Result<()> {
     let mut join_handles = vec![];
     let mut tx_handles = vec![];
-    if Path::new(&nodes_info).exists() {
-        println!("Opening FIFO for reading...");
-
-        let file = File::open(nodes_info.clone()).unwrap();
-
-        println!("FIFO open in read_mode");
+    let read_pipe_name = format!("{}_write", nodes_info.clone());
+    let write_pipe_name = format!("{}_read", nodes_info.clone());
+    if Path::new(&read_pipe_name).exists() {
+        let file = File::open(read_pipe_name.clone()).unwrap();
+        println!("Opening FIFO for reading...{}", read_pipe_name.clone());
         let reader = BufReader::new(file);
+
+        let mut file_write = OpenOptions::new()
+            .write(true)
+            .open(&write_pipe_name)
+            .unwrap();
 
         println!("Reader started");
         for line in reader.lines() {
@@ -603,6 +607,8 @@ pub fn trace_processes_controlled(
                 rx,
                 &mut join_handles,
             );
+            let buf = vec![0; 8];
+            file_write.write(&buf).expect("Failed to send ping to ROSE");
         }
     } else {
         println!("FIFO does not exist.");
@@ -1035,9 +1041,16 @@ pub fn collect_events(
                         let node_name = hashmap_pid_to_node
                             .get(&pid)
                             .expect(&format!("Failed to node-name for pid {}", event.pid));
-                        let event_name = functions
-                            .get(event.id as usize)
-                            .expect(&format!("Failed to get function name for id {}", event.id));
+                        let event_name = functions.get(event.id as usize);
+
+                        let event_name = match event_name {
+                            Some((name, offset)) => &(name.clone(), *offset),
+                            None => &("unknown".to_string(), 0 as usize),
+                        };
+
+                        if event_name.0 == "unknown" {
+                            continue;
+                        }
                         write_event_to_history(
                             event,
                             node_name.clone(),

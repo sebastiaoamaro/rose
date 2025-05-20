@@ -39,8 +39,6 @@ for i in $(seq 1 $n); do ssh-keyscan -t rsa n${i}.lxd >>/root/.ssh/known_hosts; 
 
 echo "Added nodes to known hosts"
 
-# Create ~/nodes with has th DB hostnames one per line
-# echo -e 'n1\nn2\nn3\nn4\nn5' > ~/nodes
 rm /root/nodes
 for i in $(seq 1 $n); do echo -e "n${i}.lxd" >>/root/nodes; done
 
@@ -66,4 +64,5 @@ for i in $(seq 1 $n); do
 	echo "Files to n${i}"
 done
 
+rm /root/.ssh/config
 # lein run test --nodes-file ~/nodes --username root

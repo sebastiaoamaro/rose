@@ -8,7 +8,7 @@ echo -e '\n# Set default working directory\nexport WORKDIR="/vagrant" && [ -d "$
 cp tmux.conf ~/.tmux.conf
 sudo apt-get update
 sudo apt-get -y install clang libelf1 libelf-dev zlib1g-dev libc6-dev-i386 autoconf make python3-pip pcp gnuplot gcc pkg-config gcc-14 cmake llvm jq linux-headers-$(uname -r)
-sudo apt-get upgrade
+sudo apt-get  -y upgrade
 
 #Docker
 sudo apt-get install ca-certificates curl gnupg

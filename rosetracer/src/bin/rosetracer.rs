@@ -4,10 +4,10 @@ use rosetracer::auxiliary;
 use rosetracer::production_tracer;
 use rosetracer::rw_tracer;
 use rosetracer::statistics_tracer;
-use rosetracer::tracer;
+use rosetracer::sys_all_tracer;
 use std::{env, process::exit};
 
-fn main() -> Result<()> {
+fn main() {
     let new_limit = rlimit {
         rlim_cur: 65356, // Soft limit
         rlim_max: 65356, // Hard limit
@@ -29,8 +29,8 @@ fn main() -> Result<()> {
 
     let mode = type_and_mode[1].trim();
 
-    if tracing_type == "full_trace" {
-        println!("Started FULL_TRACER");
+    if tracing_type == "sys_all_tracer" {
+        println!("Started SYS_ALL_TRACER");
         let functions_file = &args[2];
 
         let mut functions = vec![];
@@ -45,7 +45,7 @@ fn main() -> Result<()> {
             network_interface = args[5].to_string();
         }
 
-        tracer::run_tracing(
+        sys_all_tracer::run_tracing(
             mode.to_string(),
             functions,
             binary_path,
@@ -53,8 +53,6 @@ fn main() -> Result<()> {
             network_interface,
         )
         .expect("Something went wrong with tracer");
-
-        //exit(1);
     }
     if tracing_type == "rw_trace" {
         println!("Started RW_TRACER");
@@ -139,5 +137,5 @@ fn main() -> Result<()> {
     }
     println!("Finished tracing mode: {}", tracing_type);
 
-    exit(1);
+    return;
 }

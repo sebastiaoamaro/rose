@@ -1,4 +1,5 @@
 execution_plan:
+  maximum_time: 30
   tracer:
     tracer_location: /vagrant/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid

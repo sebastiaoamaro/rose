@@ -1,238 +1,26 @@
 execution_plan:
   cleanup:
-    duration: 60
-  maximum_time: 120
-  setup:
-    duration: 5
-    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/startrediscluster2d1cf30.sh
+    duration: 30
   tracer:
-    binary_to_examine: /redisraft.so
-    functions_file: /vagrant/schedules/reproducedbugs/redisraft/symbols/bug_42_symbols.txt
     pipe_location: /tmp/containerpid
-    tracer_location: /vagrant/rosetracer/target/release/rosetracer
-    tracing_type: full_trace,container_controlled
-  workload:
-    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
-    wait_time: 15
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+    tracing_type: production_trace,process_controlled
 nodes:
-  redis1:
-    binary: /redisraft.so
-    container: true
-    ip: 172.19.1.10
-    leader: true
-    leader_symbol: raft_become_leader
-    script: ./startredis.sh 1 172.19.1.10
-  redis2:
-    binary: /redisraft.so
-    container: true
-    ip: 172.19.1.11
-    leader_symbol: raft_become_leader
-    script: ./startredis.sh 2 172.19.1.11
-  redis3:
-    binary: /redisraft.so
-    container: true
-    ip: 172.19.1.12
-    leader_symbol: raft_become_leader
-    script: ./startredis.sh 3 172.19.1.12
-  redis4:
-    binary: /redisraft.so
-    container: true
-    ip: 172.19.1.13
-    leader_symbol: raft_become_leader
-    script: ./startredis.sh 4 172.19.1.13
-  redis5:
-    binary: /redisraft.so
-    container: true
-    ip: 172.19.1.14
-    leader_symbol: raft_become_leader
-    script: ./startredis.sh 5 172.19.1.14
+  zookeeper:
+    container: false
+    script: /home/sebastiaoamaro/phd/Anduril-test/Anduril/ground_truth/zookeeper-4203/run-original-test.sh
 faults:
-  networkfault178315:
-    begin_conditions:
-    - condition_nr0:
-        time: 20000
-        type: time
-    duration: 25330
-    ips_in:
-    - redis1
-    ips_out:
-    - redis1
-    target: redis2
-    traced: redis2
-    type: block_ips
-  networkfault178316:
-    begin_conditions:
-    - condition_nr0:
-        time: 20000
-        type: time
-    duration: 25137
-    ips_in:
-    - redis1
-    ips_out:
-    - redis1
-    target: redis3
-    traced: redis3
-    type: block_ips
-  networkfault178317:
-    begin_conditions:
-    - condition_nr0:
-        time: 20000
-        type: time
-    duration: 25158
-    ips_in:
-    - redis1
-    ips_out:
-    - redis1
-    target: redis4
-    traced: redis4
-    type: block_ips
-  networkfault178318:
-    begin_conditions:
-    - condition_nr0:
-        time: 20000
-        type: time
-    duration: 25265
-    ips_in:
-    - redis1
-    ips_out:
-    - redis1
-    target: redis5
-    traced: redis5
-    type: block_ips
-  process_kill178319:
-    begin_conditions:
-    - condition_nr0:
-        binary_location: /redisraft.so
-        call_count: '1'
-        offset: '0'
-        symbol: raftNodeHasSufficientLogs
-        type: user_function
-    duration: 0
-    target: redis1
-    traced: redis1
-    type: process_kill
-  process_kill178320:
-    begin_conditions:
-    - condition_nr0:
-        binary_location: /redisraft.so
-        call_count: '1'
-        offset: '0'
-        symbol: storeSnapshotData
-        type: user_function
-    - condition_nr1:
-        binary_location: /redisraft.so
-        call_count: '1'
-        offset: '0'
-        symbol: handleLoadSnapshot
-        type: user_function
-    - condition_nr2:
-        binary_location: /redisraft.so
-        call_count: '4'
-        offset: '0'
-        symbol: raft_randomize_election_timeout
-        type: user_function
-    - condition_nr3:
-        binary_location: /redisraft.so
-        call_count: '2'
-        offset: '0'
-        symbol: raftPersistVote
-        type: user_function
-    - condition_nr4:
-        binary_location: /redisraft.so
-        call_count: '2'
-        offset: '0'
-        symbol: raft_vote_for_nodeid
-        type: user_function
-    - condition_nr5:
-        binary_location: /redisraft.so
-        call_count: '2'
-        offset: '0'
-        symbol: raft_vote
-        type: user_function
-    - condition_nr6:
-        binary_location: /redisraft.so
-        call_count: '2'
-        offset: '0'
-        symbol: raftPersistTerm
-        type: user_function
-    - condition_nr7:
-        binary_location: /redisraft.so
-        call_count: '2'
-        offset: '0'
-        symbol: raftNotifyStateEvent
-        type: user_function
-    - condition_nr8:
-        binary_location: /redisraft.so
-        call_count: '4'
-        offset: '0'
-        symbol: raft_become_candidate
-        type: user_function
-    - condition_nr9:
-        binary_location: /redisraft.so
-        call_count: '2'
-        offset: '0'
-        symbol: raft_election_start
-        type: user_function
-    duration: 0
-    target: redis1
-    traced: redis1
-    type: process_kill
-  syscall106077:
-    begin_conditions:
-    - condition_nr0:
-        call_count: '1'
-        file_name: stat
-        syscall_name: read
-        type: file_syscall
-    details:
-      name: connect
-      repeatable: 0
-      return_value: -110
-    duration: 0
-    target: redis4
-    traced: redis4
+  syscall1101:
     type: syscall
-  syscall138161:
-    begin_conditions:
-    - condition_nr0:
-        call_count: '1'
-        file_name: online
-        syscall_name: openat
-        type: file_syscall
-    details:
-      name: openat
-      repeatable: 0
-      return_value: -2
+    target: zookeeper
+    traced: zookeeper
     duration: 0
-    target: redis1
-    traced: redis1
-    type: syscall
-  syscall145436:
     begin_conditions:
     - condition_nr0:
-        call_count: '1'
-        syscall_name: accept
         type: syscall
+        syscall_name: accept
+        call_count: '21'
     details:
       name: accept
+      return_value: -5
       repeatable: 0
-      return_value: -11
-    duration: 0
-    target: redis3
-    traced: redis3
-    type: syscall
-  syscall14701:
-    begin_conditions:
-    - condition_nr0:
-        call_count: '1'
-        file_name: stat
-        syscall_name: read
-        type: file_syscall
-    details:
-      name: read
-      repeatable: 0
-      return_value: -110
-    duration: 0
-    target: redis5
-    traced: redis5
-    type: syscall

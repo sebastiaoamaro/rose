@@ -438,13 +438,10 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 			__u64 time_ms = time / 1000000;
 			fault->start_time = time_ms;
 			fault->timestamp = time;
-			//bpf_printk("Changed timestamp to %llu\n",fault->timestamp);
 			int error = bpf_map_update_elem(maps->faults_specification,&fault_to_inject,&description_of_fault,BPF_ANY);
 			if (error)
 				bpf_printk("Error of update is %d, faulttype->%d / value-> %d\n",error,fault_type,1);
-
 			fault->run = 0;
-
 			if (!fault->duration)
 				fault->done++;
 		}

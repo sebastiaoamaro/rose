@@ -1,0 +1,10 @@
+FROM ubuntu:18.04
+RUN apt-get -y update
+RUN apt install -y iputils-ping
+
+ADD redis_binaries/redis-server18.04 redis-server
+ADD redis_binaries/redis-cli18.04 redis-cli
+ADD redisraft_binaries/18.04redisraftb9ee410.so ./redisraft.so
+ADD startredis.sh .
+RUN chmod +x startredis.sh
+ADD ips.txt .

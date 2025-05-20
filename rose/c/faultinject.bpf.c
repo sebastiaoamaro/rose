@@ -489,24 +489,24 @@ int BPF_KRETPROBE(__x64_sys_openat_ret)
 
 	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&pid);
 
-	if(fdrelevant){
-		if(fdrelevant->size){
-			for (int i=0;i<fdrelevant->size;i++){
-				if(i>MAX_RELEVANT_FILES)
-					break;
-				u64 relevant_fd = fdrelevant->fds[i];
-				if (relevant_fd == fd){
-					//bpf_printk("This fd is important but we already processed it \n");
-					inject_override(pid,OPENAT_RET,(struct pt_regs *) ctx,0,&faults_specification);
-				}
-			}
-			process_fd = 1;
+	// if(fdrelevant){
+	// 	if(fdrelevant->size){
+	// 		for (int i=0;i<fdrelevant->size;i++){
+	// 			if(i>MAX_RELEVANT_FILES)
+	// 				break;
+	// 			u64 relevant_fd = fdrelevant->fds[i];
+	// 			if (relevant_fd == fd){
+	// 				//bpf_printk("This fd is important but we already processed it \n");
+	// 				inject_override(pid,OPENAT_RET,(struct pt_regs *) ctx,0,&faults_specification);
+	// 			}
+	// 		}
+	// 		process_fd = 1;
 
-		}
-		else{
-			process_fd = 1;
-		}
-	}
+	// 	}
+	// 	else{
+	// 		process_fd = 1;
+	// 	}
+	// }
 
 	if (fd > 0 && process_fd){
 
@@ -770,22 +770,22 @@ int BPF_KPROBE(__x64_sys_fdatasync,struct pt_regs *regs)
 
 	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&origin_pid);
 
-	if(fdrelevant){
-		for (int i=0;i<fdrelevant->size;i++){
-			if(i>MAX_RELEVANT_FILES)
-				break;
-			__u64 relevant_fd = fdrelevant->fds[i];
-			if(relevant_fd == fd){
-				process_fd = 0;
-				process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
-					&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
-				inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
-				break;
-			}
-		}
-	}else{
-		process_fd = 0;
-	}
+	// if(fdrelevant){
+	// 	for (int i=0;i<fdrelevant->size;i++){
+	// 		if(i>MAX_RELEVANT_FILES)
+	// 			break;
+	// 		__u64 relevant_fd = fdrelevant->fds[i];
+	// 		if(relevant_fd == fd){
+	// 			process_fd = 0;
+	// 			process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
+	// 				&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
+	// 			inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);
+	// 			break;
+	// 		}
+	// 	}
+	// }else{
+	// 	process_fd = 0;
+	// }
 
 	if (fd > 0 && process_fd){
 		struct file *file = get_file_from_fd(fd);

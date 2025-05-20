@@ -95,6 +95,8 @@ void create_node(node* node, char* name,int pid,char* pid_file, char* veth, char
     node->leader = leader;
 
     node->if_index = 0;
+    node->pid_tc_in = 0;
+    node->pid_tc_out = 0;
 
 
     if (container){

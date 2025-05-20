@@ -5,7 +5,7 @@ import signal
 import sys
 import subprocess
 from processor.processor import History, choose_faults, compare_faults, write_new_schedule,get_fault_by_name
-from processor.binary_parser import calculate_offsets
+from processor.binary_parser import calculate_offsets,calculate_plt_offsets,calculate_call_offsets
 from parser.conditions import file_syscall_condition, syscall_condition, time_cond, user_function_condition
 import shutil
 import time
@@ -86,7 +86,7 @@ def parse_bug_reproduction(filename):
     return bug_reproduction
 
 def run_reproduction(schedule):
-    command = ["sh","run_reproduction.sh", schedule]
+    command = ["sudo","./run_reproduction.sh", schedule]
     try:
         with open("/tmp/run_reproduction.log", 'w', buffering=1) as file:  # Line buffering
             with subprocess.Popen(
@@ -114,7 +114,6 @@ def run_reproduction(schedule):
                         process.returncode,
                         command
                     )
-
     except subprocess.CalledProcessError as e:
         print(f"\nrun_reproduction finished with: exit code {e.returncode}")
         # Consider re-raising or handling differently
@@ -122,7 +121,7 @@ def run_reproduction(schedule):
         print(f"\nUnexpected error: {str(e)}")
 
 def check_oracle(oracle,run,result_folder):
-    command = [oracle, run, result_folder]
+    command = ["sudo",oracle, run, result_folder]
 
     buggy_run = False
     try:
@@ -156,7 +155,7 @@ def collect_history(trace_location,result_folder,run):
             text=True,           # Decode output as text
             check=True           # Raise exception on non-zero exit code
         )
-        print("Output from collect_history:")
+        #print("Output from collect_history:")
         #print(result.stdout)  # Standard output
     except subprocess.CalledProcessError as e:
         print("An error occurred:")
@@ -177,8 +176,8 @@ def run_cleanup(cleanup):
             text=True,           # Decode output as text
             check=True           # Raise exception on non-zero exit code
         )
-        print("Output from cleanup:")
-        print(result.stdout)  # Standard output
+        #print("Output from cleanup:")
+        #print(result.stdout)  # Standard output
     except subprocess.CalledProcessError as e:
         print("An error occurred:")
         print(e.stderr)  # Standard error
@@ -233,7 +232,7 @@ def main():
     print("FAULTS CHOOSEN:\n",faults_detected)
 
     schedule_location = "temp_sched.yaml"
-
+    buggy_schedules = []
     print("Running Level 1: First Guess")
     buggy_run = run_test(bug_reproduction,faults_detected)
 
@@ -242,12 +241,14 @@ def main():
     if (buggy_run):
         buggy_schedule = bug_reproduction.result_folder+"buggy_run:"+"first_guess"+".yaml"
         move_file(schedule_location,buggy_schedule)
-        reproduction_rate = check_reproduction_rate(schedule_location,bug_reproduction)
-        runs_counter+=10;
+        (runs,reproduction_rate) = check_reproduction_rate(schedule_location,bug_reproduction)
+        runs_counter+=runs;
 
         if reproduction_rate >= 75:
             end_reproduction(reproduction_rate,runs_counter,schedule_location,start_time)
             return
+        schedule = save_schedule(schedule_location,bug_reproduction.result_folder,"first_guess")
+        buggy_schedules.append(schedule)
 
     print("Running Level 2: What happened before?")
 
@@ -260,14 +261,18 @@ def main():
     time_first_fault = faults_detected_time_sorted[0].start_time
     time_rounded_first_fault = math.floor(time_first_fault /10) * 10
 
-
+    #Holds the last correct history (preserves fault order and condition order)
     last_history = history
     for fault in faults_detected:
-        if "extra" in fault.name:
-            continue
-        print("Finding context for fault: \n{} functions_to_analyze is: \n{}".format(fault, functions_to_analyze))
+
+        #Ignore faults created by us, temporary remove after refactor
+        if "extra" in fault.name: continue
+
+        print("CONTEXTUALIZING FAULT: \n{}".format(fault))
         fault_occuring = True
-        correct_fault_order = True
+        condition_order = True
+        fault_order = True
+        first_buggy_schedule_for_fault = True
         if fault.type == "syscall" and functions_to_analyze == 0:
             call_count = 1
             while reproduction_rate < 75 and fault_occuring:
@@ -276,65 +281,69 @@ def main():
                 buggy_run = run_test(bug_reproduction,faults_detected)
                 runs_counter+=1
                 if buggy_run:
-                    reproduction_rate = check_reproduction_rate(schedule_location,bug_reproduction)
-                    runs_counter+=10
-                    if reproduction_rate >= 75:
-                        break
+                    (runs,reproduction_rate) = check_reproduction_rate(schedule_location,bug_reproduction)
+                    runs_counter+=runs
+                    if reproduction_rate >= 75: break
+                    run_name = str(fault_counter)+":"+str(call_count)
+                    schedule = save_schedule(schedule_location,bug_reproduction.result_folder,run_name)
+                    buggy_schedules.append(schedule)
                 else:
-                    #If it is not a buggy_run we need to check if the fault we are changing occurred
                     history = collect_and_parse(bug_reproduction,schedule_location,str(call_count))
+                    if len(history.faults_injected) == 0: fault_occuring = False
                     for fault_injected_event in history.faults_injected:
-                        if fault_counter == fault_injected_event.id:
-                            fault_occuring = True
-                            break
-                        fault_occuring = False
-                        fault_counter += 1
-            if reproduction_rate > 75:
-                end_reproduction(reproduction_rate,runs_counter,schedule_location,start_time)
+                        if fault.name in fault_injected_event.name: fault_occuring = True
+                        else: fault_occuring = False
+                    if not fault_occuring: fault_counter += 1
+            if reproduction_rate > 75: end_reproduction(reproduction_rate,runs_counter,schedule_location,start_time)
 
         if fault.type in ("process_kill", "process_pause", "block_ips"):
-            random_sequence = 1
+            amplification = 0
             count = 1
             last_event_counter_value = 0
             previous_number_unique_events = -1
-            time_conditions = deepcopy(fault.begin_conditions)
             last_used_conditions = deepcopy(fault.begin_conditions)
             last_created_aux_faults = []
-            while reproduction_rate < 75 and fault_occuring:
+            while reproduction_rate < 75 and fault_occuring and condition_order and fault_order and len(last_used_conditions) < 7:
+                functions_before = []
                 window = 1*count
-                functions_before = history_buggy.get_functions_before(fault.target,fault.event_id,window)
-                #If we saw all functions before a fault
-                if last_event_counter_value == functions_before[0]:
-                    print("Incremented fault_counter saw all functions, LECV:", last_event_counter_value,"FUNC_BEFORE",functions_before[0])
-                    fault_counter += 1
-                    if previous_number_unique_events > 0:
-                        functions_to_analyze += 1
-                    break
-                #If incrementing the window did not increase the number of unique functions
-                elif len(functions_before[1]) <= previous_number_unique_events:
-                    print("Unique events did not change, or is smaller than previous")
-                    fault_counter += 1
-                    if previous_number_unique_events > 0:
-                        functions_to_analyze += 1
-                    break;
-                #If there are no unique functions
-                elif len(functions_before[1]) == 0:
-                    last_event_counter_value = functions_before[0]
-                    previous_number_unique_events = len(functions_before[1])
-                    continue;
+                if amplification == 0:
+                    functions_before = history_buggy.get_functions_before(fault.target,fault.event_id,window)
+                    #If we saw all functions before a fault
+                    if last_event_counter_value == functions_before[0]:
+                        print("Incremented fault_counter saw all functions, LECV:", last_event_counter_value,"FUNC_BEFORE",functions_before[0])
+                        fault_counter += 1
+                        if previous_number_unique_events > 0: functions_to_analyze += 1
+                        break
+                    #If incrementing the window did not increase the number of unique functions
+                    elif len(functions_before[1]) <= previous_number_unique_events:
+                        print("Unique events did not change, or is smaller than previous, or chain_max_size")
+                        fault_counter += 1
+                        if previous_number_unique_events > 0: functions_to_analyze += 1
+                        break;
+                    #If there are no unique functions
+                    elif len(functions_before[1]) == 0:
+                        last_event_counter_value = functions_before[0]
+                        previous_number_unique_events = len(functions_before[1])
+                        continue;
+                    else:
+                        last_event_counter_value = functions_before[0]
+                        previous_number_unique_events = len(functions_before[1])
                 else:
-                    last_event_counter_value = functions_before[0]
-                    previous_number_unique_events = len(functions_before[1])
+                    functions_before = history_buggy.get_functions_before(fault.target,fault.event_id,window)
 
-                #increment window multiplier
-                count+=1
-                print("Conditions before fault for window {} and count {}:\n{}".format(window,count,functions_before[1].items()))
+                print("USING CHAIN:{}\n".format(functions_before))
                 #Add functions to Fault
                 fault.begin_conditions = build_fault_conditions(fault,functions_before,history_buggy)
                 #Add time condition to Fault
                 cond = time_cond()
                 time_rounded = 0
-                fault_before = next((faults_detected_time_sorted[i-1] for i, x in enumerate(faults_detected_time_sorted) if x.name == fault.name and i > 0), None)
+                current_index = faults_detected_time_sorted.index(fault)
+                fault_before = None
+                for prev_index in range(current_index - 1, -1, -1):
+                    prev_fault = faults_detected_time_sorted[prev_index]
+                    if "syscall" not in prev_fault.name:
+                        fault_before = prev_fault
+                        break
                 #If there is no fault (first_one) we leverage symbols
                 if fault_before is None:
                     print("No previous fault ")
@@ -344,37 +353,75 @@ def main():
                 if time_rounded != 0:
                     cond.time = time_rounded
                     fault.begin_conditions.append(cond)
+                    fault.start_time = time_rounded
                     print("ADDED TIME_COND: ",cond.time)
 
                 #Replicates a state for all faults that share the binary to account for randomness
                 faults_created = 1
                 faults_to_inject = []
                 new_faults = []
-                if random_sequence:
+                if amplification:
                     new_faults = create_new_faults_for_state(history,fault)
                     faults_created = faults_created+len(new_faults)
                     faults_to_inject = new_faults + faults_detected
-                    print("ADDED FAULTS SEQUENCE MIGHT BE RANDOM")
-                else:
-                    faults_to_inject = faults_detected
+                    print("ADDED EXTRA FAULTS")
+                else: faults_to_inject = faults_detected
 
                 #Test schedule with new conditions
+                run_name = str(fault_counter)+":"+str(count)
                 buggy_run = run_test(bug_reproduction,faults_to_inject)
                 runs_counter+=1
-                if buggy_run:
-                    reproduction_rate = check_reproduction_rate(schedule_location,bug_reproduction)
-                    runs_counter+=10
+                if buggy_run and first_buggy_schedule_for_fault:
+                    (runs,reproduction_rate) = check_reproduction_rate(schedule_location,bug_reproduction)
+                    runs_counter+=runs
                     if reproduction_rate >= 75:
                         break
+                    first_buggy_schedule_for_fault = False
+                    schedule = save_schedule(schedule_location,bug_reproduction.result_folder,run_name)
+                    buggy_schedules.append(schedule)
+                elif buggy_run:
+                    schedule = save_schedule(schedule_location,bug_reproduction.result_folder,run_name)
+                    buggy_schedules.append(schedule)
 
                 #If it is not a buggy_run we need to check if the fault we are changing occurred
-                run_name = str(fault_counter)+":"+str(count)
                 history = collect_and_parse(bug_reproduction,schedule_location,run_name)
                 total_faults = 0
+                fault_occuring = next((True for x in history.faults_injected if fault.name in x.name), False)
+
+                print("FAULT OCCURRED: ",fault_occuring)
+                fault_order = True
+                if not fault_occuring:
+                    if amplification:
+                        #No fault occured after amplification
+                        continue;
+                    else:
+                        fault_occuring=True
+                        amplification=1
+                        print("FAULT_OCCURING:{},CONDITION_ORDER:{},FAULT_ORDER:{},LEN_LUC:{}".format(fault_occuring,condition_order,fault_order,len(last_used_conditions)))
+                        continue
+
+                elif not amplification:
+                    fault_order = compare_fault_order(faults_detected_time_sorted,history.faults_injected)
+
+                if not fault_order and not amplification:
+                    fault_counter += 1
+                    fault.begin_conditions = deepcopy(last_used_conditions)
+                    functions_to_analyze += 1
+                    continue
+
+                #increment window multiplier
+                count+=1
                 for fault_injected_event in history.faults_injected:
                     if fault.name in fault_injected_event.name:
                         #print("LUC",last_used_conditions)
-                        condition_order = history.check_last_condition(fault_injected_event,window,functions_before[2])
+                        fault_cond_order = history.check_order(fault_injected_event,window,functions_before[2])
+
+                        #If a previous amplified is out of order then this chain is not good
+                        if fault_cond_order and condition_order:
+                            condition_order = True
+                        else:
+                            condition_order = False
+
                         print("CONDITION ORDER:",condition_order)
                         if not condition_order:
                             fault.begin_conditions = deepcopy(last_used_conditions)
@@ -383,19 +430,14 @@ def main():
                             last_history = history
                         total_faults+=1
                         last_created_aux_faults = new_faults
-
-                fault_occuring = total_faults != 0
                 #If the faults we created were all called then it is not a random sequence
                 print("TOTAL FAULTS:",total_faults)
                 print("FAULTS CREATED:",faults_created)
-                random_sequence = total_faults != faults_created
-
-                #Remove extra faults we created, if it is random they will be created again
-                #if not we need to remove them
-                #for fault in new_faults:
-                #    faults_detected = [obj for obj in faults_detected if obj.name != fault.name]
-
-                if not fault_occuring:
+                #If fault did not occur and we did notry amplification it is time to try it
+                if amplification:
+                    #If we amplified and fault_occured we have to keep doing
+                    amplification = total_faults != faults_created
+                if not condition_order:
                     fault_counter += 1
                     fault.begin_conditions = deepcopy(last_used_conditions)
                     functions_to_analyze += 1
@@ -403,36 +445,93 @@ def main():
                         fault.begin_conditions = deepcopy(last_used_conditions)
                         faults_detected.append(fault)
 
-
         if reproduction_rate > 75:
             end_reproduction(reproduction_rate,runs_counter,schedule_location,start_time)
             return
 
-    print("Running Level 3: Not all Offsets are Equal")
     schedule_location = write_new_schedule(bug_reproduction.schedule,faults_detected)
     #Thrid attempts run schedules based on third level context information
-    for fault in reversed(faults_detected):
-        #No bugs we reproduce need this
-        if fault.type == "syscall":
-            continue
-        if fault.type in ("process_kill", "process_pause", "block_ips"):
-            for fault_extra in faults_detected:
-                if fault.name in fault_extra.name:
-                    for cond in fault_extra.begin_conditions:
-                        if isinstance(cond, user_function_condition):
-                            offsets = calculate_offsets(bug_reproduction.binary, cond.symbol)
-                            for offset in offsets:
-                                cond.offset = offset
-                                buggy_run = run_test(bug_reproduction,faults_detected)
-                                runs_counter+=1
-                                if buggy_run:
-                                    reproduction_rate = check_reproduction_rate(schedule_location,bug_reproduction)
-                                    runs_counter+=10
-                                    if reproduction_rate >= 75:
-                                        end_reproduction(reproduction_rate,runs_counter,schedule_location,start_time)
-                                        return
-            functions_to_analyze -= 1
-            #Go back to level 2
+    if not bug_reproduction.binary == "":
+        print("Running Level 3.1: Not all Offsets are Equal: plt")
+        for fault in reversed(faults_detected):
+            if "extra" in fault.name:
+                continue
+            #No bugs we reproduce need this
+            if fault.type == "syscall":
+                continue
+            if fault.type in ("process_kill", "process_pause", "block_ips"):
+                for cond in fault.begin_conditions:
+                    if isinstance(cond, user_function_condition):
+                        offsets = calculate_plt_offsets(bug_reproduction.binary, cond.symbol)
+                        print("Fault: {}, Offsets for 3.1 are: {}".format(fault.name,offsets))
+                        (runs,reproduction_rate,buggy_schedules_3_1) = test_offsets_for_fault(offsets,faults_detected,fault,bug_reproduction,runs_counter,schedule_location,cond)
+                        if reproduction_rate > 75:
+                            runs_counter+=runs
+                            end_reproduction(reproduction_rate,runs_counter,schedule_location,start_time)
+                            return
+                        for buggy_schedule in buggy_schedules_3_1:
+                            buggy_schedules.append(buggy_schedule)
+                        #Reset offsets back to 0
+                        reset_offset_for_fault(faults_detected,fault,cond)
+                        break;
+
+        print("Running Level 3.2: Not all Offsets are Equal: calls")
+        for fault in reversed(faults_detected):
+            if "extra" in fault.name:
+                continue
+            #No bugs we reproduce need this
+            if fault.type == "syscall":
+                continue
+            if fault.type in ("process_kill", "process_pause", "block_ips"):
+                for cond in fault.begin_conditions:
+                    if isinstance(cond, user_function_condition):
+                        offsets = calculate_call_offsets(bug_reproduction.binary, cond.symbol)
+                        print("Fault: {}, Offsets for 3.2 are: {}".format(fault.name,offsets))
+                        (runs,reproduction_rate,buggy_schedules_3_2) = test_offsets_for_fault(offsets,faults_detected,fault,bug_reproduction,runs_counter,schedule_location,cond)
+                        if reproduction_rate > 75:
+                            runs_counter+=runs
+                            end_reproduction(reproduction_rate,runs_counter,schedule_location,start_time)
+                            return
+                        for buggy_schedule in buggy_schedules_3_2:
+                            buggy_schedules.append(buggy_schedule)
+                        #Reset offsets back to 0
+                        reset_offset_for_fault(faults_detected,fault,cond)
+                        break;
+
+        print("Running Level 3.3: Not all Offsets are Equal: all")
+        for fault in reversed(faults_detected):
+            if "extra" in fault.name:
+                continue
+            #No bugs we reproduce need this
+            if fault.type == "syscall":
+                continue
+            if fault.type in ("process_kill", "process_pause", "block_ips"):
+                for cond in fault.begin_conditions:
+                    if isinstance(cond, user_function_condition):
+                        offsets = calculate_offsets(bug_reproduction.binary, cond.symbol)
+                        print("Fault: {}, Offsets for 3.3 are: {}".format(fault.name,offsets))
+                        (runs,reproduction_rate,buggy_schedules_3_3) = test_offsets_for_fault(offsets,faults_detected,fault,bug_reproduction,runs_counter,schedule_location,cond)
+                        if reproduction_rate > 75:
+                            runs_counter+=runs
+                            end_reproduction(reproduction_rate,runs_counter,schedule_location,start_time)
+                            return
+                        for buggy_schedule in buggy_schedules_3_3:
+                            buggy_schedules.append(buggy_schedule)
+                        #Reset offsets back to 0
+                        reset_offset_for_fault(faults_detected,fault,cond)
+                        break;
+    best_rr_rate = 0
+    best_schedule = ""
+    for buggy_schedule in reversed(buggy_schedules):
+        runs_counter+=10
+        reproduction_rate = check_reproduction_rate_post_phase(buggy_schedule,bug_reproduction)
+        if reproduction_rate >= 75:
+            end_reproduction(reproduction_rate,runs_counter,buggy_schedule,start_time)
+            return
+        if reproduction_rate > best_rr_rate:
+            best_rr_rate = reproduction_rate
+            best_schedule = buggy_schedule
+    end_reproduction(reproduction_rate,runs_counter,best_schedule,start_time)
 
 def run_test(bug_reproduction,faults_detected,):
     schedule_location = write_new_schedule(bug_reproduction.schedule,faults_detected)
@@ -462,12 +561,43 @@ def check_reproduction_rate(schedule,bug_reproduction):
             normal_runs_counter+=1
         if normal_runs_counter == 3:
             print("CAN NOT HAVE RR SUPERIOR TO 70%")
-            return 0
+            return (buggy_runs_counter+normal_runs_counter, 0)
+    reproduction_rate = (buggy_runs_counter*100)/10
+    print("RR:",reproduction_rate)
+    return (buggy_runs_counter+normal_runs_counter, reproduction_rate)
+
+def check_reproduction_rate_post_phase(schedule,bug_reproduction):
+    print("SCHEDULE:",schedule,"TESTING REPLAY RATE")
+    buggy_runs_counter = 0
+    normal_runs_counter = 0
+    for i in range(0,10):
+        run_reproduction(schedule)
+        buggy_run = check_oracle(bug_reproduction.oracle,str(0),bug_reproduction.result_folder)
+        run_cleanup(bug_reproduction.cleanup)
+        if(buggy_run):
+            buggy_runs_counter += 1
     reproduction_rate = (buggy_runs_counter*100)/10
     print("RR:",reproduction_rate)
     return reproduction_rate
 
+def save_schedule(schedule_location,result_folder,run_name):
+    location = result_folder+run_name+".yaml"
+    command = ["sudo","cp",schedule_location,location]
+    try:
+        # Start the process
+        result = subprocess.run(
+            command,
+            capture_output=True,  # Capture stdout and stderr
+            text=True,           # Decode output as text
+            check=True           # Raise exception on non-zero exit code
+        )
+        #print("Output from collect_history:")
+        #print(result.stdout)  # Standard output
+    except subprocess.CalledProcessError as e:
+        print("An error occurred:")
+        print(e.stderr)  # Standard error
 
+    return location
 def end_reproduction(reproduction_rate,runs,schedule,start_time):
     end_time = time.time()
     elapsed_time = end_time - start_time
@@ -487,47 +617,57 @@ def build_fault_conditions(fault,functions_before,history_buggy):
 
 #Calculate the time it should use based on the previous fault
 def get_time_for_fault(fault,faults_detected_time_sorted,fault_before,history,time_rounded_first_fault):
-    print("Fault before is",fault_before.name)
     time_fault_current = fault.start_time
     time_rounded_current = math.floor(time_fault_current / 10) * 10
-
     time_fault_before = get_fault_by_name(faults_detected_time_sorted,fault_before.name).start_time
     time_rounded_before = math.floor(time_fault_before / 10) * 10
-
-    time_gap = time_rounded_current - time_rounded_before
 
     #If the previous fault did not occur in the last attempt we leverage the time before in the original
     #as we did for the previous fault
     fault_before_testing = next((x for x in history.faults_injected if fault_before.name in x.name), None)
-    print("Faults injected in last history:\n",history.faults_injected)
+    #print("Faults injected in last history:\n",history.faults_injected)
     if fault_before_testing is None:
-        print("Time is time of previous fault in original")
+        print("Time is time of fault {} in original".format(fault_before.name))
         time_rounded = time_rounded_before
-    #Multiple faults can be the same and occur at the same time thus we need to check for this
-    elif (time_rounded_before == time_rounded_first_fault):
-        #Always leverage the timestamp of the fault in our testing context
-        print("Time is time of previous fault {} in most recent history and it is the same as the first fault".format(fault_before_testing.name))
-        ts = fault_before_testing.relative_time
-        time_rounded = math.floor((ts/1000000) /10) * 10
-    elif (time_gap <= 2000):
-        while time_gap <= 2000:
-            print("Time gap is ", time_gap)
-            fault_before = next((faults_detected_time_sorted[i-1] for i, x in enumerate(faults_detected_time_sorted) if x.name == fault_before.name and i > 0), None)
-            if fault_before == None:
-                break
-            time_fault_before = fault_before.start_time
-            time_rounded_before = math.floor(time_fault_before /10) * 10
-            time_gap = time_rounded_current - time_rounded_before
-        fault_before_testing = next((x for x in history.faults_injected if fault_before.name in x.name), None)
-        ts = fault_before_testing.relative_time
-        time_rounded = math.floor((ts/1000000) /10) * 10
     else:
-        print("Time is time of previous fault in most recent history")
-        ts = fault_before_testing.relative_time
+        print("Time is time of fault {} in most recent history".format(fault_before_testing.name))
+        #Relax time
+        ts = fault_before_testing.relative_time - 1000
         time_rounded = math.floor((ts/1000000) /10) * 10
 
+    if time_rounded <= 0:
+        print("Time in testing is sub 0, leverage a default 100 milli value")
+        time_rounded = 100
     return time_rounded
 
+def compare_fault_order(faults_detected,faults_injected):
+    count_faults = 0
+    for fault_detected in faults_detected:
+        for fault_injected in faults_injected:
+            if fault_detected.name in fault_injected.name:
+                count_faults+=1
+                break
+
+    all_faults_were_injected = count_faults == len(faults_detected)
+    print("Count_faults:{} and faults_detected:{}".format(count_faults,len(faults_detected)))
+    if not all_faults_were_injected: return all_faults_were_injected
+
+    fault_names_detected = [f.name for f in faults_detected if "syscall" not in f.name and "extra" not in f.name]
+    fault_names_injected = [f.name for f in faults_injected if "syscall" not in f.name and "extra" not in f.name]
+
+    print("fault_names_detected: {}\n".format(fault_names_detected))
+    print("fault_names_injected: {}\n".format(fault_names_injected))
+    for (i,fault_detected) in enumerate(fault_names_detected):
+            fault_detected_prod_time = next((x.start_time for x in faults_detected if x.name == fault_detected), None)
+            fault_injected_prod_time = next((x.start_time for x in faults_detected if x.name == fault_names_injected[i]), None)
+            gap = abs(fault_detected_prod_time - fault_injected_prod_time)
+            print("Checking fault {}, injected {}, gap is {} ".format(fault_detected,fault_names_injected[i],gap))
+            if fault_names_injected[i] == fault_detected:
+                continue
+            elif gap > 2000:
+                return False
+
+    return True
 #Receives a history and a fault, and creates new_faults with the same state on
 #nodes which have the same binary
 def create_new_faults_for_state(history,fault):
@@ -541,5 +681,32 @@ def create_new_faults_for_state(history,fault):
             new_faults.append(new_fault)
     return new_faults
 
+def test_offsets_for_fault(offsets,faults_detected,fault,bug_reproduction,runs_counter,schedule_location,cond):
+    buggy_schedules = []
+    for offset in offsets:
+        #Change offsets of faults
+        for fault_extra in faults_detected:
+            if fault.name in fault_extra.name:
+                for i in range(0,len(fault_extra.begin_conditions)):
+                    if isinstance(fault_extra.begin_conditions[i], user_function_condition) and fault_extra.begin_conditions[i].symbol == cond.symbol:
+                        fault_extra.begin_conditions[i].offset = offset
+        buggy_run = run_test(bug_reproduction,faults_detected)
+        runs_counter+=1
+        if buggy_run:
+            run_name = fault.name + str(offset)
+            schedule = save_schedule(schedule_location,bug_reproduction.result_folder,run_name)
+            buggy_schedules.append(schedule)
+            (runs,reproduction_rate) = check_reproduction_rate(schedule_location,bug_reproduction)
+            runs_counter+=runs
+            if reproduction_rate >= 75:
+                return (runs_counter,reproduction_rate,buggy_schedules)
+    return (runs_counter,0,buggy_schedules)
+
+def reset_offset_for_fault(faults_detected,fault,cond):
+    for fault_extra in faults_detected:
+        if fault.name in fault_extra.name:
+            for i in range(0,len(fault_extra.begin_conditions)):
+                if isinstance(fault_extra.begin_conditions[i], user_function_condition) and fault_extra.begin_conditions[i].symbol == cond.symbol:
+                    fault_extra.begin_conditions[i].offset = 0
 if __name__ == "__main__":
     main()

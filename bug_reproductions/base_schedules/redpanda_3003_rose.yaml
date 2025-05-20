@@ -1,5 +1,5 @@
 execution_plan:
-  maximum_time: 120
+  maximum_time: 90
   setup:
     script: /vagrant/schedules/reproducedbugs/redpanda/lxc/scripts/start_redpanda_cluster.sh
   workload:

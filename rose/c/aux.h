@@ -4,10 +4,10 @@
 #define MAX_ENTRIES 10240
 #define PATH_MAX	4096
 #define STATE_PROPERTIES_COUNT 34
-#define MAX_IPS_BLOCKED 16
+#define MAX_IPS_BLOCKED 8
 #define TASK_COMM_LEN 16
-#define MAX_FILENAME_LEN 128
-#define FUNCNAME_MAX 512
+#define MAX_FILENAME_LEN 64
+#define FUNCNAME_MAX 256
 #define MAX_FUNCTIONS 32
 #define FILENAME_MAX_SIZE 32
 #define FAULTSSUPPORTED 26
@@ -208,7 +208,6 @@ void print_fault_schedule();
 int send_signal(int pid, int signal,char*);
 long get_children_pids(pid_t pid);
 void kill_child_processes(pid_t parent_pid);
-int get_jvmso_path(char *path,int pid);
 void bump_memlock_rlimit(void);
 void bump_file_rlimit(void);
 pid_t find_host_pid_for_container_pid(pid_t target_pid);

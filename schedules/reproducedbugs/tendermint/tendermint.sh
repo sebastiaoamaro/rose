@@ -1,4 +1,3 @@
 #!/usr/bin/env bash
-#/home/sebastiaoamaro/phd/torefidevel/rw/tendermint/build/tendermint init
-#/vagrant/rw/tendermint/build/tendermint init
-exec -a "$0" /vagrant/rw/tendermint/build/tendermint node --proxy_app=kvstore > /tmp/output.log
+/vagrant/schedules/reproducedbugs/tendermint/setup/tendermint init
+exec -a "$0" /vagrant/schedules/reproducedbugs/tendermint/setup/tendermint node --proxy_app=kvstore > /tmp/output.log 2>&1

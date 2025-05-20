@@ -722,48 +722,6 @@ void kill_child_processes(pid_t parent_pid) {
     closedir(dir);
 }
 
-int get_jvmso_path(char *path,int pid)
-{
-	char mode[16], line[128], buf[64];
-	size_t seg_start, seg_end, seg_off;
-	FILE *f;
-	int i = 0;
-	bool found = false;
-
-	if (pid == -1) {
-		fprintf(stderr, "not specify pid, see --pid.\n");
-		return -1;
-	}
-
-	sprintf(buf, "/proc/%d/maps", pid);
-	f = fopen(buf, "r");
-	if (!f) {
-		fprintf(stderr, "open %s failed: %m\n", buf);
-		return -1;
-	}
-
-	while (fscanf(f, "%zx-%zx %s %zx %*s %*d%[^\n]\n",
-			&seg_start, &seg_end, mode, &seg_off, line) == 5) {
-		i = 0;
-		while (isblank(line[i]))
-			i++;
-		if (strstr(line + i, "libjvm.so")) {
-			found = true;
-			strcpy(path, line + i);
-			break;
-		}
-	}
-
-	fclose(f);
-
-	if (!found) {
-		fprintf(stderr, "Not found libjvm.so.\n");
-		return -ENOENT;
-	}
-
-	return 0;
-}
-
 pid_t find_host_pid_for_container_pid(pid_t target_pid) {
     DIR *proc_dir;
     struct dirent *entry;
@@ -852,15 +810,16 @@ char **build_nsenter_args(const char *pid_str,int container_type) {
         nsenter_args[0] = "nsenter";
         nsenter_args[1] = "--target";
         nsenter_args[2] = (char *)pid_str;
-        nsenter_args[3] = "--mount";
-        nsenter_args[4] = "--uts";
+        nsenter_args[3] = "--user";
+        nsenter_args[4] = "--mount";
         nsenter_args[5] = "--ipc";
         nsenter_args[6] = "--net";
         nsenter_args[7] = "--pid";
-        nsenter_args[8] = "--user";
+        nsenter_args[8] = "--uts";
         nsenter_args[9] = "--";
         nsenter_args[10] = NULL;
     }
+
     return nsenter_args;
 }
 

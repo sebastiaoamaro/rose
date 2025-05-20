@@ -1,0 +1,89 @@
+execution_plan:
+  maximum_time: 120
+  setup:
+    script: "/vagrant/schedules/reproducedbugs/redisraft/lxc/run_jepsen.sh"
+    duration: 5
+  workload:
+    script: /vagrant/schedules/reproducedbugs/redisraft/lxc/signal_jepsen_start.sh
+    wait_workload: true
+  tracer:
+    tracer_location: "/vagrant/rosetracer/target/release/rosetracer"
+    pipe_location: "/tmp/containerpid"
+    functions_file: /vagrant/function_analyzer/redisraft/functions_dfd91d4.txt
+    binary_to_examine: /opt/redis/redisraft.so
+    tracing_type: production_trace,container_controlled
+nodes:
+  n1:
+    container: true
+    container_type: lxc
+    ip: 10.61.110.21
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+  n2:
+    container: true
+    container_type: lxc
+    ip: 10.61.110.13
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+  n3:
+    container: true
+    container_type: lxc
+    ip: 10.61.110.43
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+  n4:
+    container: true
+    container_type: lxc
+    ip: 10.61.110.214
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+  n5:
+    container: true
+    container_type: lxc
+    ip: 10.61.110.39
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+
+faults:
+  block_ips_n1:
+    type: block_ips
+    target: n1
+    traced: n1
+    duration: 25000
+    ips_in:
+      - n2
+      - n3
+      - n4
+      - n5
+    ips_out:
+      - n2
+      - n3
+      - n4
+      - n5
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 20000
+
+  block_ips_n2:
+    type: block_ips
+    target: n2
+    traced: n2
+    duration: 25000
+    ips_in:
+      - n3
+      - n4
+      - n5
+    ips_out:
+      - n3
+      - n4
+      - n5
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 24000

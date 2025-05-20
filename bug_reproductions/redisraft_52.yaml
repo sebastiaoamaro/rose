@@ -1,0 +1,8 @@
+reproduction:
+  schedule: "/vagrant/bug_reproductions/base_schedules/rr_52_rose.yaml"
+  #base_trace: "/vagrant/tests/bugdetection/redisraft/normal.txt"
+  oracle: "/vagrant/bug_reproductions/oracles/detect_bug_rr_52.sh"
+  result_folder: "/vagrant/tests/bugdetection/redisraft/"
+  trace_location: "/tmp/history.txt"
+  buggy_trace: "/vagrant/bug_reproductions/traces/rr_52.txt"
+  binary: "/vagrant/schedules/reproducedbugs/redisraft/setup/redisraft_binaries/18.04redisraft2d1cf30.so"

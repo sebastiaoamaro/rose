@@ -2,7 +2,7 @@ execution_plan:
   maximum_time: 120
   setup:
     script: "/vagrant/schedules/reproducedbugs/redisraft/scripts/startredisclusterb9ee410.sh"
-    duration: 5
+    duration: 10
   workload:
     wait_time: 15
     script: /vagrant/schedules/reproducedbugs/redisraft/scripts/runworkload.sh

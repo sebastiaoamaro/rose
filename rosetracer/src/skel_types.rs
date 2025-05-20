@@ -13,8 +13,8 @@ pub mod rw_tracer {
     include!(concat!(env!("OUT_DIR"), "/rw_tracer.skel.rs"));
 }
 
-pub mod tracer {
-    include!(concat!(env!("OUT_DIR"), "/tracer.skel.rs"));
+pub mod sys_all_tracer {
+    include!(concat!(env!("OUT_DIR"), "/sys_all_tracer.skel.rs"));
 }
 
 pub mod statistics_tracer {
@@ -24,7 +24,7 @@ pub mod statistics_tracer {
 use production_tracer::*;
 use rw_tracer::*;
 use statistics_tracer::*;
-use tracer::*;
+use sys_all_tracer::*;
 
 pub trait SkelUpdatePidTrait {
     fn update(&mut self, pid_vec: &[u8; 4], one: &[u8; 4]);
@@ -52,7 +52,7 @@ pub trait SkelEndTraceTrait {
 
 pub enum SkelEnum<'a, 'obj> {
     Production(&'a mut ProductionTracerSkel<'obj>),
-    Tracer(&'a mut TracerSkel<'obj>),
+    SysAllTracer(&'a mut SysAllTracerSkel<'obj>),
     RwTracer(&'a mut RwTracerSkel<'obj>),
     StatisticsTracer(&'a mut StatisticsTracerSkel<'obj>),
 }
@@ -67,7 +67,7 @@ impl<'a, 'obj> SkelUpdatePidTrait for SkelEnum<'a, 'obj> {
                     .update(pid_vec, one, MapFlags::ANY)
                     .expect("Failed to add pid to eBPF");
             }
-            SkelEnum::Tracer(skel_instance) => {
+            SkelEnum::SysAllTracer(skel_instance) => {
                 skel_instance
                     .maps
                     .pid_tree
@@ -119,14 +119,14 @@ impl<'a, 'obj> SkelAttachUprobe for SkelEnum<'a, 'obj> {
                 match uprobe {
                     Ok(uprobe_injected) => {
                         hashmap_links.get_mut(&pid).unwrap().push(uprobe_injected);
-                        //println!("Injected in pos {} in pid {}", index_function, pid);
+                        println!("Injected in pos {} in pid {}", index_function, pid);
                     }
                     Err(e) => {
                         println!("Failed:{}, err:{}", function.clone(), e);
                     }
                 }
             }
-            SkelEnum::Tracer(skel_instance) => {
+            SkelEnum::SysAllTracer(skel_instance) => {
                 //libbpf-rs is broken and miscalculates offsets
                 let opts = UprobeOpts {
                     cookie: index_function as u64,
@@ -227,7 +227,7 @@ impl<'a, 'obj> SkelEndTraceTrait for SkelEnum<'a, 'obj> {
                     &functions,
                 );
             }
-            SkelEnum::Tracer(skel_instance) => {
+            SkelEnum::SysAllTracer(skel_instance) => {
                 end_trace(
                     &mut skel_instance.maps.pid_tree,
                     &mut skel_instance.maps.fd_to_name,

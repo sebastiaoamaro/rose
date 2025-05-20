@@ -1,11 +1,11 @@
 execution_plan:
-  maximum_time: 120
+  maximum_time: 90
   setup:
     script: /vagrant/schedules/reproducedbugs/redisraft/scripts/startrediscluster2d1cf30.sh
     duration: 5
   cleanup:
     # script: /vagrant/schedules/reproducedbugs/redisraft/scripts/cleanup.sh
-    duration: 30
+    duration: 15
   workload:
     wait_time: 15
     script: /vagrant/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
@@ -49,15 +49,6 @@ nodes:
     script: ./startredis.sh 5 172.19.1.14
 
 faults:
-  process_kill_majority:
-    type: process_kill
-    target: majority
-    traced: redis1
-    begin_conditions:
-      - condition1:
-          type: time
-          time: 10000
-
   process_kill_1:
     type: process_kill
     target: redis1
@@ -83,7 +74,7 @@ faults:
     begin_conditions:
       - condition1:
           type: time
-          time: 40000
+          time: 28000
 
   block_ips_redis2:
     type: block_ips
@@ -101,7 +92,7 @@ faults:
     begin_conditions:
       - condition1:
           type: time
-          time: 40000
+          time: 28000
 
   block_ips_redis3:
     type: block_ips
@@ -117,7 +108,7 @@ faults:
     begin_conditions:
       - condition1:
           type: time
-          time: 40000
+          time: 28000
 
   block_ips_redis4:
     type: block_ips
@@ -133,7 +124,7 @@ faults:
     begin_conditions:
       - condition1:
           type: time
-          time: 40000
+          time: 28000
 
   block_ips_redis5:
     type: block_ips
@@ -149,4 +140,13 @@ faults:
     begin_conditions:
       - condition1:
           type: time
-          time: 40000
+          time: 28000
+
+  process_kill_majority:
+    type: process_kill
+    target: majority
+    traced: redis1
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 31000

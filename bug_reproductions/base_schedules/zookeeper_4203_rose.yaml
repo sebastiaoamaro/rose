@@ -2,10 +2,10 @@ execution_plan:
   tracer:
     tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
     pipe_location: /tmp/containerpid
-    tracing_type: full_trace,process_controlled
+    tracing_type: production_trace,process_controlled
   cleanup:
     duration: 30
 nodes:
   zookeeper:
     container: false
-    script: /home/sebastiaoamaro/phd/torefidevel/rw/Anduril/ground_truth/zookeeper-4203/run-original-test.sh
+    script: /home/sebastiaoamaro/phd/Anduril-test/Anduril/ground_truth/zookeeper-4203/run-original-test.sh

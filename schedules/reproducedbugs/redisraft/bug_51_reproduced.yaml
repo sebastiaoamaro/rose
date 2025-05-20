@@ -1,5 +1,5 @@
 execution_plan:
-  maximum_time: 60
+  maximum_time: 45
   setup:
     script: /vagrant/schedules/reproducedbugs/redisraft/scripts/startrediscluster2d1cf30.sh
     duration: 5
@@ -57,7 +57,7 @@ faults:
     begin_conditions:
       - condition1:
           type: time
-          time: 10000
+          time: 25000
 
   process_pause1_2:
     type: process_pause
@@ -67,7 +67,7 @@ faults:
     begin_conditions:
       - condition1:
           type: time
-          time: 10000
+          time: 25000
       - condition1:
           type: user_function
           binary_location: "/redisraft.so"
@@ -82,7 +82,7 @@ faults:
     begin_conditions:
       - condition1:
           type: time
-          time: 10000
+          time: 25000
       - condition1:
           type: user_function
           binary_location: "/redisraft.so"
@@ -97,7 +97,7 @@ faults:
     begin_conditions:
       - condition1:
           type: time
-          time: 10000
+          time: 25000
       - condition1:
           type: user_function
           binary_location: "/redisraft.so"
@@ -112,7 +112,7 @@ faults:
     begin_conditions:
       - condition1:
           type: time
-          time: 10000
+          time: 25000
       - condition1:
           type: user_function
           binary_location: "/redisraft.so"
@@ -127,7 +127,7 @@ faults:
     begin_conditions:
       - condition1:
           type: time
-          time: 10000
+          time: 25000
       - condition1:
           type: user_function
           binary_location: "/redisraft.so"

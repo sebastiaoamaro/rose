@@ -29,4 +29,9 @@ struct process_fd {
 	int pid;
 	u64 timestamp;
 };
+struct operation_info{
+	int pid;
+	long unsigned int buff_addr;
+};
+
 #endif // AUX_H

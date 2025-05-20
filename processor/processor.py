@@ -240,6 +240,8 @@ class History:
         self.faults_injected.sort(key=lambda x: x.time)
         for event in self.events:
             event.relative_time = event.time - self.start_time
+        for fault in self.faults_injected:
+            fault.relative_time = fault.time - self.start_time
 
 
     def process_history(self,history_file):
@@ -267,65 +269,6 @@ class History:
     def discover_faults(self,normal_history):
         fault_nr = 0
         for event in self.events:
-            if event.type == "network_event":
-                ip_src = event.arg1
-                ip_dst = event.arg2
-                for key,node in self.nodes.items():
-                    if str(node.ip) == str(ip_src):
-                        event.node = node.name
-
-                if (event.node == "any"):
-                    continue
-                dest_node = 0
-                try:
-                    dest_node = self.ip_to_node[str(ip_dst)]
-                except:
-                    continue
-
-                start = event.time - int(event.arg3)*1000000
-                #Network event has frequency, delay, start_time,end_time,id
-                network_event = (int(event.arg4),int(event.arg3),start,event.time,event.id)
-
-                self.network_history[event.node][dest_node].append(network_event)
-
-            if event.type == "network_information":
-                ip_src = event.arg1
-                ip_dst = event.arg2
-                for node_name,node in self.nodes.items():
-                    if str(node.ip) == str(ip_src):
-                        event.node = node.name
-
-                if (event.node == "any"):
-                        continue
-
-                dest_node = 0
-                try:
-                    dest_node = self.ip_to_node[str(ip_dst)]
-                except:
-                    continue
-
-                #Skip IPs not in experiment
-                if dest_node == 0:
-                    continue
-
-                #Skip packets to itself
-                if event.node == dest_node:
-                    continue
-
-                frequency = event.arg3
-                ratio = int(frequency)/(self.experiment_time)
-                if ratio > 1:
-                    #Calculate the delay possible partition which never healed
-                    delay = int((self.end_time-event.time)/1000000)
-                    #If delay is less than 250, then it is not relevant
-                    if delay < 5000:
-                        continue
-                    #Network event has frequency, delay, start_time,end_time,id
-                    network_event = (int(event.arg3),delay,event.time,self.end_time,event.id)
-
-                    self.network_history[event.node][dest_node].append(network_event)
-
-
             #Process sycall Fault
             if event.type == "sys_exit":
 
@@ -372,21 +315,20 @@ class History:
                     time_rounded = math.floor(time/10) * 10
                     fault.start_time = time_rounded
 
-                    time = int((event.time - self.start_time)/1000000)
-                    time_rounded = math.floor(time/10) * 10
-                    fault.start_time = time_rounded
+                    # time = int((event.time - self.start_time)/1000000)
+                    # time_rounded = math.floor(time/10) * 10
+                    # fault.start_time = time_rounded
 
-                    cond = time_cond()
-                    cond.time = time_rounded
-                    fault.begin_conditions.append(cond)
+                    # cond = time_cond()
+                    # cond.time = time_rounded
+                    # fault.begin_conditions.append(cond)
                 #If we can not leverage information from the syscall itself, look for previous ones, this can not be done here takes to much time
                 else:
                     fault_nr += 1
                     fault.state_score = 0
 
                 self.faults.append(fault)
-
-            #Find process pauses/waits
+                #Find process pauses/waits
             if event.type == "process_state_change":
                 for node_name,pid_list in self.pids.items():
                     if event.pid in pid_list:
@@ -402,9 +344,9 @@ class History:
                 fault.duration = int(event.arg2)*1000
                 fault.begin_conditions = []
 
-                time = int((event.time - self.start_time)/1000000)
+                time = int(((event.time - self.start_time)/1000000)-fault.duration)
                 #We add a pause event after it is finished thus its start is at -duration
-                time_rounded = math.floor(time/10) * 10 - fault.duration
+                time_rounded = math.floor(time/10) * 10
                 fault.start_time = time_rounded
 
                 #Processes are stopped by us to setup other things, thus pauses at the start are detected but are not real
@@ -424,15 +366,77 @@ class History:
                 fault_nr += 1
                 self.faults.append(fault)
 
+            if event.type == "network_event":
+                ip_src = event.arg1
+                ip_dst = event.arg2
+                for key,node in self.nodes.items():
+                    if str(node.ip) == str(ip_src):
+                        event.node = node.name
+
+                if (event.node == "any"):
+                    continue
+                dest_node = 0
+                try:
+                    dest_node = self.ip_to_node[str(ip_dst)]
+                except:
+                    continue
+
+                start = event.time - int(event.arg3)*1000000
+                #Network event has frequency, delay, start_time,end_time,id
+                network_event = (int(event.arg4),int(event.arg3),start,event.time,0)
+
+                self.network_history[event.node][dest_node].append(network_event)
+
+            if event.type == "network_information":
+                ip_src = event.arg1
+                ip_dst = event.arg2
+                for node_name,node in self.nodes.items():
+                    if str(node.ip) == str(ip_src):
+                        event.node = node.name
+
+                if (event.node == "any"):
+                        continue
+
+                dest_node = 0
+                try:
+                    dest_node = self.ip_to_node[str(ip_dst)]
+                except:
+                    continue
+
+                #Skip IPs not in experiment
+                if dest_node == 0:
+                    continue
+
+                #Skip packets to itself
+                if event.node == dest_node:
+                    continue
+
+                frequency = event.arg3
+                ratio = int(frequency)/(self.experiment_time)
+                if ratio > 1:
+                    #Calculate the delay possible partition which never healed
+                    delay = int((self.end_time-event.time)/1000000)
+                    #If delay is less than 5000, then it is not relevant
+                    if delay < 5000:
+                        continue
+                    #Network event has frequency, delay, start_time,end_time,id
+                    network_event = (int(event.arg3),delay,event.time,self.end_time,event.id)
+
+                    self.network_history[event.node][dest_node].append(network_event)
 
         #Find network faults
         for node in self.nodes:
             for dest_node,list in self.network_history[node].items():
                 for event in list:
-                    if event[2] < self.start_time:
+                    #Network event has frequency, duration, start_time,end_time,id
+                    frequency = event[0]
+                    duration = event[1]
+                    start_time_fault = event[2]
+                    end_time = event[3]
+                    if start_time_fault < self.start_time:
                         print("Network event before start time")
                         continue
-                    if event[0]/self.experiment_time < 1:
+                    if frequency/self.experiment_time < 1:
                         print("Frequency too low" + " time: " + str(self.experiment_time) + " count: " + str(event[0]) )
                         continue
                     fault = Fault()
@@ -447,19 +451,14 @@ class History:
                     fault.fault_specifics = fault_specifics
                     fault.target = node
                     fault.traced = node
-                    fault.duration = event[1]
+                    fault.duration = duration
                     fault.begin_conditions = []
-
-                    fault_timestamp = int(event[2]) - event[1]*1000000
-                    time = int((event[2]-self.start_time)/1000000)
+                    time = int((start_time_fault-self.start_time)/1000000)
+                    #Substract duration of fault
                     time_rounded = math.floor(time/10) * 10
-                    fault.start_time = time_rounded - event[1]
-                    fault.event_id = self.find_event_by_id_by_time(fault_timestamp, node)
+                    fault.start_time = time_rounded
 
-                    #We trace before the experiment starts, this removes faults which are not real
-                    if fault.start_time <= 1000:
-                        print("Skipped network_delay it is before experiment started {}".format(fault.target,fault.duration*1000000))
-                        continue
+                    fault.event_id = self.find_event_by_id_by_time(start_time_fault, node)
 
                     if len(fault.begin_conditions) == 0:
                         cond = time_cond()
@@ -490,7 +489,7 @@ class History:
                     fault.event_id = last_event_before_crash.id
 
                     time = int((last_event_before_crash.time - self.start_time)/1000000)
-                    time_rounded = math.floor(time/10) * 1000
+                    time_rounded = math.floor(time/10) * 10
                     fault.start_time = time_rounded
                     if len(fault.begin_conditions) == 0:
                         cond = time_cond()
@@ -571,16 +570,16 @@ class History:
         print("Fault before correct:{} and fault before injected: {}".format(fault_before_correct.name, fault_before_injected.name))
         return fault_before_correct.name == fault_before_injected.name
 
-    def check_last_condition(self,fault_injected_event,window,origin_order):
+    def check_order(self,fault_injected_event,window,origin_order):
         if fault_injected_event.id == 0:
             return False
         functions_before = self.get_functions_before(fault_injected_event.node,fault_injected_event.id,window)
         new_order = functions_before[2]
 
-        #print("COMPARING",new_order[0].name,"AND",origin_order[0].name)
-        #print("NEW_ORDER ",new_order)
-        #print("ORIGIN_ORDER ",origin_order)
-        return new_order[0].name == origin_order[0].name
+        for i in range(0,len(new_order)-1):
+            if new_order[i].name != origin_order[i].name:
+                return False
+        return True
 
     def check_syscall_support(self,syscall_name):
         return check_if_syscall_supported(syscall_name) != "TEMP_EMPTY"
@@ -614,8 +613,8 @@ def get_fault_by_name(faults, fault_name):
         if fault.name == fault_name:
             return fault
     print("Failed to find previous fault ", fault_name, "faults is ", faults)
-def write_new_schedule(base_schedule,faults):
 
+def write_new_schedule(base_schedule,faults):
     #Put faults by time order to facilitate readability
     faults = sorted(faults,key=lambda x:x.start_time)
     file = open(base_schedule,"r")
@@ -718,12 +717,24 @@ def choose_faults(faults,history_buggy,history):
         if fault.type == "block_ips":
             for fault_ahead in faults_choosen:
                 if fault_ahead.type == "process_pause":
+                    start_pause = fault_ahead.start_time
+                    end_pause = fault_ahead.start_time+fault_ahead.duration
+                    partition_start = fault.start_time
+                    partition_end = fault.start_time + fault.duration
+                    target_match = (fault.target == fault_ahead.target or fault_ahead.target in fault.fault_specifics.nodes_in)
+                    part_ends_in_pause = (start_pause < partition_end < end_pause)
+                    if target_match and part_ends_in_pause:
+                        benign_partitions_to_remove.append(fault.name)
+                        continue
+
+    for fault in faults_choosen:
+        if fault.type == "block_ips":
+            for fault_ahead in faults_choosen:
+                if fault_ahead.type == "process_pause":
                     time_gap=abs(fault_ahead.start_time - (fault.start_time + fault.duration))
                     if time_gap <= 2000:
                         benign_partitions_to_remove.append(fault.name)
                         continue
-
-
     faults_selected = []
     for fault in faults_choosen:
         if fault.name not in benign_partitions_to_remove:

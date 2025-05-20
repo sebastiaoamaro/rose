@@ -33,15 +33,15 @@ void init_tc(int count){
 int main(int,char **argv)
 {
     int index = atoi(argv[1]);
-	//int pos = atoi(argv[2]);
+	int pos = atoi(argv[2]);
 	int handle = atoi(argv[3]);
 	int faults = atoi(argv[4]);
 	int direction = atoi(argv[5]);
 
-	//printf("Index is %d, pos is %d, handle is %d, fault_count is %d, direction is %d \n",index,pos,handle,faults,direction);
+	printf("Index is %d,handle is %d, fault_count is %d, direction is %d \n",index,handle,faults,direction);
 	// Docker changed netdevice number to be always 2, will depend on version
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, tc_hook,
-		.ifindex = 2, .attach_point = direction);
+		.ifindex = index, .attach_point = direction);
 	DECLARE_LIBBPF_OPTS(bpf_tc_opts, tc_opts,
 		.handle = handle, .priority = 1);
 	bool hook_created = false;
@@ -62,7 +62,9 @@ int main(int,char **argv)
 	 *      bpf_tc_hook_destroy does NOT really remove the qdisc,
 	 *      there may be an egress filter on the qdisc
 	 */
-	skel->rodata->if_index = index;
+
+	//Pos is the original index-1, since docker is always 2 we need an extra variable
+	skel->rodata->if_index = pos;
 
 	skel->rodata->fault_count = faults;
 

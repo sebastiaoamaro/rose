@@ -1,0 +1,30 @@
+execution_plan:
+  maximum_time: 60
+  setup:
+    script: /vagrant/schedules/tracing_tests/redis/scripts/start_cluster.sh
+    duration: 60
+  workload:
+    script: /vagrant/schedules/tracing_tests/redis/scripts/start_workload.sh
+    wait_workload: true
+  cleanup:
+    script: /vagrant/schedules/tracing_tests/redis/scripts/cleanup.sh
+    duration: 15
+  tracer:
+    tracer_location: "/vagrant/rosetracer/target/release/rosetracer"
+    pipe_location: "/tmp/containerpid"
+    functions_file: /vagrant/tests/redis/functions.txt
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: full_trace,container_controlled
+nodes:
+  configs-redis-1-1:
+    container: true
+    binary: /redisraft.so
+    ip: 172.38.0.11
+  configs-redis-2-1:
+    container: true
+    binary: /redisraft.so
+    ip: 172.38.0.12
+  configs-redis-3-1:
+    container: true
+    binary: /redisraft.so
+    ip: 172.38.0.13
