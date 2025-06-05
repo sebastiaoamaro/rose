@@ -85,7 +85,7 @@ def build_fault_conditions(file,fault_nr,begin_conditions):
     for condition in begin_conditions:
         if isinstance(condition,syscall_condition):
             fault_condition = """    fault_condition fault_condition_#faultnr_#condnr;\n"""
-            fault_condition += """    systemcall syscall_#faultnr_#condnr;\n"""
+            fault_condition += """    system_call syscall_#faultnr_#condnr;\n"""
             fault_condition += """    fault_condition_#faultnr_#condnr.type = SYSCALL;\n"""
             fault_condition += """    build_syscall(&syscall_#faultnr_#condnr,#syscall_nr,#call_count);\n"""
             fault_condition = fault_condition.replace("#syscall_nr",str(condition.cond_nr))

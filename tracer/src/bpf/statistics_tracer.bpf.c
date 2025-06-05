@@ -20,19 +20,18 @@ struct {
 } pid_tree SEC(".maps");
 
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__type(key, int);
-	__type(value, u32);
-	__uint(max_entries, 1024);
-} connect_map SEC(".maps");
+	__type(value, int);
+	__uint(max_entries, 4096);
+} uprobes_counters SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__type(key, int);
 	__type(value, int);
 	__uint(max_entries, 4096);
-	__uint(pinning, LIBBPF_PIN_BY_NAME);
-} uprobes_counters SEC(".maps");
+} syscall_stats SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
@@ -120,46 +119,43 @@ static inline int update_event_counter(){
 SEC("uprobe")
 int handle_uprobe(struct pt_regs *ctx) {
 
-		u64 pid_tgid = bpf_get_current_pid_tgid();
-		int pid_relevant = check_pid_prog(pid_tgid);
+	u64 pid_tgid = bpf_get_current_pid_tgid();
+	int pid_relevant = check_pid_prog(pid_tgid);
 
-		if (!pid_relevant)
-			return 0;
+	if (!pid_relevant)
+		return 0;
 
-		u64 cookie = bpf_get_attach_cookie(ctx);
+	u64 cookie = bpf_get_attach_cookie(ctx);
 
-		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
-		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
+	u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
+	u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
 
-		u64 timestamp = bpf_ktime_get_ns();
+	int *counter = bpf_map_lookup_elem(&uprobes_counters,&cookie);
 
-		int *counter = bpf_map_lookup_elem(&uprobes_counters,&cookie);
+	if (counter){
+		int new_counter = *counter + 1;
+		bpf_map_update_elem(&uprobes_counters,&cookie,&new_counter,BPF_ANY);
+	}else{
+		int zero = 0;
+		bpf_map_update_elem(&uprobes_counters,&cookie,&zero,BPF_ANY);
+	}
 
-		if (counter){
-			int new_counter = *counter + 1;
-			bpf_map_update_elem(&uprobes_counters,&cookie,&new_counter,BPF_ANY);
-		}else{
-			int zero = 0;
-			bpf_map_update_elem(&uprobes_counters,&cookie,&zero,BPF_ANY);
-		}
+	u64 timestamp = bpf_ktime_get_ns();
+	struct event key = {
+		UPROBE,
+		timestamp,
+		cookie,
+		pid,
+		tid,
+		0,
+		0,
+		0,
+		0,
+		1
+	};
 
-
-		struct event key = {
-			UPROBE,
-			timestamp,
-			cookie,
-			pid,
-			tid,
-			0,
-			0,
-			0,
-			0,
-			1
-		};
-
-		bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
-
-		update_event_counter();
+	bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
+	update_event_counter();
 
     return 0;
 }
@@ -206,6 +202,15 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 	if (!pid_relevant)
         return 0;
 
+	int *counter = bpf_map_lookup_elem(&uprobes_counters,&id);
+
+	if (counter){
+		int new_counter = *counter + 1;
+		bpf_map_update_elem(&uprobes_counters,&id,&new_counter,BPF_ANY);
+	}else{
+		int zero = 0;
+		bpf_map_update_elem(&uprobes_counters,&id,&zero,BPF_ANY);
+	}
 
 	return 0;
 }

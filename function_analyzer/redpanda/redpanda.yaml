@@ -1,6 +1,0 @@
-reproduction:
-  schedule: "/vagrant/schedules/function_statistics/redpanda.yaml"
-  result_folder: "/vagrant/tests/bugdetection/redpanda/"
-  trace_location: "/tmp/history.txt"
-  functions_file: "/vagrant/function_analyzer/redpanda/functions.txt"
-  cleanup: /vagrant/schedules/reproducedbugs/redpanda/lxc/scripts/cleanup.sh

@@ -360,11 +360,11 @@ def main():
                 total_faults = 0
                 fault_occuring = next((True for x in history.faults_injected if fault.name in x.name), False)
 
-                print("FAULT OCCURRED: ",fault_occuring)
+                print("FAULT OCCURRED:",fault_occuring)
                 fault_order = True
                 if not fault_occuring:
                     if amplification:
-                        #No fault occured after amplification
+                        fault.begin_conditions = deepcopy(last_used_conditions)
                         continue;
                     else:
                         fault_occuring=True

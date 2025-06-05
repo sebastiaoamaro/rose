@@ -1,5 +1,0 @@
-snapshot.c
-raft.c
-log.c
-redisraft.c
-entrycache.c

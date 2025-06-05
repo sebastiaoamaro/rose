@@ -1396,17 +1396,6 @@ pub fn pin_maps(skel: &mut PinMapsSkel) {
         }
         Err(e) => println!("Error unpinning map: {}", e),
     }
-    let res = skel
-        .maps
-        .uprobes_counters
-        .unpin("/sys/fs/bpf/uprobes_counters");
-
-    match res {
-        Ok(_) => {
-            //println!("Successfully unpinned map")
-        }
-        Err(e) => println!("Error unpinning map: {}", e),
-    }
 
     let res = skel
         .maps
@@ -1453,10 +1442,6 @@ pub fn pin_maps(skel: &mut PinMapsSkel) {
     skel.maps
         .history
         .pin("/sys/fs/bpf/history")
-        .expect("Failed to pin map");
-    skel.maps
-        .uprobes_counters
-        .pin("/sys/fs/bpf/uprobes_counters")
         .expect("Failed to pin map");
     skel.maps
         .network_information

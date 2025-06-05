@@ -14,13 +14,12 @@ import os
 from rose import BugReproduction, parse_bug_reproduction,run_reproduction,run_cleanup,collect_history,Run
 from pathlib import Path
 
-def parse_file_split_by_comma(file_path, skip_empty=True, strip_items=True):
 
+def parse_file_split_by_comma(file_path, skip_empty=True, strip_items=True):
     file_path = Path(file_path)
     if not file_path.exists():
         print("File {} does not exist".format(file_path))
         return []
-
     with open(file_path, 'r') as file:
         lines = []
         for line in file:
@@ -35,7 +34,6 @@ def parse_file_split_by_comma(file_path, skip_empty=True, strip_items=True):
 def delete_function_from_file(filename: str, target: str) -> None:
     with open(filename, 'r') as file:
         lines = file.readlines()
-
     with open(filename, 'w') as file:
         for line in lines:
             if target not in line:
@@ -44,7 +42,6 @@ def delete_function_from_file(filename: str, target: str) -> None:
 def main():
     filename = sys.argv[1]
     bug_reproduction = parse_bug_reproduction(filename)
-        #cleanup last runs
     try:
         os.remove("/tmp/failed_probes.txt")
     except FileNotFoundError:
@@ -59,7 +56,6 @@ def main():
         print("Failed to remove files no perms")
 
     bug_reproduction = parse_bug_reproduction(filename)
-    #Run faultless schedule
     start_time = time.time()
     print("Running faultless schedule")
     run_reproduction(bug_reproduction.schedule)
@@ -76,7 +72,7 @@ def main():
     for function in function_stats:
         ratio = int(function[2])/elapsed_time
         print("Ratio is {}, total calls is {} time_elasped is {}".format(ratio, function[2],elapsed_time))
-        if ratio >2:
+        if ratio > 2:
             frequent_functions.append(function[0])
 
 

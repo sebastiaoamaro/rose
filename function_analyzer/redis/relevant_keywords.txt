@@ -1,4 +1,0 @@
-cluster
-aof
-bio
-rdb

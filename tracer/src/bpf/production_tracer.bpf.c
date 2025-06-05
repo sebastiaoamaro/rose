@@ -397,16 +397,6 @@ int handle_uprobe(struct pt_regs *ctx) {
 	u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
 	u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
 
-	int *counter = bpf_map_lookup_elem(&uprobes_counters,&cookie);
-
-	if (counter){
-		int new_counter = *counter + 1;
-		bpf_map_update_elem(&uprobes_counters,&cookie,&new_counter,BPF_ANY);
-	}else{
-		int zero = 0;
-		bpf_map_update_elem(&uprobes_counters,&cookie,&zero,BPF_ANY);
-	}
-
 
 	struct event key = {
 		UPROBE,
