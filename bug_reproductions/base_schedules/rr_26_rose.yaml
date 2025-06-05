@@ -1,15 +1,15 @@
 execution_plan:
   maximum_time: 60
   setup:
-    script: "/vagrant/schedules/reproducedbugs/redisraft/lxc/run_jepsen.sh"
+    script: "/vagrant/schedules/reproduced_bugs/redisraft/lxc/run_jepsen.sh"
     duration: 5
   workload:
-    script: /vagrant/schedules/reproducedbugs/redisraft/lxc/signal_jepsen_start.sh
+    script: /vagrant/schedules/reproduced_bugs/redisraft/lxc/signal_jepsen_start.sh
     wait_workload: true
   tracer:
-    tracer_location: "/vagrant/rosetracer/target/release/rosetracer"
+    tracer_location: "/vagrant/tracer/target/release/tracer"
     pipe_location: "/tmp/containerpid"
-    functions_file: /vagrant/function_analyzer/redisraft/functions_dfd91d4.txt
+    functions_file: /vagrant/profiler/redisraft/functions_dfd91d4.txt
     binary_to_examine: /opt/redis/redisraft.so
     tracing_type: production_trace,container_controlled
 nodes:

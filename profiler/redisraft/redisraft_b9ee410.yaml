@@ -1,0 +1,6 @@
+reproduction:
+  schedule: "/vagrant/schedules/function_statistics/redisraft_b9ee410.yaml"
+  result_folder: "/vagrant/tests/bugdetection/redisraft/"
+  trace_location: "/tmp/history.txt"
+  functions_file: "/vagrant/function_analyzer/redisraft/functions_b9ee410.txt"
+  cleanup: "/vagrant/schedules/reproduced_bugs/redisraft/scripts/cleanup.sh"

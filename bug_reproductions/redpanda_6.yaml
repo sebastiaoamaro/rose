@@ -3,5 +3,5 @@ reproduction:
   oracle: "/vagrant/bug_reproductions/oracles/detect_bug_redpanda_6.sh"
   result_folder: "/vagrant/tests/bugdetection/redpanda/"
   trace_location: "/tmp/history.txt"
-  binary: "/vagrant/schedules/reproducedbugs/redpanda/setup/binaries/21.10.1/redpanda/libexec/redpanda"
+  binary: "/vagrant/schedules/reproduced_bugs/redpanda/setup/binaries/21.10.1/redpanda/libexec/redpanda"
   buggy_trace: "/vagrant/bug_reproductions/traces/redpanda_6.txt"

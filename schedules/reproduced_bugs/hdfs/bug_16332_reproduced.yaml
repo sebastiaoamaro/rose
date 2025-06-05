@@ -1,0 +1,27 @@
+execution_plan:
+  cleanup:
+    duration: 60
+  tracer:
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/tracer/target/release/tracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
+
+nodes:
+  hdfs:
+    container: false
+    script: /home/sebastiaoamaro/phd/torefidevel/rw/Anduril/experiment/hdfs-16332/run-original-test.sh
+
+faults:
+  syscall_fail:
+    type: syscall
+    details:
+      name: read
+      return_value: -5
+    target: hdfs
+    traced: hdfs
+    begin_conditions:
+      - condition1:
+          type: file_syscall
+          syscall_name: read
+          file_name: blk_
+          call_count: 2

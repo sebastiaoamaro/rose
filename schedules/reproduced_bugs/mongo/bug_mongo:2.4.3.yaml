@@ -1,0 +1,83 @@
+execution_plan:
+  maximum_time: 120
+  setup:
+    script: /vagrant/schedules/reproduced_bugs/mongo/mongo_2.4.3/scripts/start_cluster.sh
+    duration: 90
+  workload:
+    script: /vagrant/schedules/reproduced_bugs/mongo/mongo_2.4.3/scripts/run_workload.sh
+  cleanup:
+    duration: 10
+  tracer:
+    tracer_location: /vagrant/tracer/target/release/tracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,container_controlled
+nodes:
+  mongo-0:
+    container: true
+    ip: 172.20.0.2
+  mongo-1:
+    container: true
+    ip: 172.20.0.3
+  mongo-2:
+    container: true
+    ip: 172.20.0.4
+  mongo-3:
+    container: true
+    ip: 172.20.0.5
+  mongo-4:
+    container: true
+    ip: 172.20.0.6
+
+faults:
+  block_primary1:
+    type: block_ips
+    target: mongo-1
+    traced: mongo-1
+    duration: 60000
+    ips_in:
+      - mongo-0
+    ips_out:
+      - mongo-0
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 20000
+  block_primary2:
+    type: block_ips
+    target: mongo-2
+    traced: mongo-2
+    duration: 60000
+    ips_in:
+      - mongo-0
+    ips_out:
+      - mongo-0
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 20000
+  block_primary3:
+    type: block_ips
+    target: mongo-3
+    traced: mongo-3
+    duration: 60000
+    ips_in:
+      - mongo-0
+    ips_out:
+      - mongo-0
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 20000
+  block_primary4:
+    type: block_ips
+    target: mongo-4
+    traced: mongo-4
+    duration: 60000
+    ips_in:
+      - mongo-0
+    ips_out:
+      - mongo-0
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 20000

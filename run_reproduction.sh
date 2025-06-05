@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #Build tracer
-cd rosetracer
+cd tracer
 cargo build --release
 cd ..
 
@@ -14,10 +14,10 @@ if [ "$#" -eq 1 ]; then
         sudo rm /tmp/containerpid_read
         sudo rm /tmp/containerpid_write
         sudo rm /tmp/history.txt
-        sudo insmod rose/kernelmodule/rose.ko
-        python3 schedule_parser.py $schedule
-        mv faultschedule.c rose/c/
-        cd rose/c/
+        sudo insmod executor/kernelmodule/rose.ko
+        python3 parser.py $schedule
+        mv fault_schedule.c executor/c/
+        cd executor/c/
         make -j$(nproc)
         sudo -E ./main/main
     fi
@@ -38,10 +38,10 @@ if [ "$#" -gt 4 ]; then
                 sudo rm /tmp/containerpid_read
                 sudo rm /tmp/containerpid_write
                 sudo rm /tmp/history.txt
-                sudo insmod rose/kernelmodule/rose.ko
-                python3 schedule_parser.py $schedule
-                mv faultschedule.c rose/c/
-                cd rose/c/
+                sudo insmod executor/kernelmodule/rose.ko
+                python3 parser.py $schedule
+                mv fault_schedule.c executor/c/
+                cd executor/c/
                 make -j$(nproc)
                 sudo -E ./main/main
                 cd ../../
@@ -64,10 +64,10 @@ if [ "$#" -gt 4 ]; then
             sudo rm /tmp/containerpid_read
             sudo rm /tmp/containerpid_write
             sudo rm /tmp/history.txt
-            sudo insmod rose/kernelmodule/rose.ko
-            python3 schedule_parser.py $schedule
-            mv faultschedule.c rose/c/
-            cd rose/c/
+            sudo insmod executor/kernelmodule/rose.ko
+            python3 parser.py $schedule
+            mv faultschedule.c executor/c/
+            cd executor/c/
             make -j$(nproc)
             sudo -E ./main/main
             cd ../../

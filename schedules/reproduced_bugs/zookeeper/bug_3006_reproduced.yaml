@@ -1,0 +1,27 @@
+execution_plan:
+  tracer:
+    tracer_location: /vagrant/tracer/target/release/tracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
+
+nodes:
+  zookeeper:
+    container: false
+    script: /vagrant/rw/Anduril/experiment/zookeeper-3006/run-original-test.sh
+
+faults:
+  write_fail:
+    type: file_system_operation
+    details:
+      name: read
+      file_name: snapshot.0
+      return_value: -1
+      success: False
+    target: zookeeper
+    traced: zookeeper
+    begin_conditions:
+      - condition1:
+          type: file_syscall
+          syscall_name: openat
+          file_name: snapshot.0
+          call_count: 1

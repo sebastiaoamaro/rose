@@ -1,0 +1,26 @@
+execution_plan:
+  tracer:
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/tracer/target/release/tracer
+    pipe_location: /tmp/containerpid
+
+nodes:
+  kafka:
+    container: false
+    script: /home/sebastiaoamaro/phd/rw/Anduril/experiment/kafka-9374/run-original-test.sh
+
+faults:
+  read_fail:
+    type: syscall
+    details:
+      name: connect
+      return_value: -1
+      #success: True
+      repeatable: True
+    #repeatable: True
+    target: kafka
+    traced: kafka
+    begin_conditions:
+      - condition1:
+          type: syscall
+          syscall_name: connect
+          call_count: 20

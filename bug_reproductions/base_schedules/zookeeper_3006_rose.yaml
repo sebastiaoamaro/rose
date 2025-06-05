@@ -1,8 +1,8 @@
 execution_plan:
-  tracer:
-    tracer_location: /vagrant/rosetracer/target/release/rosetracer
-    pipe_location: /tmp/containerpid
-    tracing_type: full_trace,process_controlled
+  # tracer:
+  #   tracer_location: /vagrant/tracer/target/release/tracer
+  #   pipe_location: /tmp/containerpid
+  #   tracing_type: production_trace,process_controlled
   cleanup:
     duration: 30
 

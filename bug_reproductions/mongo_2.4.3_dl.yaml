@@ -4,4 +4,4 @@ reproduction:
   result_folder: "/vagrant/tests/bugdetection/mongo/"
   trace_location: "/tmp/history.txt"
   buggy_trace: "/vagrant/bug_reproductions/traces/mongo_2.4.3_dl.txt"
-  cleanup: "/vagrant/schedules/reproducedbugs/mongo/mongo_2.4.3/scripts/cleanup.sh"
+  cleanup: "/vagrant/schedules/reproduced_bugs/mongo/mongo_2.4.3/scripts/cleanup.sh"

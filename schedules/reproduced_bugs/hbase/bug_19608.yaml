@@ -1,0 +1,28 @@
+execution_plan:
+  maximum_time: 60
+  tracer:
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/tracer/target/release/tracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
+  cleanup:
+    duration: 30
+nodes:
+  zookeeper:
+    container: false
+    script: /home/sebastiaoamaro/phd/torefidevel/rw/Anduril/experiment/hbase-19608/run-original-test.sh
+
+faults:
+  write_fail:
+    type: syscall
+    details:
+      name: openat
+      return_value: -5
+      success: False
+    target: zookeeper
+    traced: zookeeper
+    begin_conditions:
+      - condition1:
+          type: file_syscall
+          syscall_name: openat
+          file_name: originForInjection
+          call_count: 1

@@ -78,7 +78,7 @@ export PATH=/usr/local/bin:$PATH
 
 #Build vmlinux.h
 cd ../..
-cd rosetracer/src/bpf
+cd tracer/src/bpf
 sudo bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
 
 cd ../../

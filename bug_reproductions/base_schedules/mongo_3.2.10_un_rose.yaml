@@ -1,14 +1,14 @@
 execution_plan:
   maximum_time: 120
   setup:
-    script: /vagrant/schedules/reproducedbugs/mongo/mongo_3.2.10/scripts/start_cluster.sh
+    script: /vagrant/schedules/reproduced_bugs/mongo/mongo_3.2.10/scripts/start_cluster.sh
     duration: 90
   workload:
-    script: /vagrant/schedules/reproducedbugs/mongo/mongo_3.2.10/scripts/run_workload.sh
+    script: /vagrant/schedules/reproduced_bugs/mongo/mongo_3.2.10/scripts/run_workload.sh
   cleanup:
     duration: 10
   tracer:
-    tracer_location: /vagrant/rosetracer/target/release/rosetracer
+    tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
     tracing_type: production_trace,container_controlled
 nodes:

@@ -4,4 +4,4 @@ reproduction:
   result_folder: "/vagrant/tests/bugdetection/redpanda/"
   trace_location: "/tmp/history.txt"
   buggy_trace: "/vagrant/bug_reproductions/traces/redpanda_3039.txt"
-  cleanup: "/vagrant/schedules/reproducedbugs/redpanda/scripts/cleanup.sh"
+  cleanup: "/vagrant/schedules/reproduced_bugs/redpanda/scripts/cleanup.sh"

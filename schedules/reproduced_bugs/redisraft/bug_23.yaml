@@ -1,0 +1,221 @@
+execution_plan:
+  maximum_time: 60
+  setup:
+    script: "/vagrant/schedules/reproduced_bugs/redisraft/lxc/run_jepsen.sh"
+    duration: 5
+  workload:
+    script: /vagrant/schedules/reproduced_bugs/redisraft/lxc/signal_jepsen_start.sh
+    wait_workload: true
+  tracer:
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    #    functions_file: /vagrant/profiler/redisraft/functions_dfd91d4.txt
+    binary_to_examine: /opt/redis/redisraft.so
+    tracing_type: production_trace,container_controlled
+nodes:
+  n1:
+    container: true
+    container_type: lxc
+    ip: 10.118.98.136
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+  n2:
+    container: true
+    container_type: lxc
+    ip: 10.118.98.79
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+  n3:
+    container: true
+    container_type: lxc
+    ip: 10.118.98.84
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+  n4:
+    container: true
+    container_type: lxc
+    ip: 10.118.98.74
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+  n5:
+    container: true
+    container_type: lxc
+    ip: 10.118.98.171
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+
+faults:
+  # process_kill_n1:
+  #   type: process_kill
+  #   target: n1
+  #   traced: n1
+  #   begin_conditions:
+  #     - condition_nr0:
+  #         type: time
+  #         time: 18000
+
+  block_ips_n1:
+    type: block_ips
+    target: n1
+    traced: n1
+    duration: 5000
+    ips_in:
+      - n2
+      - n3
+      - n5
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 20000
+
+  block_ips_n4:
+    type: block_ips
+    target: n4
+    traced: n4
+    duration: 5000
+    ips_in:
+      - n2
+      - n3
+      - n5
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 20000
+
+  block_ips_n2:
+    type: block_ips
+    target: n2
+    traced: n2
+    duration: 5000
+    ips_in:
+      - n1
+      - n4
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 20000
+
+  block_ips_n5:
+    type: block_ips
+    target: n5
+    traced: n5
+    duration: 5000
+    ips_in:
+      - n1
+      - n4
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 20000
+
+  block_ips_n3:
+    type: block_ips
+    target: n3
+    traced: n3
+    duration: 5000
+    ips_in:
+      - n1
+      - n4
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 20000
+
+  # process_kill_n3:
+  #   type: process_kill
+  #   target: n3
+  #   traced: n3
+  #   begin_conditions:
+  #     - condition_nr0:
+  #         type: time
+  #         time: 25000
+
+  # process_kill_n4:
+  #   type: process_kill
+  #   target: n4
+  #   traced: n4
+  #   begin_conditions:
+  #     - condition_nr0:
+  #         type: time
+  #         time: 25000
+
+  # process_kill_n5:
+  #   type: process_kill
+  #   target: n5
+  #   traced: n5
+  #   begin_conditions:
+  #     - condition_nr0:
+  #         type: time
+  #         time: 25000
+
+  block_ips_n1_2:
+    type: block_ips
+    target: n1
+    traced: n1
+    duration: 5000
+    ips_in:
+      - n3
+      - n4
+      - n5
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 27000
+
+  block_ips_n2_2:
+    type: block_ips
+    target: n2
+    traced: n2
+    duration: 5000
+    ips_in:
+      - n3
+      - n4
+      - n5
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 27000
+
+  block_ips_n5_2:
+    type: block_ips
+    target: n5
+    traced: n5
+    duration: 5000
+    ips_in:
+      - n1
+      - n2
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 27000
+
+  block_ips_n4_2:
+    type: block_ips
+    target: n4
+    traced: n4
+    duration: 5000
+    ips_in:
+      - n1
+      - n2
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 27000
+
+  block_ips_n3_2:
+    type: block_ips
+    target: n3
+    traced: n3
+    duration: 5000
+    ips_in:
+      - n1
+      - n2
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 27000

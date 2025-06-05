@@ -1,15 +1,15 @@
 execution_plan:
   maximum_time: 300
   setup:
-    script: /vagrant/schedules/reproducedbugs/redpanda/lxc/scripts/start_redpanda_cluster.sh
+    script: /vagrant/schedules/reproduced_bugs/redpanda/lxc/scripts/start_redpanda_cluster.sh
   workload:
-    script: /vagrant/schedules/reproducedbugs/redpanda/lxc/scripts/signal_jepsen_start.sh
+    script: /vagrant/schedules/reproduced_bugs/redpanda/lxc/scripts/signal_jepsen_start.sh
     wait_workload: true
   tracer:
-    tracer_location: /vagrant/rosetracer/target/release/rosetracer
+    tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
     binary_to_examine: /opt/redpanda/libexec/redpanda
-    functions_file: /vagrant/function_analyzer/redpanda/functions.txt
+    functions_file: /vagrant/profiler/redpanda/functions.txt
     tracing_type: stats_trace,container_controlled
 
 nodes:

@@ -1,0 +1,32 @@
+execution_plan:
+  tracer:
+    tracer_location: /vagrant/tracer/target/release/tracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
+  cleanup:
+    duration: 5
+nodes:
+  tendermint:
+    container: false
+    script: /vagrant/schedules/reproduced_bugs/tendermint/tendermint.sh
+
+faults:
+  change_fstat_result:
+    type: syscall
+    details:
+      name: newfstatat
+      return_value: -1
+      success: False
+    traced: tendermint
+    target: tendermint
+    begin_conditions:
+      - condition1:
+          type: user_function
+          binary_location: /vagrant/schedules/reproduced_bugs/tendermint/setup/tendermint
+          symbol: github.com/tendermint/tendermint/libs/os.EnsureDir
+          call_count: 1
+      - condition2:
+          type: file_syscall
+          syscall_name: newfstatat
+          file_name: /.tendermint/data
+          call_count: 1

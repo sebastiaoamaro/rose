@@ -1,0 +1,191 @@
+execution_plan:
+  maximum_time: 120
+  setup:
+    script: /vagrant/schedules/reproduced_bugs/redpanda/lxc/scripts/start_redpanda_cluster.sh
+  workload:
+    script: /vagrant/schedules/reproduced_bugs/redpanda/lxc/scripts/signal_jepsen_start.sh
+    wait_workload: true
+  tracer:
+    tracer_location: /vagrant/tracer/target/release/tracer
+    pipe_location: /tmp/containerpid
+    binary_to_examine: /opt/redpanda/libexec/redpanda
+    functions_file: /vagrant/profiler/redpanda/functions.txt
+    tracing_type: production_trace,container_controlled
+
+nodes:
+  n1:
+    container: true
+    container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
+    pid_file: /var/lib/redpanda/data/pid.lock
+    script: /start_redpanda.sh
+  n2:
+    container: true
+    container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
+    pid_file: /var/lib/redpanda/data/pid.lock
+    script: /start_redpanda.sh
+  n3:
+    container: true
+    container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
+    pid_file: /var/lib/redpanda/data/pid.lock
+    script: /start_redpanda.sh
+  n4:
+    container: true
+    container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
+    pid_file: /var/lib/redpanda/data/pid.lock
+    script: /start_redpanda.sh
+  n5:
+    container: true
+    container_type: lxc
+    binary: /opt/redpanda/libexec/redpanda
+    pid_file: /var/lib/redpanda/data/pid.lock
+    script: /start_redpanda.sh
+
+faults:
+  # process_pause11:
+  #   type: process_pause
+  #   target: n1
+  #   traced: n1
+  #   duration: 20000
+  #   begin_conditions:
+  #     - condition1:
+  #         type: user_function
+  #         binary_location: "/opt/redpanda/libexec/redpanda"
+  #         symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+  #         call_count: 150
+  #     # - condition0:
+  #     #     type: time
+  #     #     time: 3500
+  # #
+  # process_pause:
+  #   type: process_pause
+  #   target: n2
+  #   traced: n2
+  #   duration: 20000
+  #   begin_conditions:
+  #     - condition1:
+  #         type: user_function
+  #         binary_location: "/opt/redpanda/libexec/redpanda"
+  #         symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+  #         call_count: 150
+  #     # - condition0:
+  #     #     type: time
+  #     #     time: 35000
+  # process_pause1:
+  #   type: process_pause
+  #   target: n3
+  #   traced: n3
+  #   duration: 20000
+  #   begin_conditions:
+  #     - condition1:
+  #         type: user_function
+  #         binary_location: "/opt/redpanda/libexec/redpanda"
+  #         symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+  #         call_count: 150
+  # #     # - condition0:
+  # #     #     type: time
+  # #     #     time: 35000
+  # process_pause2:
+  #   type: process_pause
+  #   target: n4
+  #   traced: n4
+  #   duration: 20000
+  #   begin_conditions:
+  #     - condition1:
+  #         type: user_function
+  #         binary_location: "/opt/redpanda/libexec/redpanda"
+  #         symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+  #         call_count: 150
+  #     # - condition0:
+  #     #     type: time
+  #     #     time: 35000
+  # process_pause3:
+  #   type: process_pause
+  #   target: n5
+  #   traced: n5
+  #   duration: 20000
+  #   begin_conditions:
+  #     - condition1:
+  #         type: user_function
+  #         binary_location: "/opt/redpanda/libexec/redpanda"
+  #         symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+  #         call_count: 150
+  #     # - condition0:
+  #     #     type: time
+  #     #     time: 35000
+
+  process_pause1:
+    type: process_pause
+    target: n1
+    traced: n1
+    duration: 20000
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 5000
+      - condition1:
+          type: user_function
+          binary_location: "/opt/redpanda/libexec/redpanda"
+          symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+          call_count: 1
+  process_pause2:
+    type: process_pause
+    target: n2
+    traced: n2
+    duration: 20000
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 20000
+      - condition1:
+          type: user_function
+          binary_location: "/opt/redpanda/libexec/redpanda"
+          symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+          call_count: 1
+  process_pause3:
+    type: process_pause
+    target: n3
+    traced: n3
+    duration: 20000
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 40000
+      - condition1:
+          type: user_function
+          binary_location: "/opt/redpanda/libexec/redpanda"
+          symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+          call_count: 1
+
+  process_pause4:
+    type: process_pause
+    target: n4
+    traced: n4
+    duration: 20000
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 50000
+      - condition1:
+          type: user_function
+          binary_location: "/opt/redpanda/libexec/redpanda"
+          symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+          call_count: 1
+
+  process_pause5:
+    type: process_pause
+    target: n5
+    traced: n5
+    duration: 20000
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 60000
+      - condition1:
+          type: user_function
+          binary_location: "/opt/redpanda/libexec/redpanda"
+          symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+          call_count: 1

@@ -1,0 +1,27 @@
+execution_plan:
+  cleanup:
+    duration: 70
+  tracer:
+    tracer_location: /vagrant/tracer/target/release/tracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
+
+nodes:
+  zookeeper:
+    container: false
+    script: /vagrant/rw/Anduril/ground_truth/zookeeper-3157/run-original-test.sh
+
+faults:
+  write_fail:
+    type: syscall
+    details:
+      name: read
+      return_value: -5
+    target: zookeeper
+    traced: zookeeper
+    begin_conditions:
+      - condition1:
+          type: file_syscall
+          syscall_name: read
+          file_name: log.100000001
+          call_count: 2

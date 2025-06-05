@@ -1,8 +1,8 @@
 #!/bin/bash
 workload_size=25000000
 runs=5
-maindirectory=/vagrant/rosetracer/
-main=/vagrant/rosetracer/target/release/rosetracer
+maindirectory=/vagrant/tracer/
+main=/vagrant/tracer/target/release/tracer
 date=$(date +"%H:%M")
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 

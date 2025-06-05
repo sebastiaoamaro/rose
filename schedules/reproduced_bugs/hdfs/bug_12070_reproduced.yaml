@@ -1,0 +1,27 @@
+execution_plan:
+  tracer:
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/tracer/target/release/tracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
+  cleanup:
+    duration: 60
+
+nodes:
+  hdfs:
+    container: false
+    script: /home/sebastiaoamaro/phd/torefidevel/rw/Anduril/experiment/hdfs-12070/run-original-test.sh
+
+faults:
+  syscall_fail:
+    type: syscall
+    details:
+      name: newfstatat
+      return_value: -13
+    target: hdfs
+    traced: hdfs
+    begin_conditions:
+      - condition1:
+          type: file_syscall
+          syscall_name: newfstatat
+          file_name: .meta
+          call_count: 10

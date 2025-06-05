@@ -1,15 +1,15 @@
 execution_plan:
   maximum_time: 120
   setup:
-    script: /vagrant/schedules/reproducedbugs/redpanda/scripts/startcluster.sh
+    script: /vagrant/schedules/reproduced_bugs/redpanda/scripts/startcluster.sh
     duration: 10
   workload:
     wait_time: 10
-    script: /vagrant/schedules/reproducedbugs/redpanda/scripts/runworkload.sh
+    script: /vagrant/schedules/reproduced_bugs/redpanda/scripts/runworkload.sh
   cleanup:
     duration: 30
   tracer:
-    tracer_location: /vagrant/rosetracer/target/release/rosetracer
+    tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
     tracing_type: full_trace,container_controlled
 nodes:

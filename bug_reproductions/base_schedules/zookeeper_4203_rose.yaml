@@ -1,6 +1,6 @@
 execution_plan:
   tracer:
-    tracer_location: /home/sebastiaoamaro/phd/torefidevel/rosetracer/target/release/rosetracer
+    tracer_location: /home/sebastiaoamaro/phd/torefidevel/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
     tracing_type: production_trace,process_controlled
   cleanup:

@@ -1,17 +1,17 @@
 execution_plan:
   setup:
-    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/startredisclusterb9ee410.sh
+    script: /vagrant/schedules/reproduced_bugs/redisraft/scripts/startredisclusterb9ee410.sh
     duration: 5
   cleanup:
-    #script: /vagrant/schedules/reproducedbugs/redisraft/scripts/cleanup.sh
+    #script: /vagrant/schedules/reproduced_bugs/redisraft/scripts/cleanup.sh
     duration: 30
   workload:
     wait_time: 15
-    script: /vagrant/schedules/reproducedbugs/redisraft/scripts/runworkload.sh
+    script: /vagrant/schedules/reproduced_bugs/redisraft/scripts/runworkload.sh
   tracer:
-    tracer_location: /vagrant/rosetracer/target/release/rosetracer
+    tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
-    functions_file: /vagrant/function_analyzer/redisraft/functions_b9ee410.txt
+    functions_file: /vagrant/profiler/redisraft/functions_b9ee410.txt
     binary_to_examine: /redisraft.so
     tracing_type: stats_trace,container_controlled
 nodes:

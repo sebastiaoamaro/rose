@@ -1,0 +1,28 @@
+execution_plan:
+  tracer:
+    tracer_location: /vagrant/tracer/target/release/tracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
+  cleanup:
+    duration: 90
+nodes:
+  kafka:
+    container: false
+    script: /vagrant/rw/Anduril/experiment/kafka-12508/run-original-test.sh
+
+faults:
+  read_fail:
+    type: syscall
+    details:
+      name: openat
+      return_value: -5
+      #success: True
+    #repeatable: True
+    target: kafka
+    traced: kafka
+    begin_conditions:
+      - condition1:
+          type: file_syscall
+          syscall_name: openat
+          file_name: syscall_check_1
+          call_count: 1

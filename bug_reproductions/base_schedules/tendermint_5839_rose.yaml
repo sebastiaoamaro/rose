@@ -1,7 +1,7 @@
 execution_plan:
   maximum_time: 30
   tracer:
-    tracer_location: /vagrant/rosetracer/target/release/rosetracer
+    tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
     tracing_type: full_trace,process_controlled
   cleanup:
@@ -10,4 +10,4 @@ execution_plan:
 nodes:
   tendermint:
     container: false
-    script: /vagrant/schedules/reproducedbugs/tendermint/tendermint.sh
+    script: /vagrant/schedules/reproduced_bugs/tendermint/tendermint.sh
