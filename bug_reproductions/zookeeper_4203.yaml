@@ -1,6 +1,6 @@
 reproduction:
-  schedule: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/base_schedules/zookeeper_4203_rose.yaml"
-  oracle: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/oracles/detect_bug_zk_4203.sh"
-  result_folder: "/home/sebastiaoamaro/phd/torefidevel/tests/bugdetection/zookeeper/"
+  schedule: "/vagrant/bug_reproductions/base_schedules/zookeeper_4203_rose.yaml"
+  oracle: "/vagrant/bug_reproductions/oracles/detect_bug_zk_4203.sh"
+  result_folder: "/vagrant/tests/bugdetection/zookeeper/"
   trace_location: "/tmp/history.txt"
-  buggy_trace: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/traces/zookeeper_4203.txt"
+  buggy_trace: "/vagrant/bug_reproductions/traces/zookeeper_4203.txt"

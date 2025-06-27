@@ -11,7 +11,7 @@ import time
 import math
 from copy import deepcopy
 import os
-from rose import BugReproduction, parse_bug_reproduction,run_reproduction,run_cleanup,collect_history,Run
+from rose import BugReproduction, parse_bug_reproduction,run_reproduction,run_cleanup,collect_history
 from pathlib import Path
 
 
@@ -39,6 +39,78 @@ def delete_function_from_file(filename: str, target: str) -> None:
             if target not in line:
                 file.write(line)
 
+def get_symbols(relevant_files,binary,output_file):
+    command = ["profiler/get_symbols_by_file.sh", relevant_files,binary,output_file]
+
+    print(command)
+    try:
+        with open("/tmp/profile.log", 'w', buffering=1) as file:  # Line buffering
+            with subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # Merge stderr into stdout
+                text=True,
+                bufsize=1,
+                errors='replace'
+            ) as process:
+                while True:
+                    line = process.stdout.readline()
+                    if not line:
+                        if process.poll() is not None:
+                            break
+                        continue
+                    file.write(line)
+                if process.returncode != 0:
+                    raise subprocess.CalledProcessError(
+                        process.returncode,
+                        command
+                    )
+    except subprocess.CalledProcessError as e:
+        print(f"\nrun_reproduction finished with: exit code {e.returncode}")
+    except Exception as e:
+        print(f"\nUnexpected error: {str(e)}")
+
+def collect_profile(profile_location):
+
+    command = ["sudo","mv","/tmp/history.txt",profile_location+"faultless_execution.txt"]
+    try:
+        # Start the process
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+    except subprocess.CalledProcessError as e:
+        print("An error occurred:")
+        print(e.stderr)
+
+    command = ["sudo","mv","/tmp/function_stats.txt",profile_location+"function_stats.txt"]
+    try:
+        # Start the process
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+    except subprocess.CalledProcessError as e:
+        print("An error occurred:")
+        print(e.stderr)
+
+    command = ["sudo","mv","/tmp/syscall_stats.txt",profile_location+"syscall_stats.txt"]
+    try:
+        # Start the process
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+    except subprocess.CalledProcessError as e:
+        print("An error occurred:")
+        print(e.stderr)
+
 def main():
     filename = sys.argv[1]
     bug_reproduction = parse_bug_reproduction(filename)
@@ -55,30 +127,38 @@ def main():
     except PermissionError:
         print("Failed to remove files no perms")
 
-    bug_reproduction = parse_bug_reproduction(filename)
-    start_time = time.time()
-    print("Running faultless schedule")
-    run_reproduction(bug_reproduction.schedule)
-    trace_location = collect_history(bug_reproduction.trace_location,bug_reproduction.result_folder,"normal")
-    run_cleanup(bug_reproduction.cleanup)
-    end_time = time.time()
-    elapsed_time = end_time - start_time
+    if bug_reproduction.binary != "" and bug_reproduction.functions_file == "":
+        get_symbols(bug_reproduction.profile+"relevant_files.txt",bug_reproduction.binary,bug_reproduction.profile+"functions.txt")
 
-    failed_probes = parse_file_split_by_comma("/tmp/failed_probes.txt")
+        bug_reproduction = parse_bug_reproduction(filename)
+        start_time = time.time()
+        print("Running faultless schedule")
+        run_reproduction(bug_reproduction.schedule)
+        run_cleanup(bug_reproduction.cleanup)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
 
-    function_stats = parse_file_split_by_comma("/tmp/function_stats.txt")
+        failed_probes = parse_file_split_by_comma("/tmp/failed_probes.txt")
 
-    frequent_functions = []
-    for function in function_stats:
-        ratio = int(function[2])/elapsed_time
-        print("Ratio is {}, total calls is {} time_elasped is {}".format(ratio, function[2],elapsed_time))
-        if ratio > 2:
-            frequent_functions.append(function[0])
+        function_stats = parse_file_split_by_comma("/tmp/function_stats.txt")
+
+        frequent_functions = []
+        for function in function_stats:
+            ratio = int(function[2])/elapsed_time
+            print("Ratio is {}, total calls is {} time_elasped is {}".format(ratio, function[2],elapsed_time))
+            if ratio > 2:
+                frequent_functions.append(function[0])
+
+        #Add probes which we could not attach
+        for failed_probe in failed_probes:
+            frequent_functions.append(failed_probe)
 
 
-    for frequent_function in frequent_functions:
-        print(f"Removing function {frequent_function}")
-        delete_function_from_file(bug_reproduction.functions_file, frequent_function)
+        for frequent_function in frequent_functions:
+            print(f"Removing function {frequent_function}")
+            delete_function_from_file(bug_reproduction.profile+"functions.txt", frequent_function)
+
+    collect_profile(bug_reproduction.profile)
 
 if __name__ == "__main__":
     main()

@@ -265,6 +265,12 @@ class History:
                 self.network_history[node_name][node_dest] = []
             self.ip_to_node[str(node.ip)] = node_name
 
+    def collect_network_info(self):
+        for node_name,node in self.nodes.items():
+            self.network_history[node_name] = {}
+            for node_dest in self.nodes:
+                self.network_history[node_name][node_dest] = []
+            self.ip_to_node[str(node.ip)] = node_name
 
     def discover_faults(self,normal_history):
         fault_nr = 0
@@ -436,7 +442,7 @@ class History:
                     if start_time_fault < self.start_time:
                         print("Network event before start time")
                         continue
-                    if frequency/self.experiment_time < 1:
+                    if frequency/self.experiment_time < 0.5:
                         print("Frequency too low" + " time: " + str(self.experiment_time) + " count: " + str(event[0]) )
                         continue
                     fault = Fault()

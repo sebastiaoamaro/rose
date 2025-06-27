@@ -117,7 +117,6 @@ const volatile int time_only = 0;
 
 /* Declare the external kfunc */
 extern int bpf_strstr(const char* str,const char* str2, int str_len) __ksym;
-extern int bpf_compare_str(const char* str,const char* str2, int str_len) __ksym;
 
 SEC("kprobe/__x64_sys_write")
 int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
@@ -459,7 +458,7 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
     		}
     	}
     	if (!string_equal){
-    		bpf_printk("Strings not equal %s and %s",file_open->filename,path);
+    		//bpf_printk("Strings not equal %s and %s",file_open->filename,path);
     		return 0;
     	}
         bpf_printk("ORIGIN_PID:%d,PID:%d,FILENAME:%s,PATH:%s,SIZE: %d \n",origin_pid,pid,file_open->filename,path,file_open->size);

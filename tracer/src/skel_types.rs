@@ -1,5 +1,7 @@
 use crate::auxiliary::pin_maps::PinMapsSkel;
-use crate::auxiliary::{end_trace, process_uprobes_array_map, write_to_file};
+use crate::auxiliary::{
+    end_trace, process_syscall_counters_map, process_uprobes_counters_map, write_to_file,
+};
 use libbpf_rs::Link;
 use libbpf_rs::UprobeOpts;
 use libbpf_rs::{MapCore, MapFlags};
@@ -262,7 +264,8 @@ impl<'a, 'obj> SkelEndTraceTrait for SkelEnum<'a, 'obj> {
                     hashmap_pid_to_node,
                     &functions,
                 );
-                process_uprobes_array_map(&mut skel_instance.maps.uprobes_counters, &functions);
+                process_uprobes_counters_map(&mut skel_instance.maps.uprobes_counters, &functions);
+                process_syscall_counters_map(&mut skel_instance.maps.syscall_counters, &functions);
             }
         }
     }

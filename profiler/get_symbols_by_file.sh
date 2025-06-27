@@ -4,11 +4,12 @@ if [ "$#" -ne 3 ]; then
     echo "Usage: $0 <relevant_files> <binary> <output_file>"
     exit 1
 fi
+cd /vagrant/profiler/
 
 relevant_files="$1"
 binary="$2"
 output_file="$3"
-functions_file="function_symbols.txt"
+functions_file="functions_symbols.txt"
 functions_binary="functions_binary.txt"
 
 if [ -f "$functions_file" ]; then
@@ -46,3 +47,7 @@ grep -v "ERROR" $output_file > "temp_functions.txt"
 python3 remove_duplicates.py "temp_functions.txt" $output_file
 
 rm "temp_functions.txt"
+
+rm "$functions_file"
+
+rm "$functions_binary"

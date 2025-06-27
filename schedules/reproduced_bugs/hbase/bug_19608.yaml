@@ -1,7 +1,7 @@
 execution_plan:
   maximum_time: 60
   tracer:
-    tracer_location: /home/sebastiaoamaro/phd/torefidevel/tracer/target/release/tracer
+    tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
     tracing_type: production_trace,process_controlled
   cleanup:
@@ -9,7 +9,7 @@ execution_plan:
 nodes:
   zookeeper:
     container: false
-    script: /home/sebastiaoamaro/phd/torefidevel/rw/Anduril/experiment/hbase-19608/run-original-test.sh
+    script: /vagrant/rw/Anduril/experiment/hbase-19608/run-original-test.sh
 
 faults:
   write_fail:

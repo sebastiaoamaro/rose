@@ -1069,14 +1069,16 @@ pub fn collect_events(
     }
 }
 
-//Used for stats and to remove useless probes
-pub fn process_uprobes_array_map(uprobes_array: &libbpf_rs::Map, functions: &Vec<(String, usize)>) {
-    let keys = uprobes_array.keys();
+pub fn process_uprobes_counters_map(
+    uprobes_counters_map: &libbpf_rs::Map,
+    functions: &Vec<(String, usize)>,
+) {
+    let keys = uprobes_counters_map.keys();
 
     let mut uprobes_counters: Vec<i32> = vec![0; 4096];
 
     for key in keys {
-        let result = uprobes_array.lookup(&key, MapFlags::ANY);
+        let result = uprobes_counters_map.lookup(&key, MapFlags::ANY);
 
         match result {
             Ok(result) => {
@@ -1101,6 +1103,46 @@ pub fn process_uprobes_array_map(uprobes_array: &libbpf_rs::Map, functions: &Vec
             write_to_file(
                 "/tmp/function_stats.txt".to_string(),
                 format!("{},{},{}\n", functions[index].0, functions[index].1, value),
+            )
+            .expect("Failed to write to stats file");
+        }
+    }
+}
+
+pub fn process_syscall_counters_map(
+    syscall_counters_map: &libbpf_rs::Map,
+    functions: &Vec<(String, usize)>,
+) {
+    let keys = syscall_counters_map.keys();
+
+    let mut syscall_counters: Vec<i32> = vec![0; 4096];
+
+    for key in keys {
+        let result = syscall_counters_map.lookup(&key, MapFlags::ANY);
+
+        match result {
+            Ok(result) => {
+                let cookie = vec_to_i32(key);
+
+                let value_vec = result.unwrap().clone();
+
+                let value = vec_to_i32(value_vec);
+
+                syscall_counters[cookie as usize] = value;
+            }
+            Err(e) => {
+                println!("Err: {:?}", e);
+            }
+        }
+    }
+
+    File::create("/tmp/syscall_stats.txt").expect("Failed to create file");
+
+    for (index, value) in syscall_counters.iter().enumerate() {
+        if *value > 0 {
+            write_to_file(
+                "/tmp/syscall_stats.txt".to_string(),
+                format!("{},{}\n", get_syscall_name(index as u64), value),
             )
             .expect("Failed to write to stats file");
         }

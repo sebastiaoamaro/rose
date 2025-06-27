@@ -1,6 +1,6 @@
 reproduction:
-  schedule: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/base_schedules/hdfs_16332_rose.yaml"
-  oracle: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/oracles/detect_bug_hdfs_16332.sh"
-  result_folder: "/home/sebastiaoamaro/phd/torefidevel/tests/bugdetection/hdfs/"
+  schedule: "/vagrant/bug_reproductions/base_schedules/hdfs_16332_rose.yaml"
+  oracle: "/vagrant/bug_reproductions/oracles/detect_bug_hdfs_16332.sh"
+  result_folder: "/vagrant/tests/bugdetection/hdfs/"
   trace_location: "/tmp/history.txt"
-  buggy_trace: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/traces/hdfs_16332.txt"
+  buggy_trace: "/vagrant/bug_reproductions/traces/hdfs_16332.txt"

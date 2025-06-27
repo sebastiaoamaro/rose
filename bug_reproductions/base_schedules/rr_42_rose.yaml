@@ -1,7 +1,7 @@
 execution_plan:
   cleanup:
     duration: 15
-  maximum_time: 90
+  maximum_time: 60
   setup:
     duration: 5
     script: /vagrant/schedules/reproduced_bugs/redisraft/scripts/startredisclusterb9ee410.sh
@@ -16,33 +16,9 @@ execution_plan:
     wait_time: 15
 nodes:
   redis1:
-    container: true
     binary: /redisraft.so
-    leader_symbol: raft_become_leader
+    container: true
     ip: 172.19.1.10
     leader: true
+    leader_symbol: raft_become_leader
     script: ./startredis.sh 1 172.19.1.10
-  redis2:
-    container: true
-    binary: /redisraft.so
-    leader_symbol: raft_become_leader
-    ip: 172.19.1.11
-    script: ./startredis.sh 2 172.19.1.11
-  redis3:
-    container: true
-    binary: /redisraft.so
-    leader_symbol: raft_become_leader
-    ip: 172.19.1.12
-    script: ./startredis.sh 3 172.19.1.12
-  redis4:
-    container: true
-    binary: /redisraft.so
-    leader_symbol: raft_become_leader
-    ip: 172.19.1.13
-    script: ./startredis.sh 4 172.19.1.13
-  redis5:
-    container: true
-    binary: /redisraft.so
-    leader_symbol: raft_become_leader
-    ip: 172.19.1.14
-    script: ./startredis.sh 5 172.19.1.14

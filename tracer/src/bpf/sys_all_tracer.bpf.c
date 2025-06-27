@@ -311,39 +311,6 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 
     }
 
-	//Checking for small reads 1-2 bytes
-	// else if (id == 0 && ret < 3){
-	// 		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
-	// 		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
-
-	// 		u64 timestamp = bpf_ktime_get_ns();
-
-	// 		int fd = 0;
-	// 		//bpf_printk("Looking at pid_tgid %d ",pid_tgid);
-	// 		int *fd_in_map = bpf_map_lookup_elem(&pid_tgid_fd,&pid_tgid);
-
-	// 		if (fd_in_map){
-	// 			fd = *fd_in_map;
-	// 		}
-
-
-	// 		struct event key = {
-	// 			SYSCALL_EXIT,
-	// 			timestamp,
-	// 			id,
-	// 			pid,
-	// 			tid,
-	// 			fd,
-	// 			0,
-	// 			0,
-	// 			0,
-	// 			ret
-	// 		};
-	// 		bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
-
-	// 		update_event_counter();
-	// }
-
 	else if (id == 9 || id == 12){
 		if (ret == MAP_FAILED){
 			u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)

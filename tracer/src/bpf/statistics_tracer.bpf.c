@@ -31,7 +31,7 @@ struct {
 	__type(key, int);
 	__type(value, int);
 	__uint(max_entries, 4096);
-} syscall_stats SEC(".maps");
+} syscall_counters SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
@@ -140,23 +140,6 @@ int handle_uprobe(struct pt_regs *ctx) {
 		bpf_map_update_elem(&uprobes_counters,&cookie,&zero,BPF_ANY);
 	}
 
-	u64 timestamp = bpf_ktime_get_ns();
-	struct event key = {
-		UPROBE,
-		timestamp,
-		cookie,
-		pid,
-		tid,
-		0,
-		0,
-		0,
-		0,
-		1
-	};
-
-	bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
-	update_event_counter();
-
     return 0;
 }
 
@@ -195,6 +178,71 @@ SEC("tp/syscalls/sys_enter")
 int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 
 	long id = ctx->id;
+	if (id == 0 || id == 1 || id == 3 || id == 32 || id == 33 || id == 292){
+
+			u64 pid_tgid = bpf_get_current_pid_tgid();
+			int pid_relevant = check_pid_prog(pid_tgid);
+
+			if (!pid_relevant)
+				return 0;
+
+			int fd = (int)ctx->args[0];
+
+			bpf_map_update_elem(&pid_tgid_fd, &pid_tgid, &fd, BPF_ANY);
+
+	}
+	else if(id == 2 || id == 85){
+			u64 pid_tgid = bpf_get_current_pid_tgid();
+			int pid_relevant = check_pid_prog(pid_tgid);
+
+			if (!pid_relevant)
+				return 0;
+
+			const char *filename = (const char *)ctx->args[0];
+			char path[FILENAME_MAX_SIZE + 1] = {};
+			int len = bpf_probe_read_user_str(path, sizeof(path), filename);
+
+			bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
+
+	}
+
+	else if(id == 257){
+			u64 pid_tgid = bpf_get_current_pid_tgid();
+			int pid_relevant = check_pid_prog(pid_tgid);
+
+			if (!pid_relevant)
+				return 0;
+
+			const char *filename = (const char *)ctx->args[1];
+			char path[FILENAME_MAX_SIZE + 1] = {};
+			int len = bpf_probe_read_user_str(path, sizeof(path), filename);
+
+			bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
+
+
+	}
+	else if(id == 262){
+    	u64 pid_tgid = bpf_get_current_pid_tgid();
+    	int pid_relevant = check_pid_prog(pid_tgid);
+        if (!pid_relevant)
+            return 0;
+        struct process_and_syscall psys = {
+            id,
+            pid_tgid,
+        };
+
+        long unsigned int filename = ctx->args[1];
+
+        char path[FILENAME_MAX_SIZE];
+
+        int len = bpf_probe_read_user_str(path, FILENAME_MAX_SIZE,(void *)filename);
+        int res = bpf_map_update_elem(&important_arguments,&psys, &path, BPF_ANY);
+        //bpf_printk("NAME:%s, POINTER:%p, PID_TGID:%llu \n",filename,filename,pid_tgid);
+        //int res = bpf_map_update_elem(&important_arguments,&psys, &filename, BPF_ANY);
+        if (res < 0)
+            bpf_printk("Failed to add with code %d \n", res);
+
+	}
 	u64 pid_tgid = bpf_get_current_pid_tgid();
 
 	int pid_relevant = check_pid_prog(pid_tgid);
@@ -202,14 +250,14 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 	if (!pid_relevant)
         return 0;
 
-	int *counter = bpf_map_lookup_elem(&uprobes_counters,&id);
+	int *counter = bpf_map_lookup_elem(&syscall_counters,&id);
 
 	if (counter){
 		int new_counter = *counter + 1;
-		bpf_map_update_elem(&uprobes_counters,&id,&new_counter,BPF_ANY);
+		bpf_map_update_elem(&syscall_counters,&id,&new_counter,BPF_ANY);
 	}else{
 		int zero = 0;
-		bpf_map_update_elem(&uprobes_counters,&id,&zero,BPF_ANY);
+		bpf_map_update_elem(&syscall_counters,&id,&zero,BPF_ANY);
 	}
 
 	return 0;

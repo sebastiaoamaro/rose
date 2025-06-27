@@ -4,9 +4,10 @@
 Vagrant.configure("2") do |config|
     config.vm.define "test1" do |test1|
         test1.vm.box = "bento/ubuntu-24.04"
-        test1.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["target","build","repos","temp_sched.yaml","tests/bugdetection/redisraft/*"]
+        test1.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","build","repos","temp_sched.yaml","tests/bugdetection/redisraft/*"]
         test1.vm.synced_folder "~/shared/test1/", "/shared",type:"virtualbox"
         test1.disksize.size = '128GB'
+        test1.vm.network "private_network", ip: "192.168.56.10"
         test1.vm.provider "virtualbox" do |v|
             v.cpus = 4        # Set number of CPUs
             v.memory = "8192"
@@ -15,7 +16,7 @@ Vagrant.configure("2") do |config|
 
     config.vm.define "test2" do |test2|
         test2.vm.box = "bento/ubuntu-24.04"
-        test2.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["target","build","repos","ycsb-0.17.0","temp_sched.yaml"]
+        test2.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","build","repos","ycsb-0.17.0","temp_sched.yaml"]
         test2.vm.synced_folder "~/shared/test2/", "/shared",type:"virtualbox"
         test2.disksize.size = '128GB'
         test2.vm.provider "virtualbox" do |v|
@@ -26,7 +27,7 @@ Vagrant.configure("2") do |config|
 
     config.vm.define "test3" do |test3|
         test3.vm.box = "bento/ubuntu-24.04"
-        test3.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["target","build","repos","ycsb-0.17.0","Anduril","temp_sched.yaml"]
+        test3.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","build","repos","ycsb-0.17.0","Anduril","temp_sched.yaml"]
         test3.vm.synced_folder "~/shared/test3/", "/shared",type:"virtualbox"
         test3.vm.provider "virtualbox" do |v|
             v.cpus = 4        # Set number of CPUs
@@ -36,7 +37,7 @@ Vagrant.configure("2") do |config|
 
     config.vm.define "remote1" do |remote1|
         remote1.vm.box = "bento/ubuntu-24.04"
-        remote1.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["target","repos","build","Anduril",
+        remote1.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","repos","build","Anduril",
         "schedules/tracing_tests/redis/traces","tests/bugdetection/redisraft/*","temp_sched.yaml"]
         remote1.vm.synced_folder "~/shared/remote1/", "/shared",type:"virtualbox"
         remote1.vm.provider "virtualbox" do |v|

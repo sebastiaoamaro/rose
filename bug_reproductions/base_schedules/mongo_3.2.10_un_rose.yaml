@@ -2,7 +2,7 @@ execution_plan:
   maximum_time: 120
   setup:
     script: /vagrant/schedules/reproduced_bugs/mongo/mongo_3.2.10/scripts/start_cluster.sh
-    duration: 90
+    duration: 60
   workload:
     script: /vagrant/schedules/reproduced_bugs/mongo/mongo_3.2.10/scripts/run_workload.sh
   cleanup:

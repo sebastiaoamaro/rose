@@ -115,10 +115,7 @@ static pthread_t tracer_output;
 
 //Handle exits
 static volatile bool exiting = false;
-static void sig_handler(int sig)
-{
-	exiting = true;
-}
+static void sig_handler(int sig){exiting = true;}
 
 //Handles output of created processes
 struct process_args {
@@ -163,8 +160,6 @@ int main()
 	FAULT_COUNT = get_fault_count();
 	majority = (int *)malloc(QUORUM*sizeof(int));
 
-	//Setup deployment nodes
-	print_fault_schedule(plan,nodes,faults,deployment_tracer);
 	print_block("SETTING UP NODES");
 	collect_container_pids();
 	setup_node_scripts();

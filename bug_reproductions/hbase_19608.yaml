@@ -1,6 +1,7 @@
 reproduction:
-  schedule: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/base_schedules/hbase_19608_rose.yaml"
-  oracle: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/oracles/detect_bug_hbase_19608.sh"
-  result_folder: "/home/sebastiaoamaro/phd/torefidevel/tests/bugdetection/hbase/"
+  schedule: "/vagrant/bug_reproductions/base_schedules/hbase_19608_rose.yaml"
+  oracle: "/vagrant/bug_reproductions/oracles/detect_bug_hbase_19608.sh"
+  profile: "/vagrant/bug_reproductions/profiles/hbase_19608/"
+  result_folder: "/vagrant/tests/bugdetection/hbase/"
   trace_location: "/tmp/history.txt"
-  buggy_trace: "/home/sebastiaoamaro/phd/torefidevel/bug_reproductions/traces/hbase_19608.txt"
+  buggy_trace: "/vagrant/bug_reproductions/traces/hbase_19608.txt"
