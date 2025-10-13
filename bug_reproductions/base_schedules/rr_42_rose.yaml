@@ -10,7 +10,7 @@ execution_plan:
     functions_file: /vagrant/profiler/redisraft/functions_b9ee410.txt
     pipe_location: /tmp/containerpid
     tracer_location: /vagrant/tracer/target/release/tracer
-    tracing_type: production_trace,container_controlled
+    tracing_type: sys_all_trace,container_controlled
   workload:
     script: /vagrant/schedules/reproduced_bugs/redisraft/scripts/runworkload.sh
     wait_time: 15

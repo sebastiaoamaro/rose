@@ -34,6 +34,12 @@ typedef struct Setup{
     int pid;
 }setup;
 
+typedef struct Pre_Workload{
+    char script[STRING_SIZE];
+    int pid;
+    FILE *read_end;
+}pre_workload;
+
 typedef struct Workload{
     char script[STRING_SIZE];
     int pid;
@@ -48,10 +54,21 @@ typedef struct Cleanup{
     int duration; //This is not how long it takes to cleanup, but the amount of time we should wait for the last fault to take effect
 }cleanup;
 
+typedef struct LazyFS{
+    char script[STRING_SIZE];
+    char root_dir[STRING_SIZE];
+    char mount_dir[STRING_SIZE];
+    char pipe_location[STRING_SIZE];
+    int pid;
+    FILE *read_end;
+}lazyfs;
+
 typedef struct Execution_Plan{
     setup setup;
+    pre_workload pre_workload;
     workload workload;
     cleanup cleanup;
+    lazyfs lazyfs;
 }execution_plan;
 
 typedef struct Node {
@@ -109,19 +126,26 @@ typedef struct process_fault{
     int type;
 }process_fault;
 
+typedef struct lazyfs_fault{
+    int operation;
+}lazyfs_fault;
+
+
 typedef union fault_details{
     file_system_operation file_system_op;
     syscall_operation syscall;
     block_ips block_ips;
     packet_drop packet_drop;
     process_fault process_fault;
+    lazyfs_fault lazyfs_fault;
 }fault_details;
 
 enum fault_categories{
     NETWORK = 0,
     PROCESS = 1,
     SYSCALL_FAULT = 2,
-    FILE_SYS_OP = 3
+    FILE_SYS_OP = 3,
+    LAZYFS = 4,
 
 };
 

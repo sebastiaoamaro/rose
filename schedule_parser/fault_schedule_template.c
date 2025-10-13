@@ -42,7 +42,7 @@ void create_tracer(tracer* tracer,char* tracer_location, char* pipe_location, ch
     strcpy(tracer->binary_path,binary_path);
 
 }
-void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script,char* cleanup_script, int cleanup_time, int wait_time,int wait_workload){
+void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup_duration,char* workload_script,char* cleanup_script, int cleanup_time, int wait_time,int wait_workload,char *pre_workload_script,char* lazyfs_script, char* root_dir, char* mount_dir, char* pipe_location){
 
     // memset(exe_plan->setup.script,'\0',strlen(setup_script));
     strcpy(exe_plan->setup.script,setup_script);
@@ -55,10 +55,18 @@ void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup
     exe_plan->workload.wait_time = wait_time;
     exe_plan->workload.wait_workload = wait_workload;
 
+    strcpy(exe_plan->pre_workload.script,pre_workload_script);
+
     // memset(exe_plan->cleanup.script,'\0',strlen(cleanup_script));
     strcpy(exe_plan->cleanup.script,cleanup_script);
     exe_plan->cleanup.pid = 0;
     exe_plan->cleanup.duration = cleanup_time;
+
+    strcpy(exe_plan->lazyfs.script,lazyfs_script);
+    strcpy(exe_plan->lazyfs.root_dir,root_dir);
+    strcpy(exe_plan->lazyfs.mount_dir,mount_dir);
+    strcpy(exe_plan->lazyfs.pipe_location,pipe_location);
+
 }
 void create_node(node* node, char* name,int pid,char* pid_file, char* veth, char* ip, char* script,char* env,int container,int container_type,char *binary,char *leader_symbol,int leader){
 

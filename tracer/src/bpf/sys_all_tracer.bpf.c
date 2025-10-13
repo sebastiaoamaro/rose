@@ -116,8 +116,6 @@ static inline int update_event_counter(){
 
 SEC("tp/syscalls/sys_enter")
 int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
-
-
 	long id = ctx->id;
 	u64 pid_tgid = bpf_get_current_pid_tgid();
 
@@ -155,17 +153,38 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 
 	}
 	else if(id == 2 || id == 85){
-			int pid_relevant = check_pid_prog(pid_tgid);
+		int pid_relevant = check_pid_prog(pid_tgid);
 
-			if (!pid_relevant)
-				return 0;
+		if (!pid_relevant)
+			return 0;
 
-			const char *filename = (const char *)ctx->args[0];
-			char path[FILENAME_MAX_SIZE + 1] = {};
-			int len = bpf_probe_read_user_str(path, sizeof(path), filename);
+		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
+   	    u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
 
-			bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
-	}
+		const char *filename = (const char *)ctx->args[0];
+		char path[FILENAME_MAX_SIZE + 1] = {};
+		int len = bpf_probe_read_user_str(path, sizeof(path), filename);
+
+		bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
+
+       	u64 timestamp = bpf_ktime_get_ns();
+
+       	struct event key = {
+      		SYSCALL_ENTER,
+      		timestamp,
+      		id,
+      		pid,
+      		tid,
+      		0,
+      		0,
+      		0,
+      		0,
+      		0
+       	};
+
+       	bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
+       	update_event_counter();
+}
 
 	else if(id == 257){
 			int pid_relevant = check_pid_prog(pid_tgid);
@@ -179,7 +198,30 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 
 			bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
 
-	}else{
+	}else if(id == 262){
+    	u64 pid_tgid = bpf_get_current_pid_tgid();
+    	int pid_relevant = check_pid_prog(pid_tgid);
+        if (!pid_relevant)
+            return 0;
+        struct process_and_syscall psys = {
+            id,
+            pid_tgid,
+        };
+
+        long unsigned int filename = ctx->args[1];
+
+        char path[FILENAME_MAX_SIZE];
+
+        int len = bpf_probe_read_user_str(path, FILENAME_MAX_SIZE,(void *)filename);
+        int res = bpf_map_update_elem(&important_arguments,&psys, &path, BPF_ANY);
+        //bpf_printk("NAME:%s, POINTER:%p, PID_TGID:%llu \n",filename,filename,pid_tgid);
+        //int res = bpf_map_update_elem(&important_arguments,&psys, &filename, BPF_ANY);
+        if (res < 0)
+            bpf_printk("Failed to add with code %d \n", res);
+
+	}
+
+	else{
     	int pid_relevant = check_pid_prog(pid_tgid);
 
     	if (!pid_relevant)
@@ -224,10 +266,19 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 
 	if (!pid_relevant)
 		return 0;
+
 	long int ret = ctx->ret;
+
+	if(ret == -512){
+	   return 0;
+	}
 
 	//Failing opens has its own special handling since they we need the filename
 	if (ret<0 && id !=9 && id != 12){
+
+	    if (id == 0 && ret == -11){
+			return 0;
+		}
 		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
 		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
 
@@ -371,7 +422,6 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 	else if (id ==32 || id == 33 || id == 292){
 
 			int fd = 0;
-			//bpf_printk("Looking at pid_tgid %d ",pid_tgid);
 			int *fd_in_map = bpf_map_lookup_elem(&pid_tgid_fd,&pid_tgid);
 
 			if (fd_in_map){
@@ -386,13 +436,10 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 
 			};
 			bpf_map_update_elem(&dup_map,&fd_info,&ret, BPF_ANY);
-			//bpf_printk("Added pid %d, fd %d, ts %llu, new_fd %d",pid_relevant,fd,timestamp,ret);
 
 	}
-
     return 0;
 }
-
 
 SEC("uprobe")
 int handle_uprobe(struct pt_regs *ctx) {

@@ -19,6 +19,12 @@ struct {
 } rb SEC(".maps");
 
 struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 256 * 1024);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} lazyfs_rb SEC(".maps");
+
+struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAP_SIZE);
 	__type(key, struct fault_key);
@@ -58,25 +64,6 @@ struct {
 	__type(value, struct simplified_fault);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } faults SEC(".maps");
-
-
-struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, MAP_SIZE);
-	__type(key, int);
-	__type(value,int);
-	__uint(pinning, LIBBPF_PIN_BY_NAME);
-} active_write_fd SEC(".maps");
-
-//Struct to hold time
-struct {
-	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__uint(max_entries, 1);
-	__type(key, int);
-	__type(value, int);
-	__uint(pinning, LIBBPF_PIN_BY_NAME);
-} time SEC(".maps");
-
 
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
@@ -161,6 +148,7 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 	// }else{
 	// 	process_fd = 0;
 	// }
+	//
 
 	if (fd > 0 && process_fd){
 		struct file *file = get_file_from_fd(fd);
@@ -199,10 +187,10 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 			if (fi.size == 0){
 				return 0;
 			}
-			//bpf_printk("Comparing %s and %s \n with offset %d",&(fi.filename[fi.offset]),file_open->filename,fi.size);
-			if(string_contains(file_open->filename,&(fi.filename[fi.offset]),fi.size)){
-
-				// struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&origin_pid);
+			//bpf_printk("Comparing %s and %s \n with offset %d",&(fi.filename[fi.offset]),file_open->filename,file_open->size);
+			if(string_contains(file_open->filename,&(fi.filename[fi.offset]),file_open->size)){
+			    //bpf_printk("Match found \n");
+			    // struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&origin_pid);
 				// if(fds){
 				// 	u64 position = fds->size;
 				// 	if(position < MAX_RELEVANT_FILES){
@@ -221,6 +209,8 @@ int BPF_KPROBE(__x64_sys_write,struct pt_regs *regs)
 			}
 		}
 	}
+
+	//test_new_process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,&maps);
 
 	process_current_state(sys_info.general_syscall_code,pid,sys_info.fault_count,sys_info.time_only,
 		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
@@ -746,7 +736,7 @@ int BPF_KPROBE(__x64_sys_fdatasync,struct pt_regs *regs)
 	struct sys_info sys_info = {
 		fd,
 		FDATASYNC_STATE,
-		FDATASYNCFILE_STATE,
+		FDATASYNC_FILE_STATE,
 		FDATASYNC_FAULT,
 		FDATASYNCFILE_FAULT,
 		fault_count,
@@ -1003,11 +993,13 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
             int *start_pid = bpf_map_lookup_elem(&nodes_pid_translator,&original_pid);
 
             if (start_pid){
+                //bpf_printk("Translated pid, current_pid is %d, old_pid is %d \n",pid,start_pid);
                 bpf_map_update_elem(&nodes_pid_translator, &pid, &start_pid, BPF_ANY);
             }
             else{
                 //Temporary fix for all my tests that used exec -a
                 if (original_pid != 0){
+                    //bpf_printk("Translated pid, current_pid is %d, old_pid is %d \n",pid,original_pid);
                     bpf_map_update_elem(&nodes_pid_translator, &pid, &original_pid, BPF_ANY);
                 }
             }

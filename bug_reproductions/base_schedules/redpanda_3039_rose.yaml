@@ -11,7 +11,7 @@ execution_plan:
   tracer:
     tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
-    tracing_type: full_trace,container_controlled
+    tracing_type: sys_all_trace,container_controlled
 nodes:
   redpanda0:
     container: true

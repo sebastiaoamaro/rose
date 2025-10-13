@@ -1,25 +1,27 @@
 execution_plan:
+  maximum_time: 60
   tracer:
-    tracer_location: /home/sebastiaoamaro/phd/torefidevel/tracer/target/release/tracer
+    tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
-
+    tracing_type: production_trace,process_controlled
+  cleanup:
+    duration: 60
 nodes:
   hbase:
     container: false
-    script: /home/sebastiaoamaro/phd/rw/Anduril/experiment/hbase-20583/run-original-test.sh
+    script: /vagrant/rw/Anduril/experiment/hbase-20583/run-original-test.sh
 
 faults:
   syscall_fail:
     type: syscall
     details:
       name: newfstatat
-      return_value: -1
-    repeatable: True
+      return_value: -2
     target: hbase
     traced: hbase
     begin_conditions:
       - condition1:
-          type: newfstatat
-          syscall_name: read
-          file_name: .meta
-          call_count: 1
+          type: file_syscall
+          syscall_name: newfstatat
+          file_name: zookeeper_0
+          call_count: 7

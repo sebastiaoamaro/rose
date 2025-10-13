@@ -16,7 +16,6 @@ faults:
     details:
       name: accept
       return_value: -5
-      success: False
     target: zookeeper
     traced: zookeeper
     begin_conditions:

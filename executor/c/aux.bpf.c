@@ -15,15 +15,6 @@ struct {
 	__type(value, struct simplified_fault);
 } faults SEC(".maps");
 
-
-//Struct to hold faults
-struct {
-	__uint(type, BPF_MAP_TYPE_ARRAY);
-	__uint(max_entries, 1);
-	__type(key, int);
-	__type(value, int);
-} time SEC(".maps");
-
 //ARRAYS ARE NECESSARY AS VALUES BECAUSE DIFFERENT FAULT MIGHT HAVE THE SAME STATE PROPERTY
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
@@ -32,6 +23,7 @@ struct {
 	__type(value, struct info_state);
 } relevant_state_info SEC(".maps");
 
+//
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAP_SIZE);
@@ -76,11 +68,9 @@ struct {
 } rb SEC(".maps");
 
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, MAP_SIZE);
-	__type(key, int);
-	__type(value,int);
-} active_write_fd SEC(".maps");
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 256 * 1024);
+} lazyfs_rb SEC(".maps");
 
 //Auxiliary info, leader is pos [0], node_count is pos [1], nodes current_pids from that point on
 struct {

@@ -9,7 +9,7 @@ execution_plan:
   tracer:
     tracer_location: "/vagrant/tracer/target/release/tracer"
     pipe_location: "/tmp/containerpid"
-    #    functions_file: /vagrant/profiler/redisraft/functions_dfd91d4.txt
+    functions_file: /vagrant/profiler/redisraft/functions_dfd91d4.txt
     binary_to_examine: /opt/redis/redisraft.so
     tracing_type: production_trace,container_controlled
 nodes:

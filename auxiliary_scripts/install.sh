@@ -32,11 +32,13 @@ sudo apt install git
 
 #Kernel module
 cd ..
-cd rose/kernelmodule
+cd executor/kernelmodule
 sudo apt-get install -y libdw1 dwarves elfutils libdw-dev pahole libdwarf-dev
 sudo cp /sys/kernel/btf/vmlinux /usr/lib/modules/`uname -r`/build/
 git clone https://github.com/acmel/dwarves.git
 cd dwarves
+git checkout *
+git pull
 git submodule update --init --recursive
 mkdir build
 cd build
@@ -53,9 +55,13 @@ cd ../..
 #bpftool
 
 cd bpftool
+git checkout *
+git checkout .github/*
 git pull
 
 cd libbpf
+git checkout *
+git checkout .git/*
 git checkout master
 git pull
 cd src

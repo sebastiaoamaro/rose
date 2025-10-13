@@ -161,7 +161,8 @@ def create_schedules_based_changing_call_count(output_folder,base_schedule,fault
         data = ordered_load(file, yaml.SafeLoader)
 
         for i in range(1,call_count_max+1):
-             for j in range(0,len(data["faults"][fault_name]["begin_conditions"])):
+            print(data["faults"])
+            for j in range(0,len(data["faults"][fault_name]["begin_conditions"])):
                 cond = data["faults"][fault_name]["begin_conditions"][j]
                 if cond_name in cond:
                     data["faults"][fault_name]["begin_conditions"][j][cond_name]["call_count"] = i

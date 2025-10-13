@@ -1,0 +1,50 @@
+execution_plan:
+  maximum_time: 120
+  setup:
+    script: "/vagrant/schedules/reproduced_bugs/redisraft/lxc/run_jepsen.sh"
+    duration: 5
+  workload:
+    script: /vagrant/schedules/reproduced_bugs/redisraft/lxc/signal_jepsen_start.sh
+    wait_workload: true
+  tracer:
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    functions_file: /vagrant/profiler/redisraft/functions_dfd91d4.txt
+    binary_to_examine: /opt/redis/redisraft.so
+    tracing_type: sys_all_trace,container_controlled
+nodes:
+  n1:
+    container: true
+    container_type: lxc
+    ip: 10.61.177.130
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+  n2:
+    container: true
+    container_type: lxc
+    ip: 10.61.177.2
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+  n3:
+    container: true
+    container_type: lxc
+    ip: 10.61.177.42
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+  n4:
+    container: true
+    container_type: lxc
+    ip: 10.61.177.99
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh
+  n5:
+    container: true
+    container_type: lxc
+    ip: 10.61.177.178
+    binary: /opt/redis/redisraft.so
+    pid_file: /opt/redis/redis.pid
+    script: /opt/redis/start_redis_node.sh

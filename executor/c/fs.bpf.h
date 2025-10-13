@@ -151,7 +151,7 @@ static inline bool string_contains(char *str1,char *str2,int size) {
     bpf_probe_read(&comparand2, sizeof(comparand2), str2);
 
     //-1 because of the null terminator
-    int str_len = size-1;
+    int str_len = size;
     int count = 0;
     #pragma unroll
     for (int i = 0; i < FILENAME_MAX_SIZE; ++i){

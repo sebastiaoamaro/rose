@@ -40,7 +40,7 @@ def delete_function_from_file(filename: str, target: str) -> None:
                 file.write(line)
 
 def get_symbols(relevant_files,binary,output_file):
-    command = ["profiler/get_symbols_by_file.sh", relevant_files,binary,output_file]
+    command = ["profiler/get_symbols_by_keyword.sh", relevant_files,binary,output_file]
 
     print(command)
     try:
@@ -137,25 +137,23 @@ def main():
         run_cleanup(bug_reproduction.cleanup)
         end_time = time.time()
         elapsed_time = end_time - start_time
-
         failed_probes = parse_file_split_by_comma("/tmp/failed_probes.txt")
-
         function_stats = parse_file_split_by_comma("/tmp/function_stats.txt")
 
         frequent_functions = []
         for function in function_stats:
             ratio = int(function[2])/elapsed_time
-            print("Ratio is {}, total calls is {} time_elasped is {}".format(ratio, function[2],elapsed_time))
             if ratio > 2:
+                print("Ratio is {}, total calls is {} time_elasped is {}".format(ratio, function[2],elapsed_time))
                 frequent_functions.append(function[0])
 
         #Add probes which we could not attach
         for failed_probe in failed_probes:
-            frequent_functions.append(failed_probe)
+            frequent_functions.append(failed_probe[0])
 
 
         for frequent_function in frequent_functions:
-            print(f"Removing function {frequent_function}")
+            #print(f"Removing function {frequent_function}")
             delete_function_from_file(bug_reproduction.profile+"functions.txt", frequent_function)
 
     collect_profile(bug_reproduction.profile)

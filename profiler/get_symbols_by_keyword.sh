@@ -11,6 +11,11 @@ binary="$2"
 functions_file="function_symbols.txt"
 output_file="$3"
 
+if [ ! -f "$output_file" ]; then
+    echo "Deleting existing output_file file"
+    rm "$output_file"
+fi
+
 if [ ! -f "$functions_file" ]; then
     echo "Deleting existing functions file"
     rm "$functions_file"
@@ -30,5 +35,11 @@ while IFS= read -r keyword || [ -n "$keyword" ]; do
 done < "$keywords_file"
 
 ./get_offsets.sh $binary $functions_file $output_file
+
+grep -v -e "ERROR" -e "cold" $output_file > "temp_functions.txt"
+
+python3 remove_duplicates.py "temp_functions.txt" $output_file
+
+rm "temp_functions.txt"
 
 echo "All keywords processed."

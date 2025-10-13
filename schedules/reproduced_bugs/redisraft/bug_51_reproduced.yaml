@@ -15,6 +15,7 @@ execution_plan:
     functions_file: /vagrant/profiler/redisraft/functions_2d1cf30.txt
     binary_to_examine: /redisraft.so
     tracing_type: production_trace,container_controlled
+
 nodes:
   redis1:
     container: true

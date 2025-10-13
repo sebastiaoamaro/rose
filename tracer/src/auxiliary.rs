@@ -33,6 +33,7 @@ use std::time::Duration;
 pub const CONTAINER_TYPE_DOCKER: i32 = 1;
 pub const CONTAINER_TYPE_LXC: i32 = 2;
 pub const LOCATION_TRACEPOINT_VECTOR: i32 = 0;
+use std::fmt;
 pub mod pin_maps {
     include!(concat!(env!("OUT_DIR"), "/pin_maps.skel.rs"));
 }
@@ -80,7 +81,14 @@ pub struct NameAtTimestamp {
     pub timestamp: u64,
 }
 
-static SYSCALLS_WITH_FD: [u64; 10] = [
+// Implement Display for custom printing
+impl fmt::Debug for NameAtTimestamp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Name: {}, Timestamp: {} \n", self.name, self.timestamp)
+    }
+}
+
+static SYSCALLS_WITH_FD: [u64; 8] = [
     0,  // read
     1,  // write
     3,  // close
@@ -88,7 +96,7 @@ static SYSCALLS_WITH_FD: [u64; 10] = [
     33, // dup2
     34, // pause (uses a signal file descriptor indirectly)
     49, // bind
-    439, 89, 51,
+    439,
 ];
 
 static _NETWORK_SYSCALLS_WITH_FD: [u64; 10] = [
@@ -417,10 +425,6 @@ pub fn start_tracing_container(
 
     let binary_location = format!("{}{}", container_location, binary_path);
 
-    println!(
-        "binary_location for {} is {}",
-        container_name, binary_location
-    );
     for (index_function, function) in functions.clone().iter().enumerate() {
         skel.attach_uprobe(
             index_function,
@@ -1077,6 +1081,7 @@ pub fn process_uprobes_counters_map(
 
     let mut uprobes_counters: Vec<i32> = vec![0; 4096];
 
+    let mut total_function_call = 0;
     for key in keys {
         let result = uprobes_counters_map.lookup(&key, MapFlags::ANY);
 
@@ -1088,6 +1093,8 @@ pub fn process_uprobes_counters_map(
 
                 let value = vec_to_i32(value_vec);
 
+                total_function_call += value;
+
                 uprobes_counters[cookie as usize] = value;
             }
             Err(e) => {
@@ -1095,6 +1102,8 @@ pub fn process_uprobes_counters_map(
             }
         }
     }
+
+    println!("Total function calls: {}", total_function_call);
 
     File::create("/tmp/function_stats.txt").expect("Failed to create file");
 

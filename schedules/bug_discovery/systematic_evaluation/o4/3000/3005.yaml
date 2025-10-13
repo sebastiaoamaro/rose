@@ -1,0 +1,142 @@
+execution_plan:
+  maximum_time: 120
+  setup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
+    duration: 20
+  workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
+  cleanup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
+    duration: 15
+  pre_workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
+  tracer:
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: sys_all_trace,container_controlled
+nodes:
+  node1:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.11
+  node2:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.12
+  node3:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.13
+
+faults:
+  "41":
+    type: syscall
+    target: node2
+    details:
+      name: read
+      return_value: -1
+    begin_conditions:
+      - "41":
+          type: file_syscall
+          syscall_name: read
+          file_name: nodes.conf
+          call_count: 1
+
+  "42":
+    type: process_kill
+    target: node3
+    begin_conditions:
+      - "42":
+          type: time
+          time: 3500
+
+  "43":
+    type: block_ips
+    target: node1
+    duration: 10000
+    ips_out:
+      - node2
+    begin_conditions:
+      - "43":
+          type: syscall
+          syscall_name: write
+          call_count: 50
+
+  "44":
+    type: process_pause
+    target: node2
+    duration: 5
+    begin_conditions:
+      - "44":
+          type: file_syscall
+          syscall_name: write
+          file_name: dump.rdb
+          call_count: 2
+
+  "45":
+    type: syscall
+    target: node3
+    details:
+      name: openat
+      return_value: -1
+    begin_conditions:
+      - "45":
+          type: file_syscall
+          syscall_name: openat
+          file_name: appendonly.aof
+          call_count: 1
+
+  "46":
+    type: block_ips
+    target: node2
+    duration: 10000
+    ips_in:
+      - node1
+    begin_conditions:
+      - "46":
+          type: time
+          time: 12000
+
+  "47":
+    type: syscall
+    target: node1
+    details:
+      name: write
+      return_value: -1
+    begin_conditions:
+      - "47":
+          type: syscall
+          syscall_name: write
+          call_count: 20
+
+  "48":
+    type: process_pause
+    target: node3
+    duration: 10000
+    begin_conditions:
+      - "48":
+          type: time
+          time: 16000
+
+  "49":
+    type: process_kill
+    target: node2
+    begin_conditions:
+      - "49":
+          type: file_syscall
+          syscall_name: write
+          file_name: appendonly.aof
+          call_count: 3
+
+  "50":
+    type: block_ips
+    target: node3
+    duration: 10000
+    ips_out:
+      - node1
+    begin_conditions:
+      - "50":
+          type: syscall
+          syscall_name: read
+          call_count: 35

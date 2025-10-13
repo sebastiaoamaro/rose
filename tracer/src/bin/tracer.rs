@@ -28,7 +28,7 @@ fn main() {
 
     let mode = type_and_mode[1].trim();
 
-    if tracing_type == "sys_all_tracer" {
+    if tracing_type == "sys_all_trace" {
         println!("Started SYS_ALL_TRACER");
         let functions_file = &args[2];
 

@@ -10,7 +10,7 @@ execution_plan:
   tracer:
     tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
-    tracing_type: production_trace,container_controlled
+    tracing_type: sys_all_trace,container_controlled
 nodes:
   mongo-0:
     container: true

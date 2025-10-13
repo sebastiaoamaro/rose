@@ -28,10 +28,13 @@
 #include <dirent.h>
 #include <limits.h>
 
+
 static struct env {
 	bool verbose;
 	long min_duration_ms;
 } env;
+
+//Handles output of created processes
 
 struct aux_bpf* start_aux_maps(){
 
@@ -67,6 +70,17 @@ struct aux_bpf* start_aux_maps(){
 	}
 
 	err = bpf_map__pin(skel->maps.rb, "/sys/fs/bpf/rb");
+	if(err) {
+		printf("[ERROR] libbpf pin API: %d\n", err);
+	}
+
+	err = bpf_map__unpin(skel->maps.lazyfs_rb, "/sys/fs/bpf/lazyfs_rb");
+	if(err) {
+		printf("[ERROR] libbpf unpin API: %d\n", err);
+		//return NULL;
+	}
+
+	err = bpf_map__pin(skel->maps.lazyfs_rb, "/sys/fs/bpf/lazyfs_rb");
 	if(err) {
 		printf("[ERROR] libbpf pin API: %d\n", err);
 	}
@@ -146,18 +160,6 @@ struct aux_bpf* start_aux_maps(){
 		return NULL;
 	}
 
-	err = bpf_map__unpin(skel->maps.active_write_fd, "/sys/fs/bpf/active_write_fd");
-	if(err) {
-		printf("[ERROR] libbpf unpin API: %d\n", err);
-		//return NULL;
-	}
-
-	err = bpf_map__pin(skel->maps.active_write_fd, "/sys/fs/bpf/active_write_fd");
-	if(err) {
-		printf("[ERROR] libbpf pin API: %d\n", err);
-		return NULL;
-	}
-
 	err = bpf_map__unpin(skel->maps.faults, "/sys/fs/bpf/faults");
 	if(err) {
 		printf("[ERROR] libbpf unpin API: %d\n", err);
@@ -170,17 +172,6 @@ struct aux_bpf* start_aux_maps(){
 		return NULL;
 	}
 
-	err = bpf_map__unpin(skel->maps.time, "/sys/fs/bpf/time");
-	if(err) {
-		printf("[ERROR] libbpf unpin API: %d\n", err);
-		//return NULL;
-	}
-
-	err = bpf_map__pin(skel->maps.time, "/sys/fs/bpf/time");
-	if(err) {
-		printf("[ERROR] libbpf pin API: %d\n", err);
-		return NULL;
-	}
 	err = bpf_map__unpin(skel->maps.auxiliary_info, "/sys/fs/bpf/auxiliary_info");
 	if(err) {
 		printf("[ERROR] libbpf unpin API: %d\n", err);

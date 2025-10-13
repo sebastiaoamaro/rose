@@ -19,9 +19,11 @@ struct maps {
 	struct bpf_map *relevant_state_info;
 	struct bpf_map *faults_specification;
 	struct bpf_map *faults;
+	struct bpf_map *auxiliary_info;
+	struct bpf_map *nodes_translator;
+	struct bpf_map *nodes_status;
 	struct bpf_map *rb;
-	struct bpf_map *files;
-	struct bpf_map *relevant_fd;
+	struct bpf_map *lazyfs_rb;
 };
 
 struct fault_inject_bpf* fault_inject(int faults,int timemode);

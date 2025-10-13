@@ -13,7 +13,7 @@ execution_plan:
     pipe_location: "/tmp/containerpid"
     functions_file: /vagrant/profiler/redisraft/functions_b9ee410.txt
     binary_to_examine: "/redisraft.so"
-    tracing_type: stats_trace,container_controlled
+    tracing_type: sys_all_trace,container_controlled
 
 nodes:
   redis1:

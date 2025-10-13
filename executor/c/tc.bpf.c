@@ -152,9 +152,6 @@ int monitor(struct __sk_buff *ctx)
 	bpf_skb_load_bytes(ctx, nhoff + offsetof(struct iphdr, daddr), &(pair.dst_addr), 4);
 	//}
 
-	//bpf_printk("e->src_addr is %d and e->dst_addr is %d \n",pair.src_addr,pair.dst_addr);
-
-
 	struct fault_key fault_to_inject_blockips = {
 		if_index,
 		BLOCK_IPS,

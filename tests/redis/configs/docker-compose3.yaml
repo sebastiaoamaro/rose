@@ -1,48 +1,48 @@
 version: "3"
 services:
-    redis-1:
-        image: redis
-        command: ["redis-server","/etc/redis/redis.conf"]
-        privileged: true
-        volumes:
-            - /redis/node-1/data:/data
-            - /redis/node-1/conf/redis.conf:/etc/redis/redis.conf
-        ports:
-            - 6371:6379
-            - 16371:16379
-        networks:
-            redis_network:
-                ipv4_address: 172.38.0.11
-    redis-2:
-        image: redis
-        command: ["redis-server", "/etc/redis/redis.conf"]
-        privileged: true
-        volumes:
-            - /redis/node-2/data:/data
-            - /redis/node-2/conf/redis.conf:/etc/redis/redis.conf
-        ports:
-            - "6372:6379"
-            - 16372:16379
-        networks:
-            redis_network:
-                ipv4_address: 172.38.0.12
-    redis-3:
-        image: redis
-        command: ["redis-server", "/etc/redis/redis.conf"]
-        privileged: true
-        volumes:
-            - /redis/node-3/data:/data
-            - /redis/node-3/conf/redis.conf:/etc/redis/redis.conf
-        ports:
-            - "6373:6379"
-            - 16373:16379
-        networks:
-            redis_network:
-                ipv4_address: 172.38.0.13
+  redis-1:
+    image: redis:8.0.3
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    privileged: true
+    volumes:
+      - /redis/node-1/data:/data
+      - /redis/node-1/conf/redis.conf:/etc/redis/redis.conf
+    ports:
+      - 6371:6379
+      - 16371:16379
+    networks:
+      redis_network:
+        ipv4_address: 172.38.0.11
+  redis-2:
+    image: redis:8.0.3
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    privileged: true
+    volumes:
+      - /redis/node-2/data:/data
+      - /redis/node-2/conf/redis.conf:/etc/redis/redis.conf
+    ports:
+      - "6372:6379"
+      - 16372:16379
+    networks:
+      redis_network:
+        ipv4_address: 172.38.0.12
+  redis-3:
+    image: redis:8.0.3
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    privileged: true
+    volumes:
+      - /redis/node-3/data:/data
+      - /redis/node-3/conf/redis.conf:/etc/redis/redis.conf
+    ports:
+      - "6373:6379"
+      - 16373:16379
+    networks:
+      redis_network:
+        ipv4_address: 172.38.0.13
 networks:
-    redis_network:
-        driver: bridge
-        ipam:
-            config:
-                - subnet: 172.38.0.0/16
-                  gateway: 172.38.0.1
+  redis_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.38.0.0/16
+          gateway: 172.38.0.1

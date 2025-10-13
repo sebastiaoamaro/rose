@@ -164,7 +164,6 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 
 			bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
 
-
 			return 0;
 
 	}
@@ -208,7 +207,9 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 
 	if (!pid_relevant)
 		return 0;
+
 	long int ret = ctx->ret;
+
 	if(ret == -512){
 	   return 0;
 	}

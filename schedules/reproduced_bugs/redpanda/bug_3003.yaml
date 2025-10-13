@@ -126,11 +126,11 @@ faults:
       - condition0:
           type: time
           time: 5000
-      - condition1:
-          type: user_function
-          binary_location: "/opt/redpanda/libexec/redpanda"
-          symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
-          call_count: 1
+      # - condition1:
+      #     type: user_function
+      #     binary_location: "/opt/redpanda/libexec/redpanda"
+      #     symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+      #     call_count: 1
   process_pause2:
     type: process_pause
     target: n2
@@ -140,11 +140,11 @@ faults:
       - condition0:
           type: time
           time: 20000
-      - condition1:
-          type: user_function
-          binary_location: "/opt/redpanda/libexec/redpanda"
-          symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
-          call_count: 1
+      # - condition1:
+      #     type: user_function
+      #     binary_location: "/opt/redpanda/libexec/redpanda"
+      #     symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+      #     call_count: 1
   process_pause3:
     type: process_pause
     target: n3
@@ -154,11 +154,11 @@ faults:
       - condition0:
           type: time
           time: 40000
-      - condition1:
-          type: user_function
-          binary_location: "/opt/redpanda/libexec/redpanda"
-          symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
-          call_count: 1
+      # - condition1:
+      #     type: user_function
+      #     binary_location: "/opt/redpanda/libexec/redpanda"
+      #     symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+      #     call_count: 1
 
   process_pause4:
     type: process_pause
@@ -169,11 +169,11 @@ faults:
       - condition0:
           type: time
           time: 50000
-      - condition1:
-          type: user_function
-          binary_location: "/opt/redpanda/libexec/redpanda"
-          symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
-          call_count: 1
+      # - condition1:
+      #     type: user_function
+      #     binary_location: "/opt/redpanda/libexec/redpanda"
+      #     symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+      #     call_count: 1
 
   process_pause5:
     type: process_pause
@@ -184,8 +184,8 @@ faults:
       - condition0:
           type: time
           time: 60000
-      - condition1:
-          type: user_function
-          binary_location: "/opt/redpanda/libexec/redpanda"
-          symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
-          call_count: 1
+      # - condition1:
+      #     type: user_function
+      #     binary_location: "/opt/redpanda/libexec/redpanda"
+      #     symbol: _ZN5kafka15produce_handler6handleENS_15request_contextEN7seastar17smp_service_groupE
+      #     call_count: 1

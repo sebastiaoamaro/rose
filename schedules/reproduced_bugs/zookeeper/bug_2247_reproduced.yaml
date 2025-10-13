@@ -5,7 +5,6 @@ execution_plan:
     tracing_type: production_trace,process_controlled
   cleanup:
     duration: 30
-
 nodes:
   zookeeper:
     container: false
@@ -17,8 +16,6 @@ faults:
     details:
       name: write
       return_value: -5
-      #success: True
-      repeatable: True
     #repeatable: True
     target: zookeeper
     traced: zookeeper

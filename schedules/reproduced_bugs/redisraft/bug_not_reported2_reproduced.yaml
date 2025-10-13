@@ -16,35 +16,35 @@ nodes:
   n1:
     container: true
     container_type: lxc
-    ip: 10.61.110.21
+    ip: 10.61.177.130
     binary: /opt/redis/redisraft.so
     pid_file: /opt/redis/redis.pid
     script: /opt/redis/start_redis_node.sh
   n2:
     container: true
     container_type: lxc
-    ip: 10.61.110.13
+    ip: 10.61.177.2
     binary: /opt/redis/redisraft.so
     pid_file: /opt/redis/redis.pid
     script: /opt/redis/start_redis_node.sh
   n3:
     container: true
     container_type: lxc
-    ip: 10.61.110.43
+    ip: 10.61.177.42
     binary: /opt/redis/redisraft.so
     pid_file: /opt/redis/redis.pid
     script: /opt/redis/start_redis_node.sh
   n4:
     container: true
     container_type: lxc
-    ip: 10.61.110.214
+    ip: 10.61.177.99
     binary: /opt/redis/redisraft.so
     pid_file: /opt/redis/redis.pid
     script: /opt/redis/start_redis_node.sh
   n5:
     container: true
     container_type: lxc
-    ip: 10.61.110.39
+    ip: 10.61.177.178
     binary: /opt/redis/redisraft.so
     pid_file: /opt/redis/redis.pid
     script: /opt/redis/start_redis_node.sh

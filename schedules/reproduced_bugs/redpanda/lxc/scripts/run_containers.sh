@@ -1,9 +1,8 @@
 #!/bin/bash
 
 export TERM=xterm
-
+sudo sh -c 'echo 1048576 > /proc/sys/fs/aio-max-nr'
 n=5
-
 # Launch LXD Containers (5 nodes)
 for i in $(seq 1 $n); do lxc launch ubuntu:22.04 n${i}; done
 

@@ -12,7 +12,7 @@ execution_plan:
     pipe_location: /tmp/containerpid
     binary_to_examine: /opt/redpanda/libexec/redpanda
     functions_file: /vagrant/profiler/redpanda/functions.txt
-    tracing_type: production_trace,container_controlled
+    tracing_type: sys_all_trace,container_controlled
 
 nodes:
   n1:

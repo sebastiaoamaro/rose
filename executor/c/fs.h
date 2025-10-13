@@ -2,7 +2,7 @@
 #define __FS_H
 
 #define FILENAME_MAX_SIZE 32
-#define MAX_JUMPS 			25
+#define MAX_JUMPS 			26
 #define MAX_FILE_OFFSET		(FILENAME_MAX_SIZE>>1)
 #define SUB_STR_MAX			512
 #define PATH_MAX	4096

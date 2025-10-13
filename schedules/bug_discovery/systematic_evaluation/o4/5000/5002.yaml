@@ -1,0 +1,135 @@
+execution_plan:
+  maximum_time: 120
+  setup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
+    duration: 20
+  workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
+  cleanup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
+    duration: 15
+  pre_workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
+  tracer:
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: sys_all_trace,container_controlled
+nodes:
+  node1:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.11
+  node2:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.12
+  node3:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.13
+
+faults:
+  fault_1:
+    type: block_ips
+    target: node1
+    ips_out:
+      - node2
+      - node3
+    duration: 15000
+    begin_conditions:
+      - condition_1:
+          type: time
+          time: 2000
+  fault_2:
+    type: process_pause
+    target: node3
+    duration: 5000
+    begin_conditions:
+      - condition_1:
+          type: user_function
+          symbol: clusterProcessPacket
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 3
+  fault_3:
+    type: syscall
+    target: node2
+    details:
+      name: write
+      return_value: -1
+    begin_conditions:
+      - condition_1:
+          type: syscall
+          syscall_name: read
+          call_count: 5
+  fault_4:
+    type: process_kill
+    target: node3
+    begin_conditions:
+      - condition_1:
+          type: time
+          time: 10000
+  fault_5:
+    type: block_ips
+    target: node2
+    ips_in:
+      - node1
+    duration: 20000
+    begin_conditions:
+      - condition_1:
+          type: user_function
+          symbol: replicationFeedSlaves
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 4
+  fault_6:
+    type: syscall
+    target: node1
+    details:
+      name: openat
+      return_value: -1
+    begin_conditions:
+      - condition_1:
+          type: file_syscall
+          file_name: "appendonly.aof"
+          syscall_name: openat
+          call_count: 2
+  fault_7:
+    type: process_pause
+    target: node2
+    duration: 10000
+    begin_conditions:
+      - condition_1:
+          type: time
+          time: 25000
+  fault_8:
+    type: block_ips
+    target: node3
+    ips_out:
+      - node1
+    duration: 15000
+    begin_conditions:
+      - condition_1:
+          type: syscall
+          syscall_name: write
+          call_count: 8
+  fault_9:
+    type: process_kill
+    target: node1
+    begin_conditions:
+      - condition_1:
+          type: user_function
+          symbol: bioProcessBackgroundJobs
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 6
+  fault_10:
+    type: syscall
+    target: node3
+    details:
+      name: read
+      return_value: -1
+    begin_conditions:
+      - condition_1:
+          type: file_syscall
+          file_name: "dump.rdb"
+          syscall_name: read
+          call_count: 3

@@ -15,7 +15,7 @@ faults:
     type: syscall
     details:
       name: openat
-      return_value: -5
+      return_value: -11
       #success: True
     #repeatable: True
     target: kafka

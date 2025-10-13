@@ -1,0 +1,86 @@
+execution_plan:
+  maximum_time: 60
+  setup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
+    duration: 20
+  workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
+  cleanup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
+    duration: 15
+  pre_workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
+  tracer:
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: sys_all_trace,container_controlled
+nodes:
+  node1:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.11
+  node2:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.12
+  node3:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.13
+
+faults:
+  "11":
+    type: syscall
+    target: node2
+    details:
+      name: read
+      return_value: -1
+    begin_conditions:
+      - "11":
+          type: file_syscall
+          syscall_name: read
+          file_name: appendonly.aof
+          call_count: 10
+
+  "12":
+    type: process_kill
+    target: node3
+    begin_conditions:
+      - "12":
+          type: time
+          time: 7000
+
+  "13":
+    type: block_ips
+    target: node1
+    duration: 10000
+    ips_in:
+      - node3
+    begin_conditions:
+      - "13":
+          type: syscall
+          syscall_name: write
+          call_count: 80
+
+  "14":
+    type: process_pause
+    target: node1
+    duration: 20
+    begin_conditions:
+      - 14:
+          type: file_syscall
+          syscall_name: write
+          file_name: dump.rdb
+          call_count: 2
+
+  "15":
+    type: block_ips
+    target: node2
+    duration: 10000
+    ips_out:
+      - node3
+    begin_conditions:
+      - "15":
+          type: time
+          time: 12000

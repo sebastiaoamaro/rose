@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 /* Copyright (c) 2020 Facebook */
 #include <argp.h>
+#include <bits/pthreadtypes.h>
 #include <linux/bpf.h>
 #include <signal.h>
 #include <stdio.h>
@@ -66,6 +67,8 @@ void create_pipes();
 void start_tracer();
 void open_tracer_pipe();
 void write_start_event();
+void handle_lazyfs_events();
+void start_lazyfs_handler(void* args);
 
 const char *argp_program_version = "Tool for FI 0.01";
 const char *argp_program_bug_address = "sebastiao.amaro@ŧecnico.ulisboa.pt";
@@ -99,6 +102,15 @@ static struct constants {
 
 } constants;
 
+struct process_args {
+	int *pid;
+	FILE* fp;
+};
+
+struct lazyfs_args {
+    int lazyfs_rb;
+};
+
 //Main structs for reproduction
 static fault* faults;
 static node* nodes;
@@ -116,12 +128,6 @@ static pthread_t tracer_output;
 //Handle exits
 static volatile bool exiting = false;
 static void sig_handler(int sig){exiting = true;}
-
-//Handles output of created processes
-struct process_args {
-	int *pid;
-	FILE* fp;
-};
 
 int main()
 {
@@ -169,11 +175,32 @@ int main()
 	if (deployment_tracer){
 	    send_info_to_tracer();
 	}
-	add_faults_to_bpf();
 	choose_leader();
 	setup_tc_progs();
 
-	//Start eBPF prog
+	int err;
+	struct ring_buffer *rb = NULL;
+	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
+
+	//If they are containers we start before the workload
+	write_start_event();
+	start_container_nodes_scripts();
+	start_lazyfs();
+
+	pthread_t lazyfs_thread;
+
+	if(plan->lazyfs.pid != 0){
+	    int lazyfs_rb = bpf_map__fd(aux_bpf->maps.lazyfs_rb);
+		struct lazyfs_args *args = (struct lazyfs_args*)malloc(sizeof(struct lazyfs_args));
+		args->lazyfs_rb = lazyfs_rb;
+	    pthread_create(&lazyfs_thread, NULL, (void*)start_lazyfs_handler, (void*)args);
+	}
+
+	start_nodes_scripts();
+	start_pre_workload();
+
+	//Start eBPF FI program
+	add_faults_to_bpf();
 	struct fault_inject_bpf* fault_inject_bpf;
 
 	fault_inject_bpf = fault_inject(FAULT_COUNT,constants.timemode);
@@ -183,14 +210,6 @@ int main()
 		goto cleanup;
 	}
 
-	int err;
-	struct ring_buffer *rb = NULL;
-	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
-
-	//If they are containers we start before the workload
-	write_start_event();
-	start_container_nodes_scripts();
-	start_nodes_scripts();
 	pthread_t thread_id;
 	pthread_create(&thread_id, NULL, (void *)count_time, NULL);
 	if(plan->workload.wait_time > 0 ){
@@ -211,13 +230,9 @@ int main()
 			break;
 		}
 	}
+	printf("STARTING CLEANUP\n");
 
 	cleanup:
-
-	if (plan->workload.pid){
-		fclose(plan->workload.read_end);
-	}
-
 
 	if (plan->workload.wait_workload > 0){
 		printf("WAITING FOR WORKLOAD TO END BEFORE WORKLOAD CLEANUP\n");
@@ -232,6 +247,13 @@ int main()
 			kill(plan->workload.pid,SIGTERM);
 			waitpid(plan->workload.pid,NULL,0);
 		}
+	}
+
+	if (plan->workload.pid){
+		fclose(plan->workload.read_end);
+	}
+	if (plan->pre_workload.pid){
+		fclose(plan->pre_workload.read_end);
 	}
 
 	printf("SLEEPING: %d, BEFORE CLEANUP\n",plan->cleanup.duration);
@@ -295,6 +317,7 @@ int main()
         }
 		printf("WAITING FOR TRACER: %d \n",deployment_tracer->pid);
 		waitpid(deployment_tracer->pid,NULL,0);
+		printf("TRACER FINISHED: %d \n",deployment_tracer->pid);
 	}
 
 	printf("KILLING NODES and TC PROGS\n");
@@ -314,6 +337,10 @@ int main()
 			kill(nodes[i].pid_tc_out,SIGINT);
 			waitpid(nodes[i].pid_tc_in,NULL,0);
 		}
+	}
+
+	if(plan->lazyfs.script){
+	    kill(plan->lazyfs.pid,SIGTERM);
 	}
 	printf("REAPING CHILD PROCESSES\n");
 	kill_child_processes(getpid());
@@ -426,7 +453,6 @@ void get_fd_of_maps (struct aux_bpf *bpf){
 	constants.files = bpf_map__fd(bpf->maps.files);
 	constants.relevant_fd = bpf_map__fd(bpf->maps.relevant_fd);
 	constants.bpf_map_fault_fd = bpf_map__fd(bpf->maps.faults);
-	constants.time_map_fd = bpf_map__fd(bpf->maps.time);
 	constants.auxiliary_info_map_fd = bpf_map__fd(bpf->maps.auxiliary_info);
 	constants.nodes_status_map_fd = bpf_map__fd(bpf->maps.nodes_status);
 	constants.nodes_translator_map_fd = bpf_map__fd(bpf->maps.nodes_pid_translator);
@@ -436,7 +462,7 @@ void get_fd_of_maps (struct aux_bpf *bpf){
 };
 
 void run_setup(){
-
+    print_block("SETTING UP EXPERIENCE");
 	if(!plan)
 		return;
 
@@ -454,29 +480,62 @@ void run_setup(){
 
 
 	if(strlen(plan->setup.script)){
-		print_block("Creating Setup process");
+		printf("Creating Setup process \n");
 		FILE *fp = custom_popen(plan->setup.script,args_script,env_script,'r',&(plan->setup.pid),0);
 
-		//pthread_t thread_id;
+		pthread_t thread_id;
 		struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
 
 		args->fp= fp;
 		args->pid = &(plan->setup.pid);
-		//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+		pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+	}
+
+	if(strlen(plan->pre_workload.script)){
+		printf("Creating Pre Workload process \n");
+		FILE *fp = custom_popen(plan->pre_workload.script,args_script,env_script,'r',&(plan->pre_workload.pid),0);
+		plan->pre_workload.read_end = fp;
+		pthread_t thread_id;
+		struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
+
+		args->fp= fp;
+		args->pid = &(plan->pre_workload.pid);
+		pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 	}
 
 	if(strlen(plan->workload.script)){
-		print_block("Creating Workload process");
+		printf("Creating Workload process \n");
 		FILE *fp = custom_popen(plan->workload.script,args_script,env_script,'r',&(plan->workload.pid),0);
 		plan->workload.read_end = fp;
-		//pthread_t thread_id;
+		pthread_t thread_id;
 		struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
 
 		args->fp= fp;
 		args->pid = &(plan->workload.pid);
-		//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+		pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 	}
 
+	if(strlen(plan->lazyfs.script)){
+
+		char *lazyfs_args_script[6];
+
+        lazyfs_args_script[0] = plan->lazyfs.script;
+        lazyfs_args_script[1] = "-f";
+        lazyfs_args_script[2] = plan->lazyfs.mount_dir;
+        lazyfs_args_script[3] = "-r";
+        lazyfs_args_script[4] = plan->lazyfs.root_dir;
+        lazyfs_args_script[5] = NULL;
+
+    	print_block("Creating LazyFS process");
+    	FILE *fp = custom_popen(plan->lazyfs.script,lazyfs_args_script,env_script,'r',&(plan->lazyfs.pid),0);
+    	plan->lazyfs.read_end = fp;
+    	pthread_t thread_id;
+    	struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
+
+    	args->fp= fp;
+    	args->pid = &(plan->lazyfs.pid);
+    	pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+	}
 	//Start setup
 	if(strlen(plan->setup.script)){
 		sleep(1);
@@ -499,6 +558,43 @@ void start_workload(){
 		kill(plan->workload.pid,SIGUSR1);
 }
 
+
+void start_pre_workload(){
+	//Start workload
+	if (!plan)
+		return;
+	if(plan->pre_workload.pid == 0)
+		return;
+	printf("Started pre_workload from execution plan with pid %d \n",plan->pre_workload.pid);
+	kill(plan->pre_workload.pid,SIGUSR1);
+
+    int status;
+
+    printf("Waiting for pre_workload %d to terminate...\n", plan->pre_workload.pid);
+
+    if (waitpid(plan->pre_workload.pid, &status, 0) == -1) {
+            perror("waitpid failed");
+        } else {
+            if (WIFEXITED(status)) {
+                printf("Process %d exited with status %d\n", plan->pre_workload.pid, WEXITSTATUS(status));
+            } else if (WIFSIGNALED(status)) {
+                printf("Process %d was terminated by signal %d\n", plan->pre_workload.pid, WTERMSIG(status));
+            } else {
+                printf("Process %d ended (unknown reason)\n", plan->pre_workload.pid);
+            }
+        }
+}
+//Starts the lazy_fs process in the background
+void start_lazyfs(){
+	//Start workload
+	if (!plan)
+		return;
+	if(plan->lazyfs.pid == 0)
+		return;
+
+	printf("Started lazyfs from execution plan with pid %d \n",plan->lazyfs.pid);
+	kill(plan->lazyfs.pid,SIGUSR1);
+}
 
 //TODO: Collect container pids, waits until they start
 void collect_container_pids(){
@@ -539,10 +635,10 @@ void setup_node_scripts(){
 			printf("Empty command \n");
 			continue;
 		}
-		printf("Starting processes with command %s \n",nodes[i].script);
 
 		if (nodes[i].container){
 		    if (!strlen(nodes[i].pid_file)){
+				printf("Starting processes with command %s \n",nodes[i].script);
 				start_target_process_in_container(i,&nodes[i].pid);
 			}
 		}
@@ -560,6 +656,7 @@ void collect_container_processes(){
     printf("Collecting container processes \n");
 	for(int i = 0; i< NODE_COUNT; i++){
 		if (nodes[i].container && strlen(nodes[i].script) > 0 && !(strlen(nodes[i].pid_file))){
+			printf("WAITING FOR PID \n");
 			int child_pid = get_children_pids(nodes[i].pid);
 
 			while(!child_pid){
@@ -592,6 +689,7 @@ void collect_container_processes(){
                 char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
                 snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].pid_file);
 
+                printf("Combined path %s\n", combined_path);
                 // Wait until file contains the pid
                 struct stat st;
                 while (1) {
@@ -686,18 +784,6 @@ void start_container_nodes_scripts(){
 			kill(nodes[i].pid_tc_out,SIGUSR1);
 		}
 	}
-}
-
-//prints output of process we started
-void print_output(void* args){
-	char inLine[1024];
-	FILE *fp = ((struct process_args*)args)->fp;
-
-    while (fgets(inLine, sizeof(inLine), fp) != NULL)
-    {
-			printf("%s", inLine);
-			fflush(stdout);
-    }
 }
 
 FILE* start_target_process(int node_number, int *pid){
@@ -845,7 +931,7 @@ FILE* start_target_process_in_container(int node_number,int *pid){
         exit(1);
     }
 
-	printf("STARTED NODE%s,NS_PID:%d,PID:%d,SCRIPT:%s\n",nodes[node_number].name,nodes[node_number].container_pid,*pid,nodes[node_number].script);
+	printf("STARTED NODE %s,NS_PID:%d,PID:%d,SCRIPT:%s\n",nodes[node_number].name,nodes[node_number].container_pid,*pid,nodes[node_number].script);
 	pthread_t thread_id;
 	struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
 	args->fp= fp;
@@ -879,9 +965,10 @@ void setup_begin_conditions(){
 
 				struct file_info_simple file_info = {};
 				if (strlen(syscall.file_name)){
-					strncpy(file_info.filename,syscall.file_name,sizeof(file_info.filename));
-					file_info.size = strlen(file_info.filename)+1;
-					printf("Created fileinfo with filename %s \n",file_info.filename);
+				    snprintf(file_info.filename,sizeof(file_info.filename),"%s",syscall.file_name);
+					//strncpy(file_info.filename,syscall.file_name,sizeof(file_info.filename));
+					file_info.size = strlen(file_info.filename);
+					printf("Created fileinfo with filename %s and len %d\n",file_info.filename,file_info.size);
 				}
 
 				int syscall_nr = syscall.syscall;
@@ -1040,7 +1127,7 @@ void add_faults_to_bpf(){
 	print_block("Adding Faults to eBPF Maps");
 
 	for (int i = 0; i < FAULT_COUNT; i++){
-		printf("ROSE: ADDING FAULT TO BPF NR: %d, TYPE:%d \n",i,faults[i].faulttype);
+		printf("ROSE: ADDING FAULT TO BPF NR: %d, TYPE:%d, PID:%d \n",i,faults[i].faulttype,nodes[faults[i].traced].pid);
 		struct simplified_fault new_fault;
 		new_fault.run = 0;
 		new_fault.duration = faults[i].duration;
@@ -1361,7 +1448,42 @@ void count_time(){
 
 }
 
-//Handles events received from ringbuf (eBPF)
+//handles events received from the ringbuffer dedicated to lazyfs faults
+void start_lazyfs_handler(void* args){
+   	struct ring_buffer *rb = NULL;
+    int lazyfs_rb = ((struct lazyfs_args*)args)->lazyfs_rb;
+	rb = ring_buffer__new(lazyfs_rb, handle_lazyfs_events, NULL, NULL);
+	int err;
+	while (!exiting) {
+		err = ring_buffer__poll(rb, 1000 /* timeout, ms */);
+		/* Ctrl-C will cause -EINTR */
+		if (err == -EINTR) {
+			err = 0;
+			break;
+		}
+		if (err < 0) {
+			printf("Error polling perf buffer: %d\n", err);
+			break;
+		}
+	}
+
+}
+
+//Handles events received from the lazyfs ringbuffer (eBPF)
+void handle_lazyfs_events(void *ctx,void *data,size_t data_sz){
+    (void)ctx;
+	(void)data_sz;
+
+	const struct event *e = data;
+
+	int fault_nr = e->fault_nr;
+	switch(e->type){
+	    case TORN_SEQ:
+			break;
+	}
+}
+
+//Handles events received from ringbuffer (eBPF)
 void handle_event(void *ctx,void *data,size_t data_sz)
 {
 	(void)ctx;
@@ -1498,13 +1620,13 @@ void restart_process(void* args){
 	if(node->container){
 		start_target_process_in_container(node_to_restart,&temp_pid);
 		retrieve_new_pid_container(node_to_restart,temp_pid);
+		node->current_pid = temp_pid;
 		if (node->container_type == CONTAINER_TYPE_DOCKER){
 		    send_signal(node->current_pid,SIGSTOP,node->name);
 		}
 	}
 	else{
 		start_target_process(node_to_restart,&temp_pid);
-		node->current_pid = temp_pid;
 	}
 	update_node_pid_ebpf(node_to_restart,node->current_pid,node->pid,current_pid_pre_restart);
 	reinject_uprobes(node_to_restart);
@@ -1532,7 +1654,9 @@ void retrieve_new_pid_container(int node_nr,int nsenter_pid){
 
 }
 
-//new_pid is the pid of the new script, boot_pid the pid that information is based in the maps, old pid is the pid pre restart
+//new_pid is the pid of the new script
+//boot_pid the pid that information is based in the maps
+//old pid is the pid pre restart
 void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
 	printf("PID TRANSLATED: NEW: %d, OLD: %d\n",new_pid,boot_pid);
 	int error = bpf_map_update_elem(constants.nodes_translator_map_fd,&new_pid,&boot_pid,BPF_ANY);
@@ -1609,4 +1733,16 @@ int get_node_nr_from_pid(int pid){
 		}
 	}
 	return 0;
+}
+
+//prints output of process we started
+void print_output(void* args){
+	char inLine[1024];
+	FILE *fp = ((struct process_args*)args)->fp;
+
+    while (fgets(inLine, sizeof(inLine), fp) != NULL)
+    {
+			printf("%s", inLine);
+			fflush(stdout);
+    }
 }

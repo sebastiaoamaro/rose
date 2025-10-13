@@ -5,16 +5,21 @@ cd tracer
 cargo build --release
 cd ..
 
-#Runs a schedule
+cd executor/kernelmodule/
+make
+cd ../../
+
+sudo rmmod rose
+sudo insmod executor/kernelmodule/rose.ko
+
+#Runs a schedule one time
 if [ "$#" -eq 1 ]; then
     if [ -n "$1" ]; then
-        # If checks pass, proceed
         echo "Arguments provided: $1"
         schedule=$1
         sudo rm /tmp/containerpid_read
         sudo rm /tmp/containerpid_write
         sudo rm /tmp/history.txt
-        sudo insmod executor/kernelmodule/rose.ko
         python3 parser.py $schedule
         mv fault_schedule.c executor/c/
         cd executor/c/
@@ -38,7 +43,6 @@ if [ "$#" -gt 4 ]; then
                 sudo rm /tmp/containerpid_read
                 sudo rm /tmp/containerpid_write
                 sudo rm /tmp/history.txt
-                sudo insmod executor/kernelmodule/rose.ko
                 python3 parser.py $schedule
                 mv fault_schedule.c executor/c/
                 cd executor/c/
@@ -64,7 +68,6 @@ if [ "$#" -gt 4 ]; then
             sudo rm /tmp/containerpid_read
             sudo rm /tmp/containerpid_write
             sudo rm /tmp/history.txt
-            sudo insmod executor/kernelmodule/rose.ko
             python3 parser.py $schedule
             mv faultschedule.c executor/c/
             cd executor/c/

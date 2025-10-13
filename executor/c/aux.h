@@ -21,6 +21,7 @@
 #define MAX_RESPONSE_LEN 1024
 #define CONTAINER_TYPE_DOCKER 1
 #define CONTAINER_TYPE_LXC 2
+
 struct fault;
 
 struct tc_key{
@@ -125,6 +126,7 @@ enum fault_type{
     CLOSE_FAULT = 3,
     FUTEX_FAULT = 202,
     CONNECT_FAULT = 42,
+    TORN_SEQ = 43,
     TEMP_EMPTY = 999
 };
 
@@ -152,7 +154,7 @@ enum stateinfo{
     OPENAT_SPECIFIC = 20,
     TIME_STATE = 21,
     FDATASYNC_STATE = 24,
-    FDATASYNCFILE_STATE = 25,
+    FDATASYNC_FILE_STATE = 25,
     FSYNC_STATE = 27,
     FSYNCFILE_STATE= 28,
     PWRITE64_STATE = 29,
@@ -213,4 +215,5 @@ void bump_file_rlimit(void);
 pid_t find_host_pid_for_container_pid(pid_t target_pid);
 char **build_nsenter_args(const char *pid_str,int container_type);
 long long get_nanoseconds();
+void print_output(void* args);
 #endif /* __AUX_H */

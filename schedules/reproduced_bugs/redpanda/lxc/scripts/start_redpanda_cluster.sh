@@ -6,7 +6,7 @@ sudo rm /tmp/signal_start_workload.txt
 sudo rm -r /vagrant/schedules/reproduced_bugs/redpanda/lxc/redpanda_jepsen/store/*
 export TERM=xterm
 cd /vagrant/schedules/reproduced_bugs/redpanda/lxc/scripts
-sudo ./run_network.sh
+sudo sh -c 'echo 1048576 > /proc/sys/fs/aio-max-nr'
 for i in $(seq 1 5); do
     lxc exec n${i} -n -- rm /var/lib/redpanda/data/pid.lock
 	lxc file push redpanda.yaml n${i}/etc/redpanda/redpanda.yaml -q

@@ -134,7 +134,6 @@ faults:
     type: process_kill
     target: redis1
     traced: redis1
-    exit: true
     begin_conditions:
       - condition1:
           type: user_function
