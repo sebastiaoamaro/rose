@@ -45,13 +45,14 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
 
         setpgid(child_pid, child_pid); //Needed so negative PIDs can kill children of /bin/sh
 
+        //If it is not a container process, wait for the signal to start
         if (!container_process){
             signal(SIGUSR1,sig_handler);
             while(true){
                 if(ready){
                     break;
                 }
-                sleep(1);
+                sleep_for_ms(1);
             }
         }
         int err = execvp(command,args);

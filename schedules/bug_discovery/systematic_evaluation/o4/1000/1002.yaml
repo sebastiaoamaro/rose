@@ -7,10 +7,11 @@ execution_plan:
     script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
   cleanup:
     script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
-    duration: 15
+    duration: 5
   pre_workload:
     script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
   tracer:
+    functions_file: /vagrant/profiler/redis/functions.txt
     tracer_location: "/vagrant/tracer/target/release/tracer"
     pipe_location: "/tmp/containerpid"
     binary_to_examine: "/usr/local/bin/redis-server"

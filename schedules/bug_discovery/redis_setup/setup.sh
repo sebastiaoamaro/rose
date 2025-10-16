@@ -17,7 +17,7 @@ cluster-node-timeout 50000000
 cluster-announce-ip 172.38.0.${portnumber}
 cluster-announce-port 6379
 cluster-announce-bus-port 16379
-loglevel verbose
+loglevel notice
 appendonly yes
 appendfsync always
 save 1 1

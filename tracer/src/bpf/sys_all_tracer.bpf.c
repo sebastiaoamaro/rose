@@ -90,13 +90,13 @@ struct event _event = {};
 
 
 static inline int check_pid_prog(u64 pid_tgid) {
-    u32 key = pid_tgid >> 32; // Get current PID
+    u32 pid = pid_tgid >> 32; // Get current PID
     u32 *value;
 
-    value = bpf_map_lookup_elem(&pid_tree, &key);
+    value = bpf_map_lookup_elem(&pid_tree, &pid);
     if (value) {
         // PID is in the map
-        return key;
+        return pid;
     } else {
         // PID is not in the map
         return 0;
@@ -163,8 +163,11 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 
 		const char *filename = (const char *)ctx->args[0];
 		char path[FILENAME_MAX_SIZE + 1] = {};
-		int len = bpf_probe_read_user_str(path, sizeof(path), filename);
+		int res = bpf_probe_read_user(path, sizeof(path), filename);
 
+		if (res < 0){
+		    bpf_printk("Failed with error %d \n",res);
+		}
 		bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
 
        	u64 timestamp = bpf_ktime_get_ns();
@@ -187,16 +190,20 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 }
 
 	else if(id == 257){
-			int pid_relevant = check_pid_prog(pid_tgid);
+		int pid_relevant = check_pid_prog(pid_tgid);
 
-			if (!pid_relevant)
-				return 0;
+		if (!pid_relevant)
+			return 0;
 
-			const char *filename = (const char *)ctx->args[1];
-			char path[FILENAME_MAX_SIZE + 1] = {};
-			int len = bpf_probe_read_user_str(path, sizeof(path), filename);
+		const char *filename = (const char *)ctx->args[1];
+		char path[FILENAME_MAX_SIZE + 1] = {};
+		int res = bpf_probe_read_user(path, sizeof(path), filename);
 
-			bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
+		if (res < 0){
+		    bpf_printk("Failed with error %d \n",res);
+		}
+
+		bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
 
 	}else if(id == 262){
     	u64 pid_tgid = bpf_get_current_pid_tgid();
@@ -273,7 +280,6 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 	   return 0;
 	}
 
-	//Failing opens has its own special handling since they we need the filename
 	if (ret<0 && id !=9 && id != 12){
 
 	    if (id == 0 && ret == -11){
@@ -285,10 +291,9 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 		u64 timestamp = bpf_ktime_get_ns();
 
 		int fd = 0;
-		//bpf_printk("Looking at pid_tgid %d ",pid_tgid);
 		int *fd_in_map = bpf_map_lookup_elem(&pid_tgid_fd,&pid_tgid);
 
-		if (fd_in_map){
+		if (fd_in_map){		//bpf_printk("Looking at pid_tgid %d ",pid_tgid);
 			fd = *fd_in_map;
 		}
 
@@ -332,6 +337,8 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
             update_event_counter();
 			return 0;
 
+
+		//Failing opens has its own special handling since they we need the filename
 	    }else{
 			struct event key = {
      			SYSCALL_EXIT,
@@ -481,7 +488,7 @@ int handle_uprobe(struct pt_regs *ctx) {
 			0,
 			1,
 		};
-
+		//bpf_printk("Uprobe event added \n");
 		bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
 
 		update_event_counter();
@@ -489,7 +496,7 @@ int handle_uprobe(struct pt_regs *ctx) {
     return 0;
 }
 
-SEC("tp/sched/sched_process_exec")
+SEC("tracepoint/sched/sched_process_exec")
 int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 {
 
@@ -514,7 +521,25 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 	   return 0;
 	}
 
-    bpf_printk("ADDED PID:%d, PARENT:%d \n",pid,ppid);
+    //bpf_printk("TRACER EXEC: ADDED PID:%d, PARENT:%d \n",pid,ppid);
     bpf_map_update_elem(&pid_tree, &pid, &ppid, BPF_ANY);
+
 	return 0;
+}
+
+SEC("tracepoint/sched/sched_process_fork")
+int handle_fork(struct trace_event_raw_sched_process_fork *ctx)
+{
+    __u32 parent_pid = ctx->parent_pid;
+    __u32 child_pid  = ctx->child_pid;
+
+
+    int *parent_pid_pointer = bpf_map_lookup_elem(&pid_tree, &parent_pid);
+    if (!parent_pid_pointer) {
+        return 0;
+    }
+    bpf_map_update_elem(&pid_tree, &child_pid, &parent_pid, BPF_ANY);
+    //bpf_printk("TRACER FORK: ADDED PID:%d, PARENT:%d \n", child_pid, parent_pid);
+
+    return 0;
 }

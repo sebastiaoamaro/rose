@@ -40,7 +40,7 @@ faults:
       - "11":
           type: file_syscall
           syscall_name: write
-          file_name: dump.rdb
+          file_name: .rdb
           call_count: 2
 
   "12":
@@ -83,7 +83,7 @@ faults:
       - "15":
           type: file_syscall
           syscall_name: openat
-          file_name: nodes.conf
+          file_name: .conf
           call_count: 2
 
   "16":
@@ -107,7 +107,7 @@ faults:
       - "17":
           type: file_syscall
           syscall_name: read
-          file_name: dump.rdb
+          file_name: .rdb
           call_count: 1
 
   "18":

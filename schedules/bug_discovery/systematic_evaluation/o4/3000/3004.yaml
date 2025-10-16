@@ -40,7 +40,7 @@ faults:
       - "31":
           type: file_syscall
           syscall_name: read
-          file_name: appendonly.aof
+          file_name: .aof
           call_count: 3
 
   "32":
@@ -83,7 +83,7 @@ faults:
       - "35":
           type: file_syscall
           syscall_name: openat
-          file_name: dump.rdb
+          file_name: .rdb
           call_count: 2
 
   "36":
@@ -107,7 +107,7 @@ faults:
       - "37":
           type: file_syscall
           syscall_name: write
-          file_name: appendonly.aof
+          file_name: .aof
           call_count: 2
 
   "38":

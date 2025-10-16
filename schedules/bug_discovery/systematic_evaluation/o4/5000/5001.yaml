@@ -1,5 +1,5 @@
 execution_plan:
-  maximum_time: 120
+  maximum_time: 60
   setup:
     script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
     duration: 20
@@ -7,10 +7,11 @@ execution_plan:
     script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
   cleanup:
     script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
-    duration: 15
+    duration: 5
   pre_workload:
     script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
   tracer:
+    functions_file: /vagrant/profiler/redis/functions.txt
     tracer_location: "/vagrant/tracer/target/release/tracer"
     pipe_location: "/tmp/containerpid"
     binary_to_examine: "/usr/local/bin/redis-server"
@@ -28,7 +29,6 @@ nodes:
     container: true
     script: /scripts/start_redis.sh
     ip: 172.38.0.13
-
 faults:
   fault_1:
     type: process_kill
@@ -67,7 +67,7 @@ faults:
     begin_conditions:
       - condition_1:
           type: file_syscall
-          file_name: "appendonly.aof"
+          file_name: .aof
           syscall_name: openat
           call_count: 3
   fault_5:
@@ -117,7 +117,7 @@ faults:
     begin_conditions:
       - condition_1:
           type: file_syscall
-          file_name: "dump.rdb"
+          file_name: .rdb
           syscall_name: openat
           call_count: 1
 

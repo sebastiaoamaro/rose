@@ -413,28 +413,28 @@ pub fn start_tracing_container(
         "Started tracing for pid {} with node_name {}",
         pid, container_name
     );
-    hashmap_links.insert(pid, vec![]);
+    //hashmap_links.insert(pid, vec![]);
 
-    let mut container_location = "".to_string();
-    if container_type == CONTAINER_TYPE_DOCKER {
-        container_location = get_overlay2_location(&container_name).unwrap();
-    }
-    if container_type == CONTAINER_TYPE_LXC {
-        container_location = get_lxc_rootfs_location(&container_name);
-    }
+    // let mut container_location = "".to_string();
+    // if container_type == CONTAINER_TYPE_DOCKER {
+    //     container_location = get_overlay2_location(&container_name).unwrap();
+    // }
+    // if container_type == CONTAINER_TYPE_LXC {
+    //     container_location = get_lxc_rootfs_location(&container_name);
+    // }
 
-    let binary_location = format!("{}{}", container_location, binary_path);
+    // let binary_location = format!("{}{}", container_location, binary_path);
 
-    for (index_function, function) in functions.clone().iter().enumerate() {
-        skel.attach_uprobe(
-            index_function,
-            &function.0,
-            function.1,
-            binary_location.clone(),
-            pid,
-            hashmap_links,
-        );
-    }
+    // for (index_function, function) in functions.clone().iter().enumerate() {
+    //     skel.attach_uprobe(
+    //         index_function,
+    //         &function.0,
+    //         function.1,
+    //         binary_location.clone(),
+    //         pid,
+    //         hashmap_links,
+    //     );
+    // }
     let handle = thread::spawn(move || {
         monitor_pid(pid, rx).expect("Monitoring failed");
     });
@@ -487,7 +487,6 @@ pub fn trace_containers_controlled(
 
             let pid_vec = u32_to_u8_array_little_endian(pid);
             let one = u32_to_u8_array_little_endian(1);
-
             skel.update(&pid_vec, &one);
 
             let node_already_traced = hashmap_node_to_pid.get(&node_name.clone()).is_some();
@@ -496,6 +495,29 @@ pub fn trace_containers_controlled(
             hashmap_node_to_pid.insert(node_name.clone(), pid);
             let (tx, rx) = mpsc::channel();
             tx_handles.push(tx);
+
+            let mut container_location = "".to_string();
+            if container_type == CONTAINER_TYPE_DOCKER {
+                container_location = get_overlay2_location(&node_name).unwrap();
+            }
+            if container_type == CONTAINER_TYPE_LXC {
+                container_location = get_lxc_rootfs_location(&node_name);
+            }
+            //Hold the references to the uprobes so they are not dropped
+            hashmap_links.insert(pid, vec![]);
+
+            let binary_location = format!("{}{}", container_location, binary_path);
+
+            for (index_function, function) in functions.clone().iter().enumerate() {
+                skel.attach_uprobe(
+                    index_function,
+                    &function.0,
+                    function.1,
+                    binary_location.clone(),
+                    pid,
+                    hashmap_links,
+                );
+            }
             start_tracing_container(
                 pid,
                 container_type,

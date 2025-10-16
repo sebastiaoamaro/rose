@@ -1,8 +1,8 @@
 #ifndef __FS_BPF_H
 #define __FS_BPF_H
 
+
 #include "fs.h"
-#include "aux.h"
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
@@ -76,7 +76,7 @@ static inline struct mount* get_mount_parent(struct mount *mnt) {
     return mount_p;
 }
 
-static inline int get_file_path(struct path *path, struct event_path_t *event_path, FileInfo *fi) {
+static inline int get_file_path(struct path *path, FileInfo *fi) {
     u32 i, len, offset, last_position;
     char slashchar = '/', nulchar = '\0';
     struct dentry *dentry, *parent, *mnt_root;
@@ -93,7 +93,7 @@ static inline int get_file_path(struct path *path, struct event_path_t *event_pa
     mount_parent = get_mount_parent(real_mount);
     if (!mount_parent) return 1;
     offset = last_position = MAX_FILE_OFFSET;
-#pragma unroll
+    #pragma unroll
     for (i = 0; i < MAX_JUMPS; i++) {
         // get parent dentry
         bpf_probe_read_kernel((void *) &parent, sizeof(parent), (void*)&(dentry->d_parent));
@@ -126,7 +126,10 @@ static inline int get_file_path(struct path *path, struct event_path_t *event_pa
         // copy file name into buffer
         len = (len-1) &  (MAX_FILE_OFFSET - 1);
         int err = bpf_probe_read_kernel(&(fi->filename[offset & (MAX_FILE_OFFSET-1)]), len, (void *) d_name.name);
-        if (err < 0) break;
+        if (err < 0){
+            break;
+            bpf_printk("Failed to read filename from kernel with err:%d\n",err);
+        }
         if (flag) {
             last_position = offset;
             break;
@@ -145,8 +148,8 @@ static inline int get_file_path(struct path *path, struct event_path_t *event_pa
 }
 
 static inline bool string_contains(char *str1,char *str2,int size) {
-    const char comparand[FILENAME_MAX_SIZE];
-    const char comparand2[FILENAME_MAX_SIZE];
+    const char comparand[32];
+    const char comparand2[32];
     bpf_probe_read(&comparand, sizeof(comparand), str1);
     bpf_probe_read(&comparand2, sizeof(comparand2), str2);
 
@@ -154,7 +157,7 @@ static inline bool string_contains(char *str1,char *str2,int size) {
     int str_len = size;
     int count = 0;
     #pragma unroll
-    for (int i = 0; i < FILENAME_MAX_SIZE; ++i){
+    for (int i = 0; i < 32; ++i){
         //bpf_printk("%c and %c \n",comparand[count],comparand2[i]);
         if (comparand[count] == comparand2[i] ){
             count++;

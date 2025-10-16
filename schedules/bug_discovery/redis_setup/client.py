@@ -12,7 +12,7 @@ from redis.exceptions import (
 
 # --- CONFIGURATION ---
 USE_CLUSTER = True  # Set to False for standalone Redis
-OPS_PER_SECOND = 0  # 0 for max speed, >0 to throttle
+OPS_PER_SECOND = 5  # 0 for max speed, >0 to throttle
 RETRY_DELAY = 0.1  # seconds between retries on failure
 
 # --- CLIENT SETUP ---

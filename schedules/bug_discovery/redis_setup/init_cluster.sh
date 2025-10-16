@@ -1,4 +1,5 @@
 #!/bin/bash
+sleep 1
 redis-cli --cluster create $(cat /vagrant/schedules/bug_discovery/redis_setup/ips.txt) --cluster-yes
 HOST="172.38.0.11"
 PORT="6379"

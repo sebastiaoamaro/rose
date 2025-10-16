@@ -195,7 +195,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 	obj->rodata->cond_pos = cond_pos;
 	obj->rodata->primary_function = primary_function;
 
-	env.pid = pid;
+	env.pid = -1;
 
 	//used_fentry = try_fentry(obj);
 

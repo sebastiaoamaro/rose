@@ -6,7 +6,7 @@ services:
     privileged: true
     tty: true
     volumes:
-      - /redis/node-1/data:/data
+      #- /redis/node-1/data:/data
       - /redis/node-1/conf/redis.conf:/etc/redis/redis.conf
     ports:
       - 6371:6379
@@ -20,7 +20,7 @@ services:
     privileged: true
     tty: true
     volumes:
-      - /redis/node-2/data:/data
+      #- /redis/node-2/data:/data
       - /redis/node-2/conf/redis.conf:/etc/redis/redis.conf
     ports:
       - "6372:6379"
@@ -34,7 +34,7 @@ services:
     privileged: true
     tty: true
     volumes:
-      - /redis/node-3/data:/data
+      #- /redis/node-3/data:/data
       - /redis/node-3/conf/redis.conf:/etc/redis/redis.conf
     ports:
       - "6373:6379"

@@ -5,12 +5,13 @@ execution_plan:
     duration: 20
   workload:
     script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
-  # cleanup:
-  #   script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
-  #   duration: 15
+  cleanup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
+    duration: 5
   pre_workload:
     script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
   tracer:
+    functions_file: /vagrant/profiler/redis/functions.txt
     tracer_location: "/vagrant/tracer/target/release/tracer"
     pipe_location: "/tmp/containerpid"
     binary_to_examine: "/usr/local/bin/redis-server"
@@ -28,58 +29,56 @@ nodes:
     container: true
     script: /scripts/start_redis.sh
     ip: 172.38.0.13
-# faults:
-#   "1":
-#     type: process_kill
-#     target: node1
-#     begin_conditions:
-#       - "1":
-#           type: time
-#           time: 5000
+faults:
+  "1":
+    type: process_kill
+    target: node1
+    begin_conditions:
+      - "1":
+          type: time
+          time: 5000
+  "2":
+    type: block_ips
+    target: node2
+    duration: 10000
+    ips_out:
+      - node1
+    begin_conditions:
+      - "2":
+          type: syscall
+          syscall_name: write
+          call_count: 100
 
-#   "2":
-#     type: block_ips
-#     target: node2
-#     duration: 10000
-#     ips_out:
-#       - node1
-#     begin_conditions:
-#       - "2":
-#           type: syscall
-#           syscall_name: write
-#           call_count: 100
+  "3":
+    type: process_pause
+    target: node1
+    duration: 10000
+    begin_conditions:
+      - "3":
+          type: file_syscall
+          syscall_name: write
+          file_name: .aof
+          call_count: 1
+  "4":
+    type: syscall
+    target: node2
+    details:
+      name: write
+      return_value: -1
+    begin_conditions:
+      - "4":
+          type: file_syscall
+          syscall_name: write
+          file_name: .rdb
+          call_count: 3
 
-#   "3":
-#     type: process_pause
-#     target: node3
-#     duration: 10
-#     begin_conditions:
-#       - "3":
-#           type: file_syscall
-#           syscall_name: openat
-#           file_name: appendonly.aof
-#           call_count: 5
-
-#   "4":
-#     type: syscall
-#     target: node1
-#     details:
-#       name: write
-#       return_value: -1
-#     begin_conditions:
-#       - "4":
-#           type: file_syscall
-#           syscall_name: write
-#           file_name: dump.rdb
-#           call_count: 3
-
-#   "5":
-#     type: block_ips
-#     target: node3
-#     duration: 10000
-#     ips_in:
-#       - node2
-#     begin_conditions:
-#       - "5":
-#           type: time
-#           time: 15000
+  "5":
+    type: block_ips
+    target: node3
+    duration: 10000
+    ips_in:
+      - node2
+    begin_conditions:
+      - "5":
+          type: time
+          time: 15000
