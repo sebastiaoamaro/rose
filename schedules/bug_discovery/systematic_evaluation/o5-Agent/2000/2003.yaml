@@ -1,0 +1,127 @@
+execution_plan:
+  maximum_time: 120
+  setup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
+    duration: 20
+  workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
+  cleanup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
+    duration: 5
+  pre_workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
+  tracer:
+    functions_file: /vagrant/profiler/redis/functions.txt
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: sys_all_trace,container_controlled
+nodes:
+  node1:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.11
+  node2:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.12
+  node3:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.13
+
+faults:
+  staggered_kill_node2:
+    type: process_kill
+    target: node2
+    begin_conditions:
+      - mid_election:
+          type: time
+          time: 10000
+  fail_write_node1_on_call3:
+    type: syscall
+    target: node1
+    details:
+      name: write
+      return_value: -1
+    begin_conditions:
+      - write_third_call:
+          type: syscall
+          syscall_name: write
+          call_count: 3
+  block_node1_to_node3_short:
+    type: block_ips
+    target: node1
+    ips_out:
+      - node3
+    duration: 15000
+    begin_conditions:
+      - early_sync:
+          type: time
+          time: 3000
+  pause_node3_during_reconfig:
+    type: process_pause
+    target: node3
+    duration: 20000
+    begin_conditions:
+      - reconfig_window:
+          type: time
+          time: 22000
+  fail_openat_node1_late:
+    type: syscall
+    target: node1
+    details:
+      name: openat
+      return_value: -1
+    begin_conditions:
+      - snapshot_write_late:
+          type: time
+          time: 80000
+  block_node3_in_from_node2:
+    type: block_ips
+    target: node3
+    ips_in:
+      - node2
+    duration: 35000
+    begin_conditions:
+      - after_leader_switch:
+          type: syscall
+          syscall_name: write
+          call_count: 12
+  kill_node3_after_pause:
+    type: process_kill
+    target: node3
+    begin_conditions:
+      - post_pause:
+          type: time
+          time: 26000
+  read_fail_node2_on_call7:
+    type: syscall
+    target: node2
+    details:
+      name: read
+      return_value: -1
+    begin_conditions:
+      - heavy_load_reads:
+          type: syscall
+          syscall_name: read
+          call_count: 7
+  block_node2_out_to_node1_short:
+    type: block_ips
+    target: node2
+    ips_out:
+      - node1
+    duration: 10000
+    begin_conditions:
+      - quick_partition:
+          type: time
+          time: 6000
+  pause_leader_brief_mid:
+    type: process_pause
+    target: node1
+    duration: 5000
+    begin_conditions:
+      - veto_window:
+          type: syscall
+          syscall_name: openat
+          call_count: 2

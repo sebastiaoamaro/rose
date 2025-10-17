@@ -461,7 +461,7 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
     		//bpf_printk("Strings not equal %s and %s",file_open->filename,path);
     		return 0;
     	}
-        bpf_printk("ORIGIN_PID:%d,PID:%d,FILENAME:%s,PATH:%s,SIZE: %d \n",origin_pid,pid,file_open->filename,path,file_open->size);
+        //bpf_printk("ORIGIN_PID:%d,PID:%d,FILENAME:%s,PATH:%s,SIZE: %d \n",origin_pid,pid,file_open->filename,path,file_open->size);
 		process_current_state(sys_info.file_specific_code,pid,sys_info.fault_count,sys_info.time_only,
 			&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 		inject_override(pid,sys_info.file_specific_fault_code,(struct pt_regs *) ctx,0,&faults_specification);

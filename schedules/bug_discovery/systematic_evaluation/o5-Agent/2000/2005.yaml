@@ -1,0 +1,135 @@
+execution_plan:
+  maximum_time: 120
+  setup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
+    duration: 20
+  workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
+  cleanup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
+    duration: 5
+  pre_workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
+  tracer:
+    functions_file: /vagrant/profiler/redis/functions.txt
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: sys_all_trace,container_controlled
+nodes:
+  node1:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.11
+  node2:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.12
+  node3:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.13
+faults:
+  block_node1_out_to_node2_then_node3:
+    type: block_ips
+    target: node1
+    ips_out:
+      - node2
+      - node3
+    duration: 45000
+    begin_conditions:
+      - early_load_spike:
+          type: time
+          time: 4000
+  openat_fail_node3_during_snapshot:
+    type: syscall
+    target: node3
+    details:
+      name: openat
+      return_value: -1
+    begin_conditions:
+      - snapshot_open:
+          type: file_syscall
+          file_name: .rdb
+          syscall_name: openat
+          call_count: 2
+  pause_node1_multiple:
+    type: process_pause
+    target: node1
+    duration: 10000
+    begin_conditions:
+      - heartbeat_loss_timer:
+          type: syscall
+          syscall_name: write
+          call_count: 8
+  kill_node2_on_high_callcount:
+    type: process_kill
+    target: node2
+    begin_conditions:
+      - heavy_write_failure:
+          type: syscall
+          syscall_name: write
+          call_count: 40
+  fail_read_node1_during_reconnect:
+    type: syscall
+    target: node1
+    details:
+      name: read
+      return_value: -1
+    begin_conditions:
+      - reconnect_start:
+          type: time
+          time: 55000
+  block_node2_in_from_node3_brief:
+    type: block_ips
+    target: node2
+    ips_in:
+      - node3
+    duration: 12000
+    begin_conditions:
+      - replica_sync_phase:
+          type: syscall
+          syscall_name: write
+          call_count: 6
+  openat_fail_node1_on_aof:
+    type: syscall
+    target: node1
+    details:
+      name: openat
+      return_value: -1
+    begin_conditions:
+      - aof_open:
+          type: file_syscall
+          file_name: .aof
+          syscall_name: openat
+          call_count: 1
+  pause_node3_long_mid:
+    type: process_pause
+    target: node3
+    duration: 30000
+    begin_conditions:
+      - mid_long_pause:
+          type: time
+          time: 20000
+  block_node3_out_to_node2_late:
+    type: block_ips
+    target: node3
+    ips_out:
+      - node2
+    duration: 30000
+    begin_conditions:
+      - late_isolation:
+          type: time
+          time: 90000
+  fail_write_node2_on_snapshot:
+    type: syscall
+    target: node2
+    details:
+      name: write
+      return_value: -1
+    begin_conditions:
+      - snapshot_write_attempt:
+          type: file_syscall
+          file_name: .rdb
+          syscall_name: write
+          call_count: 1

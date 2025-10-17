@@ -1,0 +1,127 @@
+execution_plan:
+  maximum_time: 120
+  setup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
+    duration: 20
+  workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
+  cleanup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
+    duration: 5
+  pre_workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
+  tracer:
+    functions_file: /vagrant/profiler/redis/functions.txt
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: sys_all_trace,container_controlled
+nodes:
+  node1:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.11
+  node2:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.12
+  node3:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.13
+faults:
+  simultaneous_pause_node1_node2:
+    type: process_pause
+    target: node1
+    duration: 20000
+    begin_conditions:
+      - start_of_test:
+          type: time
+          time: 1000
+  simultaneous_pause_node1_node2_2:
+    type: process_pause
+    target: node2
+    duration: 20000
+    begin_conditions:
+      - start_of_test:
+          type: time
+          time: 1000
+  kill_node3_mid_long:
+    type: process_kill
+    target: node3
+    begin_conditions:
+      - mid_run:
+          type: time
+          time: 30000
+  block_node1_in_from_node2_long:
+    type: block_ips
+    target: node1
+    ips_in:
+      - node2
+    duration: 50000
+    begin_conditions:
+      - after_pause:
+          type: time
+          time: 25000
+  fail_openat_node2_during_aof_rewrite:
+    type: syscall
+    target: node2
+    details:
+      name: openat
+      return_value: -1
+    begin_conditions:
+      - aof_rewrite_trigger:
+          type: file_syscall
+          syscall_name: write
+          file_name: .aof
+          call_count: 1
+  write_fail_node1_after_many:
+    type: syscall
+    target: node1
+    details:
+      name: write
+      return_value: -1
+    begin_conditions:
+      - many_writes:
+          type: syscall
+          syscall_name: write
+          call_count: 50
+  read_fail_node3_short:
+    type: syscall
+    target: node3
+    details:
+      name: read
+      return_value: -1
+    begin_conditions:
+      - snapshot_load_attempt:
+          type: file_syscall
+          syscall_name: openat
+          file_name: .rdb
+          call_count: 1
+  block_node3_out_to_node1_and_node2:
+    type: block_ips
+    target: node3
+    ips_out:
+      - node1
+      - node2
+    duration: 40000
+    begin_conditions:
+      - isolate_replica:
+          type: time
+          time: 12000
+  pause_node2_brief_during_failover:
+    type: process_pause
+    target: node2
+    duration: 10000
+    begin_conditions:
+      - failover_window:
+          type: syscall
+          syscall_name: write
+          call_count: 18
+  kill_leader_after_partition:
+    type: process_kill
+    target: node1
+    begin_conditions:
+      - after_heavy_partition:
+          type: time
+          time: 70000
