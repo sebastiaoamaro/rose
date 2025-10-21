@@ -1,0 +1,137 @@
+execution_plan:
+  maximum_time: 120
+  setup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
+    duration: 20
+  workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
+  cleanup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
+    duration: 5
+  pre_workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
+  tracer:
+    functions_file: /vagrant/profiler/redis/functions.txt
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: sys_all_trace,container_controlled
+nodes:
+  node1:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.11
+  node2:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.12
+  node3:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.13
+
+faults:
+  fault1:
+    type: process_pause
+    target: node1
+    duration: 20000
+    begin_conditions:
+      - pause_after_first_writes:
+          type: syscall
+          syscall_name: write
+          call_count: 2
+  # fault2:
+  #   type: syscall
+  #   target: node2
+  #   details:
+  #     name: write
+  #     return_value: -1
+  #   begin_conditions:
+  #     - write_fail_on_leader_switch:
+  #         type: user_function
+  #         symbol: leaderFailover
+  #         binary_location: "/usr/local/bin/redis-server"
+  #         call_count: 1
+  # fault3:
+  #   type: block_ips
+  #   target: node3
+  #   ips_in:
+  #     - node1
+  #     - node2
+  #   duration: 10000
+  #   begin_conditions:
+  #     - net_isolation_during_raft:
+  #         type: user_function
+  #         symbol: clusterProcessSync
+  #         binary_location: "/usr/local/bin/redis-server"
+  #         call_count: 1
+  fault4:
+    type: syscall
+    target: node1
+    details:
+      name: openat
+      return_value: -2
+    begin_conditions:
+      - open_fail_on_aof:
+          type: file_syscall
+          file_name: .aof
+          syscall_name: openat
+          call_count: 3
+  fault5:
+    type: process_kill
+    target: node2
+    begin_conditions:
+      - kill_after_rdb_write:
+          type: user_function
+          symbol: rdbSave
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 1
+  fault6:
+    type: syscall
+    target: node3
+    details:
+      name: read
+      return_value: -1
+    begin_conditions:
+      - read_fail_after_restart:
+          type: time
+          time: 15000
+  # fault7:
+  #   type: block_ips
+  #   target: node1
+  #   ips_out:
+  #     - node3
+  #   duration: 20000
+  #   begin_conditions:
+  #     - block_out_during_apply:
+  #         type: user_function
+  #         symbol: raftApplyLog
+  #         binary_location: "/usr/local/bin/redis-server"
+  #         call_count: 1
+  fault8:
+    type: process_pause
+    target: node3
+    duration: 10000
+    begin_conditions:
+      - pause_on_aof_fsync_call:
+          type: syscall
+          syscall_name: openat
+          call_count: 2
+  fault9:
+    type: syscall
+    target: node1
+    details:
+      name: write
+      return_value: -1
+    begin_conditions:
+      - repeated_write_failure:
+          type: syscall
+          syscall_name: write
+          call_count: 8
+  fault10:
+    type: process_kill
+    target: node3
+    begin_conditions:
+      - kill_late_after_sync:
+          type: time
+          time: 40000

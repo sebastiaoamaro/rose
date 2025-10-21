@@ -1,4 +1,4 @@
-#Types of conditions
+# Types of conditions
 class user_function_condition:
     binary_location = ""
     symbol = ""
@@ -7,7 +7,14 @@ class user_function_condition:
     call_count = 0
 
     def to_yaml(self):
-        return {"type":"user_function","binary_location":str(self.binary_location),"symbol":str(self.symbol),"offset":str(self.offset),"call_count":str(self.call_count)}
+        return {
+            "type": "user_function",
+            "binary_location": str(self.binary_location),
+            "symbol": str(self.symbol),
+            "offset": str(self.offset),
+            "call_count": str(self.call_count),
+        }
+
 
 class file_syscall_condition:
     syscall_name = ""
@@ -15,61 +22,83 @@ class file_syscall_condition:
     file_name = ""
     call_count = 0
     cond_nr = 0
+
     def to_yaml(self):
-        return {"type":"file_syscall","syscall_name":str(self.syscall_name),"file_name":str(self.file_name),"call_count":str(self.call_count)}
+        return {
+            "type": "file_syscall",
+            "syscall_name": str(self.syscall_name),
+            "file_name": str(self.file_name),
+            "call_count": str(self.call_count),
+        }
+
 
 class syscall_condition:
     syscall_name = ""
     cond_nr = 0
     call_count = 0
     cond_nr = 0
+
     def to_yaml(self):
-        return {"type":"syscall","syscall_name":str(self.syscall_name),"call_count":str(self.call_count)}
+        return {
+            "type": "syscall",
+            "syscall_name": str(self.syscall_name),
+            "call_count": str(self.call_count),
+        }
+
 
 class time_cond:
     time = 0
 
     def to_yaml(self):
-        return {"type":"time","time":int(self.time)}
+        return {"type": "time", "time": int(self.time)}
+
 
 def build_time(time_config):
     time = time_cond()
 
-    time.time = time_config['time']
+    time.time = time_config["time"]
 
     return time
+
 
 def build_user_function(user_function_config):
     user_function = user_function_condition()
 
-    user_function.binary_location = user_function_config['binary_location']
+    user_function.binary_location = user_function_config["binary_location"]
 
-    user_function.symbol = user_function_config['symbol']
+    user_function.symbol = user_function_config["symbol"]
 
-    if 'arguments' in user_function_config:
-        for argument in user_function_config['arguments']:
+    if "arguments" in user_function_config:
+        for argument in user_function_config["arguments"]:
             user_function.arguments.append(argument)
 
-    user_function.call_count = user_function_config['call_count']
+    user_function.call_count = user_function_config["call_count"]
 
-    if 'offset' in user_function_config:
-        user_function.offset = int(user_function_config['offset'])
+    if "offset" in user_function_config:
+        user_function.offset = int(user_function_config["offset"])
 
     return user_function
-
 
 
 def build_file_syscall(file_system_call_config):
     file_system_call = file_syscall_condition()
 
-    file_system_call.syscall_name = file_system_call_config['syscall_name']
+    if "syscall_name" in file_system_call_config:
+        file_system_call.syscall_name = file_system_call_config["syscall_name"]
+    else:
+        print("Missing syscall_name in", file_system_call_config)
+        exit(1)
 
-    if 'file_name' in file_system_call_config:
-        file_system_call.file_name = file_system_call_config['file_name']
+    if "file_name" in file_system_call_config:
+        file_system_call.file_name = file_system_call_config["file_name"]
+    else:
+        print("Missing file_name in", file_system_call_config)
+        exit(1)
 
-    file_system_call.call_count = file_system_call_config['call_count']
+    file_system_call.call_count = file_system_call_config["call_count"]
 
     return file_system_call
+
 
 def build_syscall(syscall_config):
     syscall = syscall_condition()
@@ -80,64 +109,94 @@ def build_syscall(syscall_config):
 
     return syscall
 
-def build_fault_conditions(file,fault_nr,begin_conditions):
+
+def build_fault_conditions(file, fault_nr, begin_conditions):
     condition_counter = 0
     for condition in begin_conditions:
-        if isinstance(condition,syscall_condition):
-            fault_condition = """    fault_condition fault_condition_#faultnr_#condnr;\n"""
+        if isinstance(condition, syscall_condition):
+            fault_condition = (
+                """    fault_condition fault_condition_#faultnr_#condnr;\n"""
+            )
             fault_condition += """    system_call syscall_#faultnr_#condnr;\n"""
-            fault_condition += """    fault_condition_#faultnr_#condnr.type = SYSCALL;\n"""
+            fault_condition += (
+                """    fault_condition_#faultnr_#condnr.type = SYSCALL;\n"""
+            )
             fault_condition += """    build_syscall(&syscall_#faultnr_#condnr,#syscall_nr,#call_count);\n"""
-            fault_condition = fault_condition.replace("#syscall_nr",str(condition.cond_nr))
-            fault_condition = fault_condition.replace("#call_count",str(condition.call_count))
+            fault_condition = fault_condition.replace(
+                "#syscall_nr", str(condition.cond_nr)
+            )
+            fault_condition = fault_condition.replace(
+                "#call_count", str(condition.call_count)
+            )
             fault_condition += """    fault_condition_#faultnr_#condnr.condition.syscall = syscall_#faultnr_#condnr;\n"""
             fault_condition += """    add_begin_condition(&faults[#faultnr],fault_condition_#faultnr_#condnr,#condnr);\n"""
-            fault_condition = fault_condition.replace("#faultnr",str(fault_nr))
-            fault_condition = fault_condition.replace("#condnr",str(condition_counter))
+            fault_condition = fault_condition.replace("#faultnr", str(fault_nr))
+            fault_condition = fault_condition.replace("#condnr", str(condition_counter))
             file.write(fault_condition)
 
-        if isinstance(condition,file_syscall_condition):
-            fault_condition = """    fault_condition fault_condition_#faultnr_#condnr;\n"""
-            fault_condition += """    file_system_call file_syscall_#faultnr_#condnr;\n"""
-            fault_condition += """    fault_condition_#faultnr_#condnr.type = FILE_SYSCALL;\n"""
+        if isinstance(condition, file_syscall_condition):
+            fault_condition = (
+                """    fault_condition fault_condition_#faultnr_#condnr;\n"""
+            )
+            fault_condition += (
+                """    file_system_call file_syscall_#faultnr_#condnr;\n"""
+            )
+            fault_condition += (
+                """    fault_condition_#faultnr_#condnr.type = FILE_SYSCALL;\n"""
+            )
             fault_condition += """    build_file_syscall(&file_syscall_#faultnr_#condnr,#syscall_nr,"#file_name",#call_count);\n"""
-            fault_condition = fault_condition.replace("#syscall_nr",str(condition.cond_nr))
-            fault_condition = fault_condition.replace("#file_name",condition.file_name)
-            fault_condition = fault_condition.replace("#call_count",str(condition.call_count))
+            fault_condition = fault_condition.replace(
+                "#syscall_nr", str(condition.cond_nr)
+            )
+            fault_condition = fault_condition.replace("#file_name", condition.file_name)
+            fault_condition = fault_condition.replace(
+                "#call_count", str(condition.call_count)
+            )
             fault_condition += """    fault_condition_#faultnr_#condnr.condition.file_system_call = file_syscall_#faultnr_#condnr;\n"""
             fault_condition += """    add_begin_condition(&faults[#faultnr],fault_condition_#faultnr_#condnr,#condnr);\n"""
-            fault_condition = fault_condition.replace("#faultnr",str(fault_nr))
-            fault_condition = fault_condition.replace("#condnr",str(condition_counter))
+            fault_condition = fault_condition.replace("#faultnr", str(fault_nr))
+            fault_condition = fault_condition.replace("#condnr", str(condition_counter))
             file.write(fault_condition)
-        if isinstance(condition,user_function_condition):
-            fault_condition = """    fault_condition fault_condition_#faultnr_#condnr;\n"""
+        if isinstance(condition, user_function_condition):
+            fault_condition = (
+                """    fault_condition fault_condition_#faultnr_#condnr;\n"""
+            )
             fault_condition += """    user_function user_func_#faultnr_#condnr;\n"""
-            fault_condition += """    fault_condition_#faultnr_#condnr.type = USER_FUNCTION;\n"""
+            fault_condition += (
+                """    fault_condition_#faultnr_#condnr.type = USER_FUNCTION;\n"""
+            )
             fault_condition += """    build_user_function(&user_func_#faultnr_#condnr,"#binary_location","#location",#call_count,#offset);\n"""
-            fault_condition = fault_condition.replace("#binary_location",condition.binary_location)
-            fault_condition = fault_condition.replace("#location",condition.symbol)
-            fault_condition = fault_condition.replace("#call_count",str(condition.call_count))
+            fault_condition = fault_condition.replace(
+                "#binary_location", condition.binary_location
+            )
+            fault_condition = fault_condition.replace("#location", condition.symbol)
+            fault_condition = fault_condition.replace(
+                "#call_count", str(condition.call_count)
+            )
             fault_condition += """    fault_condition_#faultnr_#condnr.condition.user_function = user_func_#faultnr_#condnr;\n"""
             fault_condition += """    add_begin_condition(&faults[#faultnr],fault_condition_#faultnr_#condnr,#condnr);\n"""
-            fault_condition = fault_condition.replace("#faultnr",str(fault_nr))
-            fault_condition = fault_condition.replace("#condnr",str(condition_counter))
-            fault_condition = fault_condition.replace("#offset",str(condition.offset))
+            fault_condition = fault_condition.replace("#faultnr", str(fault_nr))
+            fault_condition = fault_condition.replace("#condnr", str(condition_counter))
+            fault_condition = fault_condition.replace("#offset", str(condition.offset))
 
             file.write(fault_condition)
-        if isinstance(condition,time_cond):
-            fault_condition = """    fault_condition fault_condition_#faultnr_#condnr;\n"""
+        if isinstance(condition, time_cond):
+            fault_condition = (
+                """    fault_condition fault_condition_#faultnr_#condnr;\n"""
+            )
             fault_condition += """    int time_#faultnr_#condnr = #time;\n"""
-            fault_condition = fault_condition.replace("#time",str(condition.time))
+            fault_condition = fault_condition.replace("#time", str(condition.time))
             fault_condition += """    fault_condition_#faultnr_#condnr.type = TIME;\n"""
             fault_condition += """    fault_condition_#faultnr_#condnr.condition.time = time_#faultnr_#condnr;\n"""
             fault_condition += """    add_begin_condition(&faults[#faultnr],fault_condition_#faultnr_#condnr,#condnr);\n"""
 
-            fault_condition = fault_condition.replace("#faultnr",str(fault_nr))
-            fault_condition = fault_condition.replace("#condnr",str(condition_counter))
+            fault_condition = fault_condition.replace("#faultnr", str(fault_nr))
+            fault_condition = fault_condition.replace("#condnr", str(condition_counter))
             file.write(fault_condition)
-        condition_counter+=1
+        condition_counter += 1
 
-def get_cond_type_nr(type,condition):
+
+def get_cond_type_nr(type, condition):
     match type:
         case 1:
             return 0
