@@ -449,3 +449,20 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 	}
     return 0;
 }
+
+SEC("tracepoint/sched/sched_process_fork")
+int handle_fork(struct trace_event_raw_sched_process_fork *ctx)
+{
+    __u32 parent_pid = ctx->parent_pid;
+    __u32 child_pid  = ctx->child_pid;
+
+
+    int *parent_pid_pointer = bpf_map_lookup_elem(&pid_tree, &parent_pid);
+    if (!parent_pid_pointer) {
+        return 0;
+    }
+    bpf_map_update_elem(&pid_tree, &child_pid, &parent_pid, BPF_ANY);
+    //bpf_printk("TRACER FORK: ADDED PID:%d, PARENT:%d \n", child_pid, parent_pid);
+
+    return 0;
+}

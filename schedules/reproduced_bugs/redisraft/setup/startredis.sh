@@ -1,6 +1,4 @@
 #!/bin/bash
-echo "I am in script, arg1 is: $1, arg2 is: $2, arg3 is: $3"
-
 # Check if the argument is a valid number
 if ! [[ "$1" =~ ^[0-9]+$ ]]; then
     echo "The argument is not a valid number."
@@ -37,10 +35,5 @@ else
     echo "Joining cluster" >> $file_path
     ./redis-cli -p 5001 RAFT.CLUSTER JOIN 172.19.1.10:5001 >> $file_path
 fi
-
-# # Loop to check if the process is still running
-# while kill -0 $pid_to_wait 2>/dev/null; do
-#     sleep 1
-# done
 
 wait $pid

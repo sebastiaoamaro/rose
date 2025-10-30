@@ -61,9 +61,16 @@ pub fn run_tracing(
         .attach_tracepoint(libbpf_rs::TracepointCategory::Sched, "sched_process_exec")
         .expect("Failed to attach sched_process_exec");
 
+    let tracepoint_fork_enter = skel
+        .progs
+        .handle_fork
+        .attach_tracepoint(libbpf_rs::TracepointCategory::Sched, "sched_process_fork")
+        .expect("Failed to attach sched_process_fork");
+
     tracepoint_vector.push(tracepoint_sys_enter);
     tracepoint_vector.push(tracepoint_sys_exit);
     tracepoint_vector.push(tracepoint_proc_start);
+    tracepoint_vector.push(tracepoint_fork_enter);
 
     let mut skel_enum: SkelEnum<'_, 'static> = SkelEnum::StatisticsTracer(&mut skel);
     start_tracing(

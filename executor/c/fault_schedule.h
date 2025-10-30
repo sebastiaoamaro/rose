@@ -32,6 +32,7 @@ typedef struct Setup{
     char script[STRING_SIZE];
     int duration;
     int pid;
+    FILE *read_end;
 }setup;
 
 typedef struct Pre_Workload{
@@ -94,6 +95,7 @@ typedef struct Node {
     int running;
     char **args;
     int if_index;
+    FILE *read_end;
 }node;
 
 

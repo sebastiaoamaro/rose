@@ -596,6 +596,8 @@ def get_fault_type_nr(type, fault_specifics):
         case "lazyfs":
             if fault_specifics.operation == "torn_seq":
                 return "TORN_SEQ"
+            if fault_specifics.operation == "clear_cache":
+                return "CLEAR_CACHE"
 
 
 def check_if_syscall_supported(syscall_name):

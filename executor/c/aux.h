@@ -127,6 +127,7 @@ enum fault_type{
     FUTEX_FAULT = 202,
     CONNECT_FAULT = 42,
     TORN_SEQ = 43,
+    CLEAR_CACHE = 44,
     TEMP_EMPTY = 999
 };
 

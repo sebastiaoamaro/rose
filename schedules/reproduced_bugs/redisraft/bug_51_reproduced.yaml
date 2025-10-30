@@ -4,7 +4,7 @@ execution_plan:
     script: /vagrant/schedules/reproduced_bugs/redisraft/scripts/startrediscluster2d1cf30.sh
     duration: 5
   cleanup:
-    #script: /vagrant/schedules/reproduced_bugs/redisraft/scripts/cleanup.sh
+    script: /vagrant/schedules/reproduced_bugs/redisraft/scripts/cleanup.sh
     duration: 15
   workload:
     wait_time: 15

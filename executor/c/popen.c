@@ -40,9 +40,10 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
         else
         {
             close(fd[1]);
-            dup2(fd[0], 0);
+            dup2(fd[0],0);
         }
 
+        //setpgid(0, 0);
         setpgid(child_pid, child_pid); //Needed so negative PIDs can kill children of /bin/sh
 
         //If it is not a container process, wait for the signal to start
@@ -52,7 +53,7 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
                 if(ready){
                     break;
                 }
-                sleep_for_ms(1);
+                sleep_for_ms(10);
             }
         }
         int err = execvp(command,args);
@@ -86,6 +87,7 @@ int custom_pclose(FILE * fp, pid_t pid)
     int stat;
 
     fclose(fp);
+    printf("Closed fp for %d \n",pid);
     while (waitpid(pid, &stat, 0) == -1)
     {
         if (errno != EINTR)

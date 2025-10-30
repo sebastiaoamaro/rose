@@ -368,7 +368,9 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 			//Do this as early as possible for contention
 			fault->done++;
 			if (fault_type == PROCESS_KILL){
-				bpf_printk("KILLING PID: %d\n", pid_to_target);
+     			__u64 pid_tgid = bpf_get_current_pid_tgid();
+     			__u32 pid_running = pid_tgid >> 32;
+				bpf_printk("KILLING PID: %d\n", pid_running);
 				bpf_send_signal(9);
 				__u64 time = bpf_ktime_get_ns();
 				__u64 time_ms = time / 1000000;
@@ -414,9 +416,21 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 				fault->run = 0;
 			}
 
-		}else if (fault_type == TORN_SEQ){
-		    bpf_printk("FAULT:%d INJECTING TORN SEQ, PID: %d\n",fault->fault_nr,pid_to_target);
-			fault->done++;
+		}else if (fault_type == CLEAR_CACHE){
+		    fault->done++;
+		    bpf_printk("FAULT:%d INJECTING CLEAR_CACHE, PID: %d\n",fault->fault_nr,pid_to_target);
+			//Send message to user space to restart process
+			struct event *e;
+			e = bpf_ringbuf_reserve(maps->rb, sizeof(*e), 0);
+			if (!e)
+				return 0;
+
+			e->type = fault_type;
+			e->pid = pid_to_target;
+			e->fault_nr = fault->fault_nr;
+
+			bpf_printk("Sent %d to userpace to pid %d for fault_nr %d\n",fault_type,e->pid,fault->fault_nr);
+			bpf_ringbuf_submit(e, 0);
 		}
 
 

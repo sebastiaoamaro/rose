@@ -14,8 +14,8 @@ execution_plan:
   lazyfs:
     enabled: true
     lazyfs_script: /vagrant/lazyfs/lazyfs/scripts/mount-lazyfs.sh
-    root_dir: /tmp/lazyfs.mnt
-    mount_dir: /tmp/lazyfs.root
+    root_dir: /tmp/lazyfs.root
+    mount_dir: /tmp/lazyfs.mnt
     pipe_location: /tmp/faults.fifo
 
   tracer:
@@ -40,9 +40,9 @@ nodes:
 faults:
   lazyfs_fault:
     type: lazyfs
-    target: node2
+    target: node1
     details:
-      operation: torn_seq
+      operation: clear_cache
     begin_conditions:
       - condition1:
           type: time

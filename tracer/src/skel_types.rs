@@ -112,7 +112,7 @@ impl<'a, 'obj> SkelAttachUprobe for SkelEnum<'a, 'obj> {
                     ..Default::default()
                 };
                 let uprobe = skel_instance.progs.handle_uprobe.attach_uprobe_with_opts(
-                    pid,
+                    -1,
                     binary_path.clone(),
                     function_offset,
                     opts,
@@ -160,7 +160,7 @@ impl<'a, 'obj> SkelAttachUprobe for SkelEnum<'a, 'obj> {
                     ..Default::default()
                 };
                 let uprobe = skel_instance.progs.handle_uprobe.attach_uprobe_with_opts(
-                    pid,
+                    -1,
                     binary_path.clone(),
                     function_offset,
                     opts,
@@ -183,7 +183,7 @@ impl<'a, 'obj> SkelAttachUprobe for SkelEnum<'a, 'obj> {
                     ..Default::default()
                 };
                 let uprobe = skel_instance.progs.handle_uprobe.attach_uprobe_with_opts(
-                    pid,
+                    -1,
                     binary_path.clone(),
                     function_offset,
                     opts,

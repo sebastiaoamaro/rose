@@ -123,9 +123,9 @@ char** get_device_names(int device_count){
 
 	count_devices = get_interface_names(device_names,device_count);
 
-	for (int i=0;i<count_devices;i++){
-		printf("Device name is %s \n",device_names[i]);
-	}
+	// for (int i=0;i<count_devices;i++){
+	// 	printf("Device name is %s \n",device_names[i]);
+	// }
 
 	return device_names;
 }

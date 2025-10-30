@@ -107,10 +107,6 @@ struct process_args {
 	FILE* fp;
 };
 
-struct lazyfs_args {
-    int lazyfs_rb;
-};
-
 //Main structs for reproduction
 static fault* faults;
 static node* nodes;
@@ -175,7 +171,6 @@ int main()
 	    send_info_to_tracer();
 	}
 
-	choose_leader();
 	setup_tc_progs();
 
 	int err;
@@ -187,19 +182,11 @@ int main()
 	start_container_nodes_scripts();
 	start_lazyfs();
 
-	pthread_t lazyfs_thread;
-
-	if(plan->lazyfs.pid != 0){
-	    int lazyfs_rb = bpf_map__fd(aux_bpf->maps.lazyfs_rb);
-		struct lazyfs_args *args = (struct lazyfs_args*)malloc(sizeof(struct lazyfs_args));
-		args->lazyfs_rb = lazyfs_rb;
-	    pthread_create(&lazyfs_thread, NULL, (void*)start_lazyfs_handler, (void*)args);
-	}
-
 	start_nodes_scripts();
 	start_pre_workload();
 
 	//Start eBPF FI program
+	choose_leader();
 	setup_begin_conditions();
 	add_faults_to_bpf();
 	struct fault_inject_bpf* fault_inject_bpf;
@@ -243,30 +230,54 @@ int main()
 	}
 
 	if(plan){
+	    if (plan->setup.pid){
+    	    printf("KILLING SETUP(PID:%d)\n",plan->setup.pid);
+       		kill(plan->setup.pid,SIGTERM);
+    		// Wait for it to exit
+                int status;
+                if (waitpid(plan->setup.pid, &status, 0) == -1) {
+                    perror("waitpid failed");
+                } else {
+                    printf("Setup terminated with status %d\n", status);
+            }
+
+            printf("CLOSING SETUP PIPE\n");
+            fclose(plan->setup.read_end);
+            printf("CLOSED SETUP PIPE\n");
+		}
+
 		if (plan->workload.pid){
 		    printf("KILLING WORKLOAD(PID:%d)\n",plan->workload.pid);
-			kill(plan->workload.pid,SIGTERM);
-			waitpid(plan->workload.pid,NULL,0);
+			kill(-plan->workload.pid,SIGTERM);
+			// Wait for it to exit
+            int status;
+            if (waitpid(plan->workload.pid, &status, 0) == -1) {
+                perror("waitpid failed");
+            } else {
+                printf("Workload terminated with status %d\n", status);
+            }
+
+       	    printf("CLOSING WORKLOAD PIPE\n");
+            int result = fclose(plan->workload.read_end);
+            if (result < 0){
+                printf("Closing read_end pre_workload failed \n");
+            }
+    		printf("CLOSED WORKLOAD PIPE\n");
 		}
 	}
 
-	if (plan->workload.pid){
-		fclose(plan->workload.read_end);
-	}
 	if (plan->pre_workload.pid){
-		fclose(plan->pre_workload.read_end);
+	    printf("CLOSING PRE_WORKLOAD PIPE\n",plan->workload.pid);
+		int result = fclose(plan->pre_workload.read_end);
+		if (result < 0){
+		    printf("Closing read_end pre_workload failed \n");
+		}
 	}
 
 	printf("SLEEPING: %d, BEFORE CLEANUP\n",plan->cleanup.duration);
-	sleep(plan->cleanup.duration);
-	printf("EXPERIMENT ENDED, RUNNING CLEANUP\n");
-
-	if(!fault_inject_bpf)
-		fault_inject_bpf__destroy(fault_inject_bpf);
-	if(!aux_bpf)
-		aux_bpf__destroy(aux_bpf);
-	if(!rb)
-		ring_buffer__free(rb);
+	if(plan->cleanup.duration)
+	    sleep(plan->cleanup.duration);
+	printf("EXPERIMENT ENDED, RUNNING CLEANUP SCRIPT\n");
 
 	if (plan){
 		if(strcmp(plan->cleanup.script,"")){
@@ -279,6 +290,7 @@ int main()
 			}
 		}
 	}
+
 
 	//Add ROSE faults to tracer and close it
 	if(deployment_tracer){
@@ -321,12 +333,23 @@ int main()
 		printf("TRACER FINISHED: %d \n",deployment_tracer->pid);
 	}
 
+	if(!fault_inject_bpf)
+		fault_inject_bpf__destroy(fault_inject_bpf);
+	if(!aux_bpf)
+		aux_bpf__destroy(aux_bpf);
+	if(!rb)
+		ring_buffer__free(rb);
+
+	// printf("REAPING CHILD PROCESSES\n");
+	// kill_child_processes(getpid());
+
 	printf("KILLING NODES and TC PROGS\n");
 	for(int i =0; i< NODE_COUNT;i++){
 
 		if(strlen(nodes[i].script)){
 			kill(nodes[i].current_pid,SIGTERM);
 			waitpid(nodes[i].current_pid,NULL,0);
+			//fclose(nodes[i].read_end);
 			printf("KILLED PID: %d\n",nodes[i].current_pid);
 		}
 
@@ -343,10 +366,6 @@ int main()
 	if(plan->lazyfs.script){
 	    kill(plan->lazyfs.pid,SIGTERM);
 	}
-	printf("REAPING CHILD PROCESSES\n");
-	kill_child_processes(getpid());
-    kill(-getpid(), SIGTERM);
-    while (waitpid(-1, NULL, WNOHANG) > 0){sleep(1);printf("Waiting for child processes\n");};
 	printf("FINISHED CLEANUP\n");
 	return 0;
 }
@@ -376,8 +395,8 @@ void start_tracer(){
 	struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
 	args->fp= fp;
 	args->pid = &(deployment_tracer->pid);
-	pthread_create(&tracer_output, NULL, (void *)print_output, (void*)args);
-	sleep(1);
+	//pthread_create(&tracer_output, NULL, (void *)print_output, (void*)args);
+	sleep_for_ms(10);
 	send_signal(deployment_tracer->pid,SIGUSR1,"tracer");
 
 }
@@ -483,13 +502,13 @@ void run_setup(){
 	if(strlen(plan->setup.script)){
 		printf("Creating Setup process \n");
 		FILE *fp = custom_popen(plan->setup.script,args_script,env_script,'r',&(plan->setup.pid),0);
-
+		plan->setup.read_end = fp;
 		pthread_t thread_id;
 		struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
 
 		args->fp= fp;
 		args->pid = &(plan->setup.pid);
-		pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+		//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 	}
 
 	if(strlen(plan->pre_workload.script)){
@@ -501,7 +520,7 @@ void run_setup(){
 
 		args->fp= fp;
 		args->pid = &(plan->pre_workload.pid);
-		pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+		//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 	}
 
 	if(strlen(plan->workload.script)){
@@ -513,19 +532,21 @@ void run_setup(){
 
 		args->fp= fp;
 		args->pid = &(plan->workload.pid);
-		pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+		//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 	}
 
 	if(strlen(plan->lazyfs.script)){
 
-		char *lazyfs_args_script[6];
+		char *lazyfs_args_script[8];
 
         lazyfs_args_script[0] = plan->lazyfs.script;
-        lazyfs_args_script[1] = "-f";
-        lazyfs_args_script[2] = plan->lazyfs.mount_dir;
-        lazyfs_args_script[3] = "-r";
-        lazyfs_args_script[4] = plan->lazyfs.root_dir;
-        lazyfs_args_script[5] = NULL;
+        lazyfs_args_script[1] = "-c";
+        lazyfs_args_script[2] = "/vagrant/lazyfs/lazyfs/config/default.toml";
+        lazyfs_args_script[3] = "-m";
+        lazyfs_args_script[4] = plan->lazyfs.mount_dir;
+        lazyfs_args_script[5] = "-r";
+        lazyfs_args_script[6] = plan->lazyfs.root_dir;
+        lazyfs_args_script[7] = NULL;
 
     	print_block("Creating LazyFS process");
     	FILE *fp = custom_popen(plan->lazyfs.script,lazyfs_args_script,env_script,'r',&(plan->lazyfs.pid),0);
@@ -535,11 +556,11 @@ void run_setup(){
 
     	args->fp= fp;
     	args->pid = &(plan->lazyfs.pid);
-    	pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+    	//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 	}
 	//Start setup
 	if(strlen(plan->setup.script)){
-		sleep(1);
+	    sleep_for_ms(10);
     	kill(plan->setup.pid,SIGUSR1);
 	}
 	//Sleep while we wait for setup to start
@@ -585,7 +606,7 @@ void start_pre_workload(){
             }
         }
 }
-//Starts the lazy_fs process in the background
+//Starts the lazyfs process in the background
 void start_lazyfs(){
 	//Start workload
 	if (!plan)
@@ -787,9 +808,11 @@ void start_container_nodes_scripts(){
 			nodes[i].pid = nodes[i].current_pid;
 		}
 		if(nodes[i].pid_tc_in !=0){
+		    printf("Start TC prog for node %d \n",i);
 			kill(nodes[i].pid_tc_in,SIGUSR1);
 		}
 		if(nodes[i].pid_tc_out !=0){
+		    printf("Start TC prog for node %d \n",i);
 			kill(nodes[i].pid_tc_out,SIGUSR1);
 		}
 	}
@@ -869,7 +892,7 @@ FILE* start_target_process(int node_number, int *pid){
 
 	args->fp= fp;
 	args->pid = pid;
-	pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+	//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 
 	return fp;
 
@@ -927,10 +950,14 @@ FILE* start_target_process_in_container(int node_number,int *pid){
    	env_script[pos_env]= NULL;
 
 	FILE *fp;
-	if(nodes[node_number].running)
+	if(nodes[node_number].running){
 		fp = custom_popen("nsenter",nodes[node_number].args,env_script,'r',pid,0);
+		fclose(nodes[node_number].read_end);
+		nodes[node_number].read_end = fp;
+	}
 	else{
 		fp = custom_popen("nsenter",nsenter_args,env_script,'r',pid,0);
+		nodes[node_number].read_end = fp;
 		nodes[node_number].running = 1;
 		nodes[node_number].args = nsenter_args;
 	}
@@ -1321,7 +1348,7 @@ int setup_tc_progs(){
 
 			args->fp= fp;
 			args->pid = &nodes[target].pid_tc_out;
-			pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+			//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 
 			tc_ebpf_progs_counter++;
 
@@ -1371,7 +1398,7 @@ int setup_tc_progs(){
 			args2->fp= fp2;
 			args2->pid = &nodes[target].pid_tc_in;
 
-			pthread_create(&thread_id2, NULL, (void *)print_output, (void*)args2);
+			//pthread_create(&thread_id2, NULL, (void *)print_output, (void*)args2);
 
 			tc_ebpf_progs_counter++;
 
@@ -1457,41 +1484,6 @@ void count_time(){
 
 }
 
-//handles events received from the ringbuffer dedicated to lazyfs faults
-void start_lazyfs_handler(void* args){
-   	struct ring_buffer *rb = NULL;
-    int lazyfs_rb = ((struct lazyfs_args*)args)->lazyfs_rb;
-	rb = ring_buffer__new(lazyfs_rb, handle_lazyfs_events, NULL, NULL);
-	int err;
-	while (!exiting) {
-		err = ring_buffer__poll(rb, 1000 /* timeout, ms */);
-		/* Ctrl-C will cause -EINTR */
-		if (err == -EINTR) {
-			err = 0;
-			break;
-		}
-		if (err < 0) {
-			printf("Error polling perf buffer: %d\n", err);
-			break;
-		}
-	}
-
-}
-
-//Handles events received from the lazyfs ringbuffer (eBPF)
-void handle_lazyfs_events(void *ctx,void *data,size_t data_sz){
-    (void)ctx;
-	(void)data_sz;
-
-	const struct event *e = data;
-
-	int fault_nr = e->fault_nr;
-	switch(e->type){
-	    case TORN_SEQ:
-			break;
-	}
-}
-
 //Handles events received from ringbuffer (eBPF)
 void handle_event(void *ctx,void *data,size_t data_sz)
 {
@@ -1558,7 +1550,6 @@ void handle_event(void *ctx,void *data,size_t data_sz)
 			fault->done++;
 			break;
 		}
-		break;
 		case LEADER_CHANGE:{
 			LEADER_PID = e->pid;
 			printf("NEW LEADER: %d \n",e->pid);
@@ -1569,6 +1560,28 @@ void handle_event(void *ctx,void *data,size_t data_sz)
 			}
 			break;
 		}
+		case CLEAR_CACHE:
+		    printf("Received CLEAR_CACHE from eBPF \n");
+			FILE *file;
+            // Open the file for writing ("w" mode overwrites; use "a" to append)
+            file = fopen(plan->lazyfs.pipe_location, "w");
+
+            // Check if file opened successfully
+            if (file == NULL) {
+                perror("Error opening file");
+                break;
+            }
+
+            // Write some text to the file
+            fprintf(file, "lazyfs::clear-cache");
+
+            fclose(file);
+
+            printf("Data written successfully to lazyfs pipe\n");
+            struct fault *fault = &faults[fault_nr];
+            fault->done++;
+
+            break;
 	}
 
 	if(faults[fault_nr].exit){
@@ -1642,13 +1655,23 @@ void restart_process(void* args){
 	}
 
 	if(node->container){
+	    //Sleeping before sending the signal to give time for the popen process to setup the signal handling
+		//TODO: MAKE BETTER MECHANISM
+	    sleep_for_ms(10);
 		send_signal(node->current_pid,SIGUSR1,node->name);
     	//For Faults we need the actual pid of the restarted process
     	retrieve_new_pid_container(node_to_restart,temp_pid);
+  //  		if (node->container_type == CONTAINER_TYPE_DOCKER){
+		//     send_signal(node->current_pid,SIGSTOP,node->name);
+		// }
     	update_node_pid_ebpf(node_to_restart,node->current_pid,node->pid,current_pid_pre_restart);
-    	reinject_uprobes(node_to_restart);
+  //   	reinject_uprobes(node_to_restart);
+  //  		if (node->container_type == CONTAINER_TYPE_DOCKER){
+		//     send_signal(node->current_pid,SIGCONT,node->name);
+		// }
     }
 	else{
+	    sleep_for_ms(10);
 		send_signal(node->current_pid,SIGUSR1,node->name);
 	}
 
@@ -1762,6 +1785,7 @@ int get_node_nr_from_pid(int pid){
 void print_output(void* args){
 	char inLine[1024];
 	FILE *fp = ((struct process_args*)args)->fp;
+	int pid = ((struct process_args*)args)->pid;
 
     while (fgets(inLine, sizeof(inLine), fp) != NULL)
     {

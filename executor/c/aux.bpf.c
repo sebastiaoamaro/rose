@@ -67,11 +67,6 @@ struct {
 	__uint(max_entries, 256 * 1024);
 } rb SEC(".maps");
 
-struct {
-	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, 256 * 1024);
-} lazyfs_rb SEC(".maps");
-
 //Auxiliary info, leader is pos [0], node_count is pos [1], nodes current_pids from that point on
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);

@@ -74,17 +74,6 @@ struct aux_bpf* start_aux_maps(){
 		printf("[ERROR] libbpf pin API: %d\n", err);
 	}
 
-	err = bpf_map__unpin(skel->maps.lazyfs_rb, "/sys/fs/bpf/lazyfs_rb");
-	if(err) {
-		printf("[ERROR] libbpf unpin API: %d\n", err);
-		//return NULL;
-	}
-
-	err = bpf_map__pin(skel->maps.lazyfs_rb, "/sys/fs/bpf/lazyfs_rb");
-	if(err) {
-		printf("[ERROR] libbpf pin API: %d\n", err);
-	}
-
     err = bpf_map__unpin(skel->maps.faults_specification, "/sys/fs/bpf/faults_specification");
 	if(err) {
 		printf("[ERROR] libbpf unpin API: %d\n", err);
@@ -703,7 +692,6 @@ void kill_child_processes(pid_t parent_pid) {
                     fclose(fp);
 
                     if (ppid == parent_pid) {
-
                         kill(pid, SIGKILL);
                     }
                 }
@@ -714,67 +702,75 @@ void kill_child_processes(pid_t parent_pid) {
 }
 
 pid_t find_host_pid_for_container_pid(pid_t target_pid) {
-    DIR *proc_dir;
+    DIR *proc_dir = NULL;
     struct dirent *entry;
     char path[PATH_MAX];
     char line[256];
-    FILE *status_file;
+    FILE *status_file = NULL;
     pid_t host_pid = -1;
 
-    // Open /proc directory
     proc_dir = opendir("/proc");
     if (!proc_dir) {
         perror("Failed to open /proc");
         return -1;
     }
 
-    // Iterate through all processes
     while ((entry = readdir(proc_dir)) != NULL) {
-        pid_t current_pid;
         char *endptr;
-
-        // Skip non-numeric directory names
-        current_pid = strtol(entry->d_name, &endptr, 10);
-        if (*endptr != '\0')
+        pid_t current_pid = strtol(entry->d_name, &endptr, 10);
+        if (*endptr != '\0')  // skip non-numeric directories
             continue;
 
-        // Build path to process's status file
         snprintf(path, sizeof(path), "/proc/%s/status", entry->d_name);
 
-        // Open the status file
         status_file = fopen(path, "r");
-        if (!status_file)
+        if (!status_file) {
+            // Process may have exited between readdir() and fopen()
             continue;
+        }
 
-        // Search for NStgid line
         while (fgets(line, sizeof(line), status_file)) {
             if (strncmp(line, "NStgid:", 7) == 0) {
-                char *token = strtok(line + 7, "\t");
-                int position = 0;
+                // Skip leading label
+                char *p = line + 7;
 
-                // Parse all PIDs in the namespace hierarchy
-                while (token != NULL) {
-                    pid_t ns_pid = atoi(token);
+                // Skip leading whitespace
+                while (*p == ' ' || *p == '\t') p++;
 
-                    // The last PID is the one in the container's namespace
+                // Parse all PIDs in namespace hierarchy
+                pid_t ns_pid;
+                char *token = strtok(p, "\t ");
+                int idx = 0;
+
+                while (token) {
+                    ns_pid = (pid_t) atoi(token);
                     if (ns_pid == target_pid) {
-                        // The first PID is the host PID
                         host_pid = current_pid;
-                        fclose(status_file);
-                        closedir(proc_dir);
-                        return host_pid;
+                        goto cleanup; // break out safely
                     }
-                    token = strtok(NULL, "\t");
-                    position++;
+                    token = strtok(NULL, "\t ");
+                    idx++;
                 }
                 break;
             }
         }
-        fclose(status_file);
+
+        if (fclose(status_file) != 0 && errno != ENOENT) {
+            // Only log unexpected close errors
+            perror("fclose");
+        }
+        status_file = NULL;
     }
 
-    closedir(proc_dir);
-    return -1;
+cleanup:
+    if (status_file) {
+        if (fclose(status_file) != 0 && errno != ENOENT)
+            perror("fclose");
+    }
+    if (proc_dir)
+        closedir(proc_dir);
+
+    return host_pid;
 }
 
 char **build_nsenter_args(const char *pid_str,int container_type) {
