@@ -52,7 +52,7 @@ Mkfile.old
 dkms.conf
 tests/redis/ycsb-0.17.0/
 tests/cometbft/cometbftconfig/*
-rosetracer/target/
+tracer/target/
 rose/c/.cache/
 .vscode/
 tests/bugdetection/*
@@ -62,4 +62,15 @@ schedules/generatedschedules/*
 */__pycache__/*
 bug_reproductions/traces/*
 .vagrant/*
-rw/
+build
+schedules/reproduced_bugs/redpanda/lxc/binaries
+schedules/tracing_tests/redis/traces
+temp_sched.yaml
+.clj-kondo
+.lsp
+.cache
+.vagrant
+.zed
+schedules/reproduced_bugs/redpanda/setup/*
+/__pycache__/*
+pyrightconfig.json
