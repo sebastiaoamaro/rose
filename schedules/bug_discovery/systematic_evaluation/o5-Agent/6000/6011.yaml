@@ -1,5 +1,5 @@
 execution_plan:
-  maximum_time: 60
+  maximum_time: 120
   setup:
     script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
     duration: 20
@@ -7,18 +7,11 @@ execution_plan:
     script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
   cleanup:
     script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
-    duration: 15
+    duration: 5
   pre_workload:
     script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
-  lazyfs:
-    enabled: true
-    lazyfs_script: /vagrant/lazyfs/lazyfs/scripts/mount-lazyfs.sh
-    #TODO: CRIAR OUTRA PASTA
-    root_dir: /tmp/lazyfs.root
-    mount_dir: /tmp/lazyfs.mnt
-    pipe_location: /tmp/faults.fifo
-
   tracer:
+    functions_file: /vagrant/profiler/redis/functions.txt
     tracer_location: "/vagrant/tracer/target/release/tracer"
     pipe_location: "/tmp/containerpid"
     binary_to_examine: "/usr/local/bin/redis-server"
@@ -38,12 +31,36 @@ nodes:
     ip: 172.38.0.13
 
 faults:
-  lazyfs_fault:
-    type: lazyfs
+  delay-bio-completion:
+    type: process_pause
+    target: node1
+    duration: 20000
+    begin_conditions:
+      - before_manifest_switch:
+          type: user_function
+          symbol: "rewriteAppendOnlyFileBackground"
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 1
+  fail-fsync-manifest-atomic:
+    type: syscall
     target: node1
     details:
-      operation: clear_cache
+      name: fsync
+      return_value: -1
     begin_conditions:
-      - condition1:
+      - during_manifest_write:
+          type: user_function
+          symbol: "backgroundRewriteDoneHandler"
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 1
+  block-replicas-to-prevent_ack:
+    type: block_ips
+    target: node1
+    ips_out:
+      - node2
+      - node3
+    duration: 10000
+    begin_conditions:
+      - isolate_during_switch:
           type: time
-          time: 10000
+          time: 4000

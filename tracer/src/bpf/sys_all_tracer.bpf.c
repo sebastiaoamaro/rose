@@ -166,7 +166,7 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 		int res = bpf_probe_read_user(path, sizeof(path), filename);
 
 		if (res < 0){
-		    bpf_printk("Failed with error %d \n",res);
+		    //bpf_printk("Failed with error %d \n",res);
 		}
 		bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);
 
@@ -200,7 +200,7 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 		int res = bpf_probe_read_user(path, sizeof(path), filename);
 
 		if (res < 0){
-		    bpf_printk("Failed with error %d \n",res);
+		    //bpf_printk("Failed with error %d \n",res);
 		}
 
 		bpf_map_update_elem(&pid_to_open_name,&pid_relevant, path, BPF_ANY);

@@ -1,6 +1,6 @@
 use libc::{rlimit, setrlimit, RLIMIT_NOFILE};
 use std::env;
-use tracer::auxiliary;
+use tracer::manager;
 use tracer::production_tracer;
 use tracer::rw_tracer;
 use tracer::statistics_tracer;
@@ -34,7 +34,7 @@ fn main() {
 
         let mut functions = vec![];
         if functions_file.len() > 0 {
-            functions = auxiliary::parse_file_to_pairs(&functions_file).clone();
+            functions = manager::parse_file_to_pairs(&functions_file).clone();
         }
 
         let binary_path = args[3].to_string();
@@ -60,7 +60,7 @@ fn main() {
 
         let mut functions = vec![];
         if functions_file.len() > 0 {
-            functions = auxiliary::parse_file_to_pairs(&functions_file).clone();
+            functions = manager::parse_file_to_pairs(&functions_file).clone();
         }
 
         let binary_path = args[3].to_string();
@@ -87,7 +87,7 @@ fn main() {
 
         let mut functions = vec![];
         if functions_file.len() > 0 {
-            functions = auxiliary::parse_file_to_pairs(&functions_file).clone();
+            functions = manager::parse_file_to_pairs(&functions_file).clone();
         }
 
         let binary_path = args[3].to_string();
@@ -115,7 +115,7 @@ fn main() {
 
         let mut functions = vec![];
         if functions_file.len() > 0 {
-            functions = auxiliary::parse_file_to_pairs(&functions_file).clone();
+            functions = manager::parse_file_to_pairs(&functions_file).clone();
         }
 
         let binary_path = args[3].to_string();

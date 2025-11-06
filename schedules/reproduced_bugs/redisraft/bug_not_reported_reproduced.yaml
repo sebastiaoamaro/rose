@@ -1,12 +1,13 @@
 execution_plan:
+  maximum_time: 90
   setup:
-    script: /vagrant/schedules/reproduced_bugs/redisraft/scripts/startrediscluster2d1cf30.sh
+    script: /vagrant/schedules/reproduced_bugs/redisraft/setup/startrediscluster2d1cf30.sh
     duration: 5
   cleanup:
     duration: 30
   workload:
     wait_time: 15
-    script: /vagrant/schedules/reproduced_bugs/redisraft/scripts/runworkload.sh
+    script: /vagrant/schedules/reproduced_bugs/redisraft/setup/runworkload.sh
   tracer:
     tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
@@ -110,7 +111,6 @@ faults:
     type: process_kill
     target: redis1
     traced: redis1
-    exit: true
     begin_conditions:
       - condition1:
           type: user_function

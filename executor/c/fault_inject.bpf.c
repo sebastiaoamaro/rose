@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 /* Copyright (c) 2020 Facebook */
 #include "vmlinux.h"
-// #include <bpf/bpf_helpers.h>
-// #include <bpf/bpf_tracing.h>
-// #include <bpf/bpf_core_read.h>
 #include "state_processor.bpf.h"
 #include "fault_inject.h"
 #include "aux.h"
@@ -952,10 +949,27 @@ int BPF_KPROBE(__x64_sys_connect,struct pt_regs *regs)
 
 	return 0;
 }
+
+/////////////////////////////////////////////
+// Pid mapping works as follows:
+// At startup we have PIDS[PID] -> 1, indicating it is the original pid.
+// When a new process is started, we first find the pid which called the exec/fork (PPID) of the new process.
+// We then search for PIDS[PPID] -> PARENT_PID.
+// If PARENT_PID = 1: we check if it is in the translator map TRANSLATOR[PID] (pids which result from a restart are here)
+//      If TRANSLATOR[PID] exists:
+//          TRANSLATOR[PID]->START_PID
+//      Else:
+//          TRANSLATOR[PID]->PARENT_PID
+//      break;
+// Else:
+//      PIDS[PID] = PARENT_PID
+//
+// Now we update the PARENT_PID again, PIDS[PPID] -> PARENT_PID
+////////////////////////////////////////////
+
 SEC("tracepoint/sched/sched_process_exec")
 int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 {
-
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
@@ -970,11 +984,11 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
             ppid = parent->pid;
         }
     }
+    //This holds earlist pid in the tree we have found.
     int original_pid = ppid;
    	int *parent_pid_pointer = bpf_map_lookup_elem(&pids,&ppid);
 
-    //bpf_printk("EXECUTOR DETECTED EXEC: PID:%d, PARENT:%d \n",pid,ppid);
-
+    //If ppid is not in the map it means it is not part of the deployment.
 	if (!parent_pid_pointer) {
 	   return 0;
 	}
@@ -1007,6 +1021,8 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
             bpf_map_update_elem(&pids, &pid, &parent_pid,BPF_ANY);
         }
         original_pid = parent_pid;
+
+        //Lookup again
         parent_pid_pointer = bpf_map_lookup_elem(&pids,&parent_pid);
         if(parent_pid_pointer){
             parent_pid = *parent_pid_pointer;
@@ -1022,10 +1038,12 @@ int handle_fork(struct trace_event_raw_sched_process_fork *ctx)
     int ppid = ctx->parent_pid;
     int child_pid = ctx->child_pid;
     //bpf_printk("EXECUTOR DETECTED FORK: PID:%d, PARENT:%d \n",child_pid,ppid);
-
+    //This holds earlist pid in the tree we have found.
     int original_pid = ppid;
-   	int *parent_pid_pointer = bpf_map_lookup_elem(&pids,&ppid);
 
+    int *parent_pid_pointer = bpf_map_lookup_elem(&pids,&ppid);
+
+    //If ppid is not in the map it means it is not part of the deployment.
 	if (!parent_pid_pointer) {
 	   return 0;
 	}
@@ -1057,6 +1075,8 @@ int handle_fork(struct trace_event_raw_sched_process_fork *ctx)
             bpf_map_update_elem(&pids, &child_pid, &parent_pid,BPF_ANY);
         }
         original_pid = parent_pid;
+
+        //Lookup again
         parent_pid_pointer = bpf_map_lookup_elem(&pids,&parent_pid);
         if(parent_pid_pointer){
             parent_pid = *parent_pid_pointer;
@@ -1065,6 +1085,7 @@ int handle_fork(struct trace_event_raw_sched_process_fork *ctx)
     }
 	return 0;
 }
+
 
 
 // SEC("usdt")

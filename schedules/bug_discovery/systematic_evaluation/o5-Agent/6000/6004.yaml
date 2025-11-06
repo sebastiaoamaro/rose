@@ -1,0 +1,66 @@
+execution_plan:
+  maximum_time: 120
+  setup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
+    duration: 20
+  workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
+  cleanup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
+    duration: 5
+  pre_workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
+  tracer:
+    functions_file: /vagrant/profiler/redis/functions.txt
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: sys_all_trace,container_controlled
+nodes:
+  node1:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.11
+  node2:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.12
+  node3:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.13
+
+faults:
+  fail-openat-rdb-temp:
+    type: syscall
+    target: node2
+    details:
+      name: openat
+      return_value: -1
+    begin_conditions:
+      - rdb_child_open_tmp:
+          type: user_function
+          symbol: "rdbSaveBackground"
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 1
+  fail-write-rdb:
+    type: syscall
+    target: node2
+    details:
+      name: write
+      return_value: -1
+    begin_conditions:
+      - rdb_write_chunk:
+          type: user_function
+          symbol: "rdbSaveRio"
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 1
+  kill-node2-child:
+    type: process_kill
+    target: node2
+    begin_conditions:
+      - kill_mid_save:
+          type: user_function
+          symbol: "rdbSave"
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 1

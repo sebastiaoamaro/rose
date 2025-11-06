@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
 
-use crate::auxiliary;
+use crate::manager;
 
 mod intercept_only {
     include!(concat!(env!("OUT_DIR"), "/intercept_only.skel.rs"));
@@ -21,7 +21,7 @@ pub fn run_tracing(
     _containers: Vec<String>,
     _functions: Vec<String>,
 ) -> Result<()> {
-    auxiliary::bump_memlock_rlimit()?;
+    manager::bump_memlock_rlimit()?;
     //Build the BPF program
     let skel_builder = InterceptOnlySkelBuilder::default();
 
@@ -45,7 +45,7 @@ pub fn run_tracing(
         .attach_tracepoint(libbpf_rs::TracepointCategory::RawSyscalls, "sys_exit")?;
 
     for (_index, pid) in pids.iter().enumerate() {
-        let pid_vec = auxiliary::u32_to_u8_array_little_endian(*pid);
+        let pid_vec = manager::u32_to_u8_array_little_endian(*pid);
         skel.maps.pids.update(&pid_vec, &pid_vec, MapFlags::ANY)?;
     }
 

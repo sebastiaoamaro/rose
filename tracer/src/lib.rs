@@ -1,4 +1,4 @@
-pub mod auxiliary;
+pub mod manager;
 pub mod other_tracing;
 pub mod production_tracer;
 pub mod rw_tracer;

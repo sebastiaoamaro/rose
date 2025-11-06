@@ -110,13 +110,13 @@ void create_node(node* node, char* name,int pid,char* pid_file, char* veth, char
     if (container){
         if (container_type == CONTAINER_TYPE_DOCKER){
             char* interface_name = get_veth_interface_name_docker(node->name);
-            printf("Interface name is %s \n",interface_name);
+            //printf("Interface name is %s \n",interface_name);
             // memset(node->veth,'\0',strlen(interface_name));
             strcpy(node->veth,interface_name);
         }
         if (container_type == CONTAINER_TYPE_LXC){
             char* interface_name = get_veth_interface_name_lxc(node->name);
-            printf("Interface name is %s \n",interface_name);
+            //printf("Interface name is %s \n",interface_name);
             // memset(node->veth,'\0',strlen(interface_name));
             strcpy(node->veth,interface_name);
         }

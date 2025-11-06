@@ -413,7 +413,7 @@ void pause_process(void* args){
 
 
 int send_signal(int pid, int signal,char* node_name){
-	printf("Sending %d to %s with pid %d \n",signal,node_name,pid);
+	printf("SIGNAL:%d TO %s.PID:%d\n",signal,node_name,pid);
 	kill(pid,signal);
 }
 

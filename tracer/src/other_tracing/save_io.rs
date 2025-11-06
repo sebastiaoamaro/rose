@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
 
-use crate::auxiliary;
+use crate::manager;
 
 mod save_io {
     include!(concat!(env!("OUT_DIR"), "/save_io.skel.rs"));
@@ -26,7 +26,7 @@ pub fn run_tracing(
 
     //skel_builder.obj_builder.debug(true);
 
-    auxiliary::bump_memlock_rlimit()?;
+    manager::bump_memlock_rlimit()?;
     let mut open_object = MaybeUninit::uninit();
 
     let open_skel = skel_builder.open(&mut open_object)?;
@@ -52,7 +52,7 @@ pub fn run_tracing(
         .attach_tracepoint(libbpf_rs::TracepointCategory::RawSyscalls, "sys_exit_read")?;
 
     for (_index, pid) in pids.iter().enumerate() {
-        let pid_vec = auxiliary::u32_to_u8_array_little_endian(*pid);
+        let pid_vec = manager::u32_to_u8_array_little_endian(*pid);
         skel.maps.pids.update(&pid_vec, &pid_vec, MapFlags::ANY)?;
     }
 

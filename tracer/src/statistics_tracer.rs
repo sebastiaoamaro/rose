@@ -1,7 +1,7 @@
-use crate::auxiliary::{self, pin_maps, start_tracing};
+use crate::manager::{self, pin_maps, start_tracing};
 use crate::skel_types::{statistics_tracer, SkelEnum};
 use anyhow::Result;
-use auxiliary::pin_maps::PinMapsSkelBuilder;
+use manager::pin_maps::PinMapsSkelBuilder;
 use libbpf_rs::skel::OpenSkel as _;
 use libbpf_rs::skel::SkelBuilder as _;
 use libbpf_rs::{Link, OpenObject};
@@ -19,7 +19,7 @@ pub fn run_tracing(
         "Starting STATS_TRACER, collecting counter for {} functions",
         functions.len(),
     );
-    auxiliary::bump_memlock_rlimit()?;
+    manager::bump_memlock_rlimit()?;
     //Init maps
     let skel_builder_maps = PinMapsSkelBuilder::default();
     let mut open_object_maps = MaybeUninit::uninit();

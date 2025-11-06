@@ -444,7 +444,7 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 	   return 0;
 	}
 
-    //bpf_printk("TRACER EXEC: ADDED PID:%d, PARENT:%d \n",pid,ppid);
+    bpf_printk("TRACER EXEC: ADDED PID:%d, PARENT:%d \n",pid,ppid);
     bpf_map_update_elem(&pid_tree, &pid, &ppid, BPF_ANY);
 
 	return 0;
@@ -463,6 +463,33 @@ int handle_fork(struct trace_event_raw_sched_process_fork *ctx)
     }
     bpf_map_update_elem(&pid_tree, &child_pid, &parent_pid, BPF_ANY);
     //bpf_printk("TRACER FORK: ADDED PID:%d, PARENT:%d \n", child_pid, parent_pid);
+
+    return 0;
+}
+
+SEC("tracepoint/sched/sched_process_exit")
+int handle_process_exit(void *ctx)
+{
+    __u64 pid_tgid = bpf_get_current_pid_tgid();
+    __u32 tgid = pid_tgid >> 32;    // thread group id (PID)
+    __u32 tid  = (__u32)pid_tgid;   // current thread id
+
+    // Ignore thread exits; only act for the group leader (one event per process)
+    if (tid != tgid)
+        return 0;
+
+    // Check if this tgid (process) is present in nodes_pid_translator
+    int *origin_pid_ptr = bpf_map_lookup_elem(&pid_tree, &tgid);
+    if (origin_pid_ptr) {
+        //bpf_printk("PROCESS_EXIT: pid=%d tid=%d is in pid_tree (origin=%d)\n", tgid,tid, *origin_pid_ptr);
+        // Optional: remove to avoid stale entries
+        //bpf_map_delete_elem(&nodes_pid_translator, &tgid);
+    } else {
+        //bpf_printk("PROCESS_FREE: pid=%d not in nodes_pid_translator\n", tgid);
+    }
+
+    // Optional cleanup of pids map
+    //bpf_map_delete_elem(&pids, &tgid);
 
     return 0;
 }

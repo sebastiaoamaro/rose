@@ -181,14 +181,13 @@ int main()
 	write_start_event();
 	start_container_nodes_scripts();
 	start_lazyfs();
-
-	start_nodes_scripts();
 	start_pre_workload();
 
 	//Start eBPF FI program
 	choose_leader();
 	setup_begin_conditions();
 	add_faults_to_bpf();
+
 	struct fault_inject_bpf* fault_inject_bpf;
 
 	fault_inject_bpf = fault_inject(FAULT_COUNT,constants.timemode);
@@ -197,6 +196,9 @@ int main()
 		printf("Error in creating fault injection bpf\n");
 		goto cleanup;
 	}
+
+	//These are nodes which are not containers thus we know their pid beforehand and we can start them after the setup, catching all events
+	start_nodes_scripts();
 
 	pthread_t thread_id;
 	pthread_create(&thread_id, NULL, (void *)count_time, NULL);
@@ -395,7 +397,7 @@ void start_tracer(){
 	struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
 	args->fp= fp;
 	args->pid = &(deployment_tracer->pid);
-	//pthread_create(&tracer_output, NULL, (void *)print_output, (void*)args);
+	pthread_create(&tracer_output, NULL, (void *)print_output, (void*)args);
 	sleep_for_ms(10);
 	send_signal(deployment_tracer->pid,SIGUSR1,"tracer");
 
@@ -576,7 +578,7 @@ void start_workload(){
 			return;
 		if(plan->workload.pid == 0)
 			return;
-		printf("Started workload from execution plan with pid %d \n",plan->workload.pid);
+		printf("STARTED WORKLOAD, PID:%d \n",plan->workload.pid);
 		kill(plan->workload.pid,SIGUSR1);
 }
 
@@ -587,12 +589,12 @@ void start_pre_workload(){
 		return;
 	if(plan->pre_workload.pid == 0)
 		return;
-	printf("Started pre_workload from execution plan with pid %d \n",plan->pre_workload.pid);
+	printf("STARTED PRE_WORKLOAd, PID:%d\n",plan->pre_workload.pid);
 	kill(plan->pre_workload.pid,SIGUSR1);
 
     int status;
 
-    printf("Waiting for pre_workload %d to terminate...\n", plan->pre_workload.pid);
+    printf("WAITING FOR PRE_WORKLOAD TO FINISH...\n");
 
     if (waitpid(plan->pre_workload.pid, &status, 0) == -1) {
             perror("waitpid failed");
@@ -614,7 +616,7 @@ void start_lazyfs(){
 	if(plan->lazyfs.pid == 0)
 		return;
 
-	printf("Started lazyfs from execution plan with pid %d \n",plan->lazyfs.pid);
+	printf("STARTED LAZYFS, PID:%d\n",plan->lazyfs.pid);
 	kill(plan->lazyfs.pid,SIGUSR1);
 }
 
@@ -660,13 +662,13 @@ void setup_node_scripts(){
 
 		if (nodes[i].container){
 		    if (!strlen(nodes[i].pid_file)){
-				printf("Starting processes with command %s \n",nodes[i].script);
+				printf("NODE[%d].command=[%s]\n",i,nodes[i].script);
 				start_target_process_in_container(i,&nodes[i].pid);
 			}
 		}
 		else if (!nodes[i].container){
 			start_target_process(i,&nodes[i].pid);
-			printf("Node %d with pid %d \n",i,nodes[i].pid);
+			printf("NODE[%d].PID=[%d]\n",i,nodes[i].pid);
 			nodes[i].current_pid = nodes[i].pid;
 			int one = 1;
 			bpf_map_update_elem(constants.pids, &nodes[i].current_pid, &one, BPF_ANY);
@@ -675,33 +677,17 @@ void setup_node_scripts(){
 }
 
 void collect_container_processes(){
-    printf("Collecting container processes \n");
+    printf("COLLECTING CONTAINER PROCESSES PIDS\n");
 	for(int i = 0; i< NODE_COUNT; i++){
 		if (nodes[i].container && strlen(nodes[i].script) > 0 && !(strlen(nodes[i].pid_file))){
-			printf("WAITING FOR PID \n");
-			// int child_pid = get_children_pids(nodes[i].pid);
-
-			// while(!child_pid){
-			// 	sleep(1);
-			// 	child_pid = get_children_pids(nodes[i].pid);
-			// }
-			// int script_pid = get_children_pids(child_pid);
-
-			// while(!script_pid){
-			// 	sleep(1);
-			// 	script_pid = get_children_pids(child_pid);
-			// }
-
+		    //The pid is now the pid of the process we started with popen, not of the node
 			int process_pid = nodes[i].pid;
-
 			nodes[i].pid = process_pid;
 			nodes[i].current_pid = process_pid;
-			//send_signal(process_pid,SIGSTOP,nodes[i].name);
-			int one = 1;
 		}
 		if (nodes[i].container){
+		     //If the node pid is in a file inside the container check for it
           	 if (strlen(nodes[i].pid_file)){
-                printf("LOOKING FOR PID IN FILE %s\n",nodes[i].pid_file);
                 char *dir;
                 if (nodes[i].container_type == CONTAINER_TYPE_DOCKER){
                     dir = get_docker_container_location(nodes[i].name);
@@ -713,7 +699,6 @@ void collect_container_processes(){
                 char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
                 snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].pid_file);
 
-                printf("Combined path %s\n", combined_path);
                 // Wait until file contains the pid
                 struct stat st;
                 while (1) {
@@ -738,7 +723,7 @@ void collect_container_processes(){
                 }
 
                 int host_pid = find_host_pid_for_container_pid(pid);
-                printf("HOST PID IS %d\n",host_pid);
+                printf("NODE[%d].HOST_PID: %d\n",i,host_pid);
                 nodes[i].pid = host_pid;
                 nodes[i].current_pid = host_pid;
                 //TODO: This basically means redpanda can't setup in time for our experiment messes everything up
@@ -752,9 +737,9 @@ void collect_container_processes(){
 	}
 }
 
-
+//Sends the info of the nodes to the tracer.
+//If it is a container the pid right now is of the script, not of the node itself.
 void send_info_to_tracer(){
-
 	for(int i = 0; i< NODE_COUNT; i++){
 			if(nodes[i].container){
 				nodes[i].if_index = get_interface_index(nodes[i].veth);
@@ -764,7 +749,6 @@ void send_info_to_tracer(){
 				send_node_and_pid_to_tracer(nodes[i].container_pid,0,nodes[i].current_pid,nodes[i].name,nodes[i].if_index);
 			}
 	}
-
 }
 
 void send_node_and_pid_to_tracer(int container_pid,int container_type,int pid, char* node_name,int if_index){
@@ -775,16 +759,25 @@ void send_node_and_pid_to_tracer(int container_pid,int container_type,int pid, c
             close(deployment_tracer->pipe_write_end);
             exit(EXIT_FAILURE);
         }
+        char buffer[16];
+        ssize_t bytesRead;
+        bytesRead = read(deployment_tracer->pipe_read_end, buffer, sizeof(buffer) - 1);
 
-		//Here we wait until tracer created the structs until we proceed
-        char buffer[8];
-        ssize_t bytesRead = read(deployment_tracer->pipe_read_end, buffer, sizeof(buffer) - 1);
         if (bytesRead == -1) {
             perror("read");
             close(deployment_tracer->pipe_read_end);
             exit(EXIT_FAILURE);
+        } else if (bytesRead == 0) {
+            fprintf(stderr, "read returned EOF while waiting for tracer acknowledgment\n");
+            close(deployment_tracer->pipe_read_end);
+            exit(EXIT_FAILURE);
         }
-    printf("ROSE->TRACER: %s", message);
+
+        /* Null-terminate if needed (not used here) */
+        buffer[bytesRead] = '\0';
+
+        //This should contain a message called done
+        //printf("ROSE->TRACER: %s", buffer);
 }
 
 void start_nodes_scripts(){
@@ -798,7 +791,8 @@ void start_nodes_scripts(){
 void start_container_nodes_scripts(){
 	print_block("CONTAINER SCRIPTS: STARTED");
 	for(int i=0;i<NODE_COUNT;i++){
-		if (nodes[i].container){
+
+		if (nodes[i].container && !(strlen(nodes[i].pid_file))){
 			kill(nodes[i].pid,SIGUSR1);
 			//Need to have the pid of the process inside the container
 			//TODO: DOES NOT WORK FOR LXC
@@ -1541,6 +1535,11 @@ void handle_event(void *ctx,void *data,size_t data_sz)
 
 			int node_nr = get_node_nr_from_pid(e->pid);
 
+			if (node_nr < 0){
+			    printf("Node not found, fault not injected\n");
+				break;
+			}
+
 			args->duration = fault->duration;
 			args->node_to_restart = node_nr;
 
@@ -1600,31 +1599,24 @@ void choose_leader(){
 			if(error){
 				printf("Error in changing leader %d \n",error);
 			}
-
 			//printf("Node %s is %d \n",nodes[i].name,one);
-
 			error = bpf_map_update_elem(constants.nodes_status_map_fd,&(nodes[i].pid),&one,BPF_ANY);
 			if(error){
 				printf("Error in updating node status for leader %d \n",error);
 			}
 		}else{
 			//printf("Node %s is %d \n",nodes[i].name,zero);
-
 			int error = bpf_map_update_elem(constants.nodes_status_map_fd,&(nodes[i].pid),&zero,BPF_ANY);
 			if(error){
 				printf("Error in updating a node %d \n",error);
 			}
-
 		}
-
 		int pos = i + 2;
 		int error = bpf_map_update_elem(constants.auxiliary_info_map_fd,&pos,&(nodes[i].pid),BPF_ANY);
 		if(error){
 			printf("Error in adding pid to auxiliary_info %d \n",error);
 		}
-
 	}
-
 }
 
 void restart_process(void* args){
@@ -1661,12 +1653,12 @@ void restart_process(void* args){
 		send_signal(node->current_pid,SIGUSR1,node->name);
     	//For Faults we need the actual pid of the restarted process
     	retrieve_new_pid_container(node_to_restart,temp_pid);
-  //  		if (node->container_type == CONTAINER_TYPE_DOCKER){
+        //if (node->container_type == CONTAINER_TYPE_DOCKER){
 		//     send_signal(node->current_pid,SIGSTOP,node->name);
 		// }
     	update_node_pid_ebpf(node_to_restart,node->current_pid,node->pid,current_pid_pre_restart);
-  //   	reinject_uprobes(node_to_restart);
-  //  		if (node->container_type == CONTAINER_TYPE_DOCKER){
+        //reinject_uprobes(node_to_restart);
+        //if (node->container_type == CONTAINER_TYPE_DOCKER){
 		//     send_signal(node->current_pid,SIGCONT,node->name);
 		// }
     }
@@ -1677,18 +1669,19 @@ void restart_process(void* args){
 
 }
 
+//Gets the child of the child pid we started with popen.
+//This assumes a sh script, which uses exec -a "$0" to start the node process
 void retrieve_new_pid_container(int node_nr,int nsenter_pid){
 	int child_pid = get_children_pids(nsenter_pid);
 	while(!child_pid){
 		child_pid = get_children_pids(nsenter_pid);
 	}
-
 	int script_pid = get_children_pids(child_pid);
 	while(!script_pid){
 		script_pid = get_children_pids(child_pid);
 	}
 	nodes[node_nr].current_pid = script_pid;
-	printf("Changed pid in node %d from %d to %d \n",node_nr,nsenter_pid,script_pid);
+	printf("NODE[%d]: PID[%d] -> PID[%d] CHANGED\n",node_nr,nsenter_pid,script_pid);
 
 }
 
@@ -1696,26 +1689,28 @@ void retrieve_new_pid_container(int node_nr,int nsenter_pid){
 //boot_pid the pid that information is based in the maps
 //old pid is the pid pre restart
 void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
+    printf("NEW IN PID_TREE: CHILD: %d, PARENT: %d\n",new_pid,old_pid);
 	printf("PID TRANSLATED: NEW: %d, OLD: %d\n",new_pid,boot_pid);
 
 	int one = 1;
-
+	//Insert in the map which is a pid_tree
 	int error = bpf_map_update_elem(constants.pids, &new_pid, &old_pid, BPF_ANY);
 	if(error){
 		printf("Error inserting in pids map %d \n",error);
 	}
 
+	//Insert in the map which maps new_pid -> boot_pid, to access faults structures
 	error = bpf_map_update_elem(constants.nodes_translator_map_fd,&new_pid,&boot_pid,BPF_ANY);
 	if(error){
 		printf("Error inserting in pid translator %d \n",error);
 	}
 
+	//Insert in the map which contains node_status (checks if faults are gonna be injected)
 	int zero = 0;
 	error = bpf_map_update_elem(constants.nodes_status_map_fd,&new_pid,&zero,BPF_ANY);
 	if(error){
 		printf("Error inserting in node_status %d \n",error);
 	}
-
 
 	error = bpf_map_delete_elem(constants.nodes_status_map_fd,&old_pid);
 	if(error){
@@ -1727,8 +1722,30 @@ void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
 	if(error){
 		printf("Error in adding pid to auxiliary_info %d \n",error);
 	}
+
+	//Updates the pid in the fault structure, so that we know in what pid the fault must be injected
+    for (int i = 0; i < FAULT_COUNT; i++) {
+        struct simplified_fault fault;
+        int lookup_err = bpf_map_lookup_elem(constants.bpf_map_fault_fd, &i, &fault);
+        if (lookup_err) {
+            printf("update_faults_pid_in_bpf: lookup failed for key %d errno=%d\n", i, lookup_err);
+            continue;
+        }
+
+        if (fault.pid == old_pid) {
+            fault.pid = new_pid;
+            int update_err = bpf_map_update_elem(constants.bpf_map_fault_fd, &i, &fault, BPF_ANY);
+            if (update_err) {
+                printf("update_faults_pid_in_bpf: failed to update fault %d pid -> %d (err=%d)\n", i, new_pid, update_err);
+            } else {
+                printf("update_faults_pid_in_bpf: updated fault %d pid %d -> %d\n", i, old_pid, new_pid);
+            }
+        }
+    }
 }
 
+//Reinject the uprobes after we kill a process, in theory it might not be needed due to the use of -1 and process tracking
+// TODO: Test without this
 void reinject_uprobes(int node_nr){
 	node *node = &nodes[node_nr];
 	if(node->container){
@@ -1751,7 +1768,6 @@ void reinject_uprobes(int node_nr){
 				if(type == USER_FUNCTION){
 					user_function user_function = faults[i].fault_conditions_begin[j].condition.user_function;
 					faults[i].fault_conditions_begin[j].condition.user_function.cond_nr = user_func_cond_nr+STATE_PROPERTIES_COUNT;
-
 					if(node->container){
 						char *dir;
 						if (nodes[node_nr].container_type == CONTAINER_TYPE_DOCKER)
@@ -1778,7 +1794,7 @@ int get_node_nr_from_pid(int pid){
 			return i;
 		}
 	}
-	return 0;
+	return -1;
 }
 
 //prints output of process we started
@@ -1786,7 +1802,6 @@ void print_output(void* args){
 	char inLine[1024];
 	FILE *fp = ((struct process_args*)args)->fp;
 	int pid = ((struct process_args*)args)->pid;
-
     while (fgets(inLine, sizeof(inLine), fp) != NULL)
     {
 			printf("%s", inLine);

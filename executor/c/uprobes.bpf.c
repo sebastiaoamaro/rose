@@ -50,6 +50,14 @@ struct {
 	__uint(max_entries, 1);
 } cgroup_map SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 16384);
+	__type(key, int);
+	__type(value,int);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} pids SEC(".maps");
+
 
 /* key: pid.  value: start time */
 struct {
@@ -58,7 +66,6 @@ struct {
 	__type(key, u32);
 	__type(value, u64);
 } starts SEC(".maps");
-
 
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
@@ -149,7 +156,6 @@ static void switch_leader(struct pt_regs *ctx)
 SEC("kprobe/dummy_kprobe")
 int BPF_KPROBE(dummy_kprobe)
 {
-	//bpf_printk("In uprobe for cond_pos:%d \n",cond_pos);
 	if (primary_function){
 		switch_leader(ctx);
 	}else{

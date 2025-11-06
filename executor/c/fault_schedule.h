@@ -16,7 +16,6 @@
 #define MAX_FAULTS 32
 
 typedef struct Tracer{
-
     char tracer_location[STRING_SIZE];
     char pipe_location[STRING_SIZE];
     char functions_file[STRING_SIZE];

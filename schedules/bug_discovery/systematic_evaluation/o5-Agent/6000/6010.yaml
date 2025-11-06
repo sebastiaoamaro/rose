@@ -1,5 +1,5 @@
 execution_plan:
-  maximum_time: 60
+  maximum_time: 120
   setup:
     script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
     duration: 20
@@ -7,18 +7,11 @@ execution_plan:
     script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
   cleanup:
     script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
-    duration: 15
+    duration: 5
   pre_workload:
     script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
-  lazyfs:
-    enabled: true
-    lazyfs_script: /vagrant/lazyfs/lazyfs/scripts/mount-lazyfs.sh
-    #TODO: CRIAR OUTRA PASTA
-    root_dir: /tmp/lazyfs.root
-    mount_dir: /tmp/lazyfs.mnt
-    pipe_location: /tmp/faults.fifo
-
   tracer:
+    functions_file: /vagrant/profiler/redis/functions.txt
     tracer_location: "/vagrant/tracer/target/release/tracer"
     pipe_location: "/tmp/containerpid"
     binary_to_examine: "/usr/local/bin/redis-server"
@@ -36,14 +29,35 @@ nodes:
     container: true
     script: /scripts/start_redis.sh
     ip: 172.38.0.13
-
 faults:
-  lazyfs_fault:
-    type: lazyfs
+  pause-node1-during-save:
+    type: process_pause
+    target: node1
+    duration: 50000
+    begin_conditions:
+      - long_save_start:
+          type: user_function
+          symbol: "rdbSave"
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 1
+  kill-node1-to_simulate_oom_crash:
+    type: process_kill
+    target: node1
+    begin_conditions:
+      - kill_during_alloc:
+          type: user_function
+          symbol: "zmalloc"
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 1
+  fail-write-on-save:
+    type: syscall
     target: node1
     details:
-      operation: clear_cache
+      name: write
+      return_value: -1
     begin_conditions:
-      - condition1:
-          type: time
-          time: 10000
+      - write_when_memory_low:
+          type: file_syscall
+          file_name: ".rdb"
+          syscall_name: "write"
+          call_count: 1

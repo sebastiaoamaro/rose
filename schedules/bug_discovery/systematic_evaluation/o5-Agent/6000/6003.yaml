@@ -1,5 +1,5 @@
 execution_plan:
-  maximum_time: 60
+  maximum_time: 120
   setup:
     script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
     duration: 20
@@ -7,22 +7,16 @@ execution_plan:
     script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
   cleanup:
     script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
-    duration: 15
+    duration: 5
   pre_workload:
     script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
-  lazyfs:
-    enabled: true
-    lazyfs_script: /vagrant/lazyfs/lazyfs/scripts/mount-lazyfs.sh
-    #TODO: CRIAR OUTRA PASTA
-    root_dir: /tmp/lazyfs.root
-    mount_dir: /tmp/lazyfs.mnt
-    pipe_location: /tmp/faults.fifo
-
   tracer:
+    functions_file: /vagrant/profiler/redis/functions.txt
     tracer_location: "/vagrant/tracer/target/release/tracer"
     pipe_location: "/tmp/containerpid"
     binary_to_examine: "/usr/local/bin/redis-server"
     tracing_type: sys_all_trace,container_controlled
+
 nodes:
   node1:
     container: true
@@ -38,12 +32,35 @@ nodes:
     ip: 172.38.0.13
 
 faults:
-  lazyfs_fault:
-    type: lazyfs
+  fail-fsync-on-flush:
+    type: syscall
     target: node1
     details:
-      operation: clear_cache
+      name: fsync
+      return_value: -1
     begin_conditions:
-      - condition1:
+      - on_flush_appendonly:
+          type: user_function
+          symbol: "flushAppendOnlyFile"
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 1
+
+  block-replica-acks:
+    type: block_ips
+    target: node2
+    ips_in:
+      - node1
+    duration: 20000
+    begin_conditions:
+      - isolate_replicas:
           type: time
-          time: 10000
+          time: 2000
+  pause-node1-to-prevent-retry:
+    type: process_pause
+    target: node1
+    duration: 10000
+    begin_conditions:
+      - pause_after_fsync_failure:
+          type: syscall
+          syscall_name: "fsync"
+          call_count: 1

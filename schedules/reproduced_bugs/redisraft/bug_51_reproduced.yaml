@@ -1,14 +1,14 @@
 execution_plan:
-  maximum_time: 45
+  maximum_time: 90
   setup:
-    script: /vagrant/schedules/reproduced_bugs/redisraft/scripts/startrediscluster2d1cf30.sh
+    script: /vagrant/schedules/reproduced_bugs/redisraft/setup/startrediscluster2d1cf30.sh
     duration: 5
-  cleanup:
-    script: /vagrant/schedules/reproduced_bugs/redisraft/scripts/cleanup.sh
-    duration: 15
+  # cleanup:
+  #   script: /vagrant/schedules/reproduced_bugs/redisraft/setup/cleanup.sh
+  #   duration: 15
   workload:
     wait_time: 15
-    script: /vagrant/schedules/reproduced_bugs/redisraft/scripts/runworkload.sh
+    script: /vagrant/schedules/reproduced_bugs/redisraft/setup/runworkload.sh
   tracer:
     tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid

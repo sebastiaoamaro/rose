@@ -1,19 +1,20 @@
-import math
-import struct
-import sys
 import ipaddress
-import yaml
+import math
 import os
 import re
+import struct
+import sys
+from pathlib import Path
+
 import schedule_parser.nodes
-from schedule_parser.faults import Fault, block_ips, syscall, check_if_syscall_supported
+import yaml
 from schedule_parser.conditions import (
     file_syscall_condition,
     syscall_condition,
     time_cond,
     user_function_condition,
 )
-from pathlib import Path
+from schedule_parser.faults import Fault, block_ips, check_if_syscall_supported, syscall
 
 
 class Event:
@@ -339,9 +340,9 @@ class History:
                     time_rounded = math.floor(time / 10) * 10
                     fault.start_time = time_rounded
 
-                    cond = time_cond()
-                    cond.time = time_rounded
-                    fault.begin_conditions.append(cond)
+                    # cond = time_cond()
+                    # cond.time = time_rounded
+                    # fault.begin_conditions.append(cond)
                 # If we can not leverage information from the syscall itself, look for previous ones, this can not be done here takes to much time
                 else:
                     fault_nr += 1

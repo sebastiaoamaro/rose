@@ -1,5 +1,5 @@
 execution_plan:
-  maximum_time: 60
+  maximum_time: 120
   setup:
     script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
     duration: 20
@@ -7,18 +7,11 @@ execution_plan:
     script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
   cleanup:
     script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
-    duration: 15
+    duration: 5
   pre_workload:
     script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
-  lazyfs:
-    enabled: true
-    lazyfs_script: /vagrant/lazyfs/lazyfs/scripts/mount-lazyfs.sh
-    #TODO: CRIAR OUTRA PASTA
-    root_dir: /tmp/lazyfs.root
-    mount_dir: /tmp/lazyfs.mnt
-    pipe_location: /tmp/faults.fifo
-
   tracer:
+    functions_file: /vagrant/profiler/redis/functions.txt
     tracer_location: "/vagrant/tracer/target/release/tracer"
     pipe_location: "/tmp/containerpid"
     binary_to_examine: "/usr/local/bin/redis-server"
@@ -38,12 +31,33 @@ nodes:
     ip: 172.38.0.13
 
 faults:
-  lazyfs_fault:
-    type: lazyfs
+  net_partition_during_migrate:
+    type: block_ips
+    target: node1
+    ips_out:
+      - node3
+    duration: 20000
+    begin_conditions:
+      - migrate_started:
+          type: user_function
+          symbol: "migrateCommand"
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 1
+  kill-target-midtransfer:
+    type: process_kill
+    target: node3
+    begin_conditions:
+      - kill_target:
+          type: time
+          time: 2000
+  fail-write-on-source:
+    type: syscall
     target: node1
     details:
-      operation: clear_cache
+      name: write
+      return_value: -1
     begin_conditions:
-      - condition1:
-          type: time
-          time: 10000
+      - fail_ack_write:
+          type: syscall
+          syscall_name: "write"
+          call_count: 20

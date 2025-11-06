@@ -31,7 +31,15 @@ def parse_fault_schedule(filename):
         if "maximum_time" in fault_schedule["execution_plan"]:
             max_time = fault_schedule["execution_plan"]["maximum_time"]
 
-    nodes = parse_nodes(fault_schedule["nodes"])
+    else:
+        print("No execution_plan in schedules!")
+        exit(1)
+
+    if "nodes" in fault_schedule:
+        nodes = parse_nodes(fault_schedule["nodes"])
+    else:
+        print("No nodes in schedules!")
+        exit(1)
 
     if "faults" in fault_schedule:
         faults = parse_faults(fault_schedule["faults"], nodes)

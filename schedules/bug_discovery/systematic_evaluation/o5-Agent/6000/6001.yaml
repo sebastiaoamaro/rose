@@ -1,0 +1,70 @@
+execution_plan:
+  maximum_time: 120
+  setup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_cluster.sh
+    duration: 20
+  workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/start_workload.sh
+  cleanup:
+    script: /vagrant/schedules/bug_discovery/redis_setup/cleanup.sh
+    duration: 5
+  pre_workload:
+    script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
+  tracer:
+    functions_file: /vagrant/profiler/redis/functions.txt
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: sys_all_trace,container_controlled
+nodes:
+  node1:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.11
+  node2:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.12
+  node3:
+    container: true
+    script: /scripts/start_redis.sh
+    ip: 172.38.0.13
+
+faults:
+  fail-fsync-manifest:
+    type: syscall
+    target: node1
+    details:
+      name: fsync
+      return_value: -1
+    begin_conditions:
+      - on_background_rewrite_done:
+          type: user_function
+          symbol: "backgroundRewriteDoneHandler"
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 1
+
+  delay-node1-to-widen-window:
+    type: process_pause
+    target: node1
+    duration: 10000
+    begin_conditions:
+      - pause_after_rewrite:
+          type: user_function
+          symbol: "rewriteAppendOnlyFileBackground"
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 1
+
+  block-replicas-to-isolate:
+    type: block_ips
+    target: node1
+    ips_out:
+      - node2
+      - node3
+    duration: 20000
+    begin_conditions:
+      - net_isolate_during_commit:
+          type: user_function
+          symbol: "backgroundRewriteDoneHandler"
+          binary_location: "/usr/local/bin/redis-server"
+          call_count: 1

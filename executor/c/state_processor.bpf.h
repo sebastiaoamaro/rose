@@ -77,6 +77,7 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 
 	struct info_state *current_state;
 
+	//Checks the schedule info for a specific state_key (e.g. write invocations), and checks if we a condition for a fault triggered
 	current_state = bpf_map_lookup_elem(relevant_state_info,&information_pid);
 	if (current_state){
 		current_state->current_value++;
@@ -86,9 +87,11 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 				if (current_state->relevant_states[i]){
 					u64 relevant_value = current_state->relevant_states[i];
 					if ((value % relevant_value == 0) && relevant_value != 0){
-					   //bpf_printk("Found relevant value \n");
+					   bpf_printk("COND[%d]=TRUE, UPDATING STATE \n",state_key);
+					   //For all the faults which leverage this condition we sheck if the rest of the conditions are already triggered
 					   process_counter(state_key,relevant_value,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
 					}
+					//If we want to repeat a fault
 					if(current_state->repeat && (value % relevant_value == 0)){
 					   process_counter(state_key,relevant_value,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
 					}
@@ -112,6 +115,7 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 		}
 	}
 
+	//This checks if a fault for this node was triggered by another node, relevant when traced is not equal to target in the schedule
 	int *node_status = bpf_map_lookup_elem(nodes_status,&current_pid);
 
 	//node_status value 2 means there is a fault to inject on this node
@@ -131,17 +135,20 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 static inline void process_counter(int stateinfo,int state_condition_value, int pid_to_use,int current_pid,int fault_count,
 	struct bpf_map *faults_specification,struct bpf_map *faults,struct bpf_map *rb,struct bpf_map *auxiliary_info,struct bpf_map *nodes_status){
 	struct callback_ctx data;
-
 	struct maps_ebpf maps;
 
+	//Contains the ebpf maps we leverage
 	maps.faults_specification = faults_specification;
-	maps.rb	 = rb;
+	maps.rb	= rb;
 	maps.auxiliary_info	 = auxiliary_info;
 	maps.nodes_status = nodes_status;
 
+	//Contains the auxiliary data to check if we need to inject a fault
 	data.state_condition = stateinfo;
 	data.state_condition_value = state_condition_value;
+	//This is the pid which was used as key for all the mappings
 	data.pid_to_use = pid_to_use;
+	//This is the pid which called the a probe
 	data.current_pid = current_pid;
 	data.fault_count = fault_count;
 	data.maps = &maps;
@@ -161,7 +168,6 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 		int pid_to_use = data->pid_to_use;
 		int current_pid = data->current_pid;
 		int state_condition_value = data->state_condition_value;
-
 		int relevant_conditions = fault->relevant_conditions;
 		int run = fault->run;
 
@@ -209,19 +215,18 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 		}
 
 		//If it is a majority fault we keep going
-		if (fault->target == -2){
-			;
-		}
+		// if (fault->target == -2){
+		// 	;
+		// }
 		//If it is not leave since we can not do anything in this pid
-		else{
-			if(fault->pid != pid_to_use){
-			    //bpf_printk("Different pid in fault%d and pid%d\n",fault->pid,pid_to_use);
-				return 0;
-			}
-		}
+		// else{
+		// 	if(fault->pid != pid_to_use){
+		// 	    bpf_printk("Different pid in fault: %d and pid: %d\n",fault->pid,pid_to_use);
+		// 		return 0;
+		// 	}
+		// }
 
-		//Check if fault is done, if it is a majority we need to know if it is already done in a quorum
-
+		//Check if fault is done, if it is a majority we need to know if it was already done for a quorum
 		if (fault->target == -2){
 			if(fault->done >= fault->quorum_size){
 				return 0;
@@ -231,6 +236,7 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 				return 0;
 		}
 
+		//Check the conditions for a fault, if run == relevant_conditions we are ready
 		if (fault->initial.fault_type_conditions){
 			int *conditions = fault->initial.fault_type_conditions;
 			if (conditions[state_condition]){
@@ -240,6 +246,7 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 				if (time){
 				    time_true = fault->initial.conditions_match[TIME_STATE];
 				}
+				//If we use time as a condition, the rest of the conditions can only be triggered after it
 				if (time_true){
     				if(state_condition_value > 0){
     					if (!(fault->initial.conditions_match[state_condition])){
@@ -261,7 +268,7 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 
 		int zero = 0;
 		if (run >= relevant_conditions){
-			bpf_printk("FAULT: %d, RUN: %d, RC: %d\n",fault->fault_nr,run,relevant_conditions);
+			//bpf_printk("FAULT: %d, RUN: %d, RC: %d\n",fault->fault_nr,run,relevant_conditions);
 				//TODO: implement this only works for process faults
 			if (fault->target == -1){
 				//TODO: inject fault on leader
@@ -295,15 +302,15 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 					}
 
 				}
-
-
 			}
 			//Network faults are done with TC they have no pid, so pid is 0
 			else if (fault->faulttype == NETWORK_ISOLATION ||fault->faulttype == DROP_PACKETS ||fault->faulttype == BLOCK_IPS){
 				inject_fault(fault->faulttype,fault->target_if_index,fault,*pos,data->maps);
 			}
 			else{
-				inject_fault(fault->faulttype,current_pid,fault,*pos,data->maps);
+			    //inject_fault(fault->faulttype,current_pid,fault,*pos,data->maps);
+				//Trys to kill the main pid
+				inject_fault(fault->faulttype,fault->pid,fault,*pos,data->maps);
 			}
 		}
 
@@ -311,16 +318,15 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 	return 0;
 }
 
-static inline int inject_fault(int fault_type,int pid,struct simplified_fault *fault,int pos,struct maps_ebpf *maps){
+static inline int inject_fault(int fault_type,int current_pid,struct simplified_fault *fault,int pos,struct maps_ebpf *maps){
 
-	int pid_to_target = pid;
+	int pid_to_target = current_pid;
 	int running_pid = bpf_get_current_pid_tgid() >> 32;
 
 	if (fault){
 		//If it is a fault to inject on a leader we use the leader_pid
 		//TODO: This is no longer necessary since the pid_to_target needs to be the one here
 		if (fault->target == -1){
-			bpf_printk("Looking to inject fault in a leader \n");
 			int zero = 0;
 			int *leader_pointer = bpf_map_lookup_elem(maps->auxiliary_info,&zero);
 
@@ -353,7 +359,7 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 
 		if(fault_type == PROCESS_KILL || fault_type == PROCESS_STOP){
 
-		    //bpf_printk("Running pid:%d, pid_to_target:%d \n",running_pid,pid_to_target);
+		    //bpf_printk("RUNNING_PID:%d, TARGET_PID:%d \n",running_pid,pid_to_target);
 			if(running_pid != pid_to_target){
 				if (fault->faults_injected_counter >= fault->quorum_size){
 					return 0;
@@ -368,9 +374,7 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 			//Do this as early as possible for contention
 			fault->done++;
 			if (fault_type == PROCESS_KILL){
-     			__u64 pid_tgid = bpf_get_current_pid_tgid();
-     			__u32 pid_running = pid_tgid >> 32;
-				bpf_printk("KILLING PID: %d\n", pid_running);
+				bpf_printk("KILLING PID: %d\n", running_pid);
 				bpf_send_signal(9);
 				__u64 time = bpf_ktime_get_ns();
 				__u64 time_ms = time / 1000000;
@@ -397,7 +401,7 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 			e->pid = pid_to_target;
 			e->fault_nr = fault->fault_nr;
 
-			bpf_printk("Sent %d to userpace to pid %d for fault_nr %d\n",fault_type,e->pid,fault->fault_nr);
+			bpf_printk("SENT FAULT_TYPE:%d, PID:%d, FAULT_NR:%d TO USERSPACE\n",fault_type,e->pid,fault->fault_nr);
 			bpf_ringbuf_submit(e, 0);
 
 			int fault_code = 0;
@@ -429,13 +433,13 @@ static inline int inject_fault(int fault_type,int pid,struct simplified_fault *f
 			e->pid = pid_to_target;
 			e->fault_nr = fault->fault_nr;
 
-			bpf_printk("Sent %d to userpace to pid %d for fault_nr %d\n",fault_type,e->pid,fault->fault_nr);
+			bpf_printk("SENT FAULT_TYPE:%d, PID:%d, FAULT_NR:%d TO USERSPACE\n",fault_type,e->pid,fault->fault_nr);
 			bpf_ringbuf_submit(e, 0);
 		}
 
 
 		else{
-			bpf_printk("FAULT:%d STARTING, TYPE: %d, PID: %d\n",fault->fault_nr,fault_type,pid_to_target);
+			bpf_printk("FAULT:%d, TYPE:%d, PID:%d STARTING\n",fault->fault_nr,fault_type,pid_to_target);
 			__u64 time = bpf_ktime_get_ns();
 			__u64 time_ms = time / 1000000;
 			fault->start_time = time_ms;

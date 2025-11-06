@@ -1,7 +1,7 @@
-use crate::auxiliary::{self, pin_maps, start_tracing, LOCATION_TRACEPOINT_VECTOR};
+use crate::manager::{self, pin_maps, start_tracing, LOCATION_TRACEPOINT_VECTOR};
 use crate::skel_types::{production_tracer, SkelEnum};
 use anyhow::Result;
-use auxiliary::pin_maps::PinMapsSkelBuilder;
+use manager::pin_maps::PinMapsSkelBuilder;
 use libbpf_rs::skel::OpenSkel as _;
 use libbpf_rs::skel::SkelBuilder as _;
 use libbpf_rs::{Link, OpenObject};
@@ -15,7 +15,7 @@ pub fn run_tracing(
     nodes_info: String,
     network_device: String,
 ) -> Result<()> {
-    auxiliary::bump_memlock_rlimit()?;
+    manager::bump_memlock_rlimit()?;
     //Init maps
 
     let skel_builder_maps = PinMapsSkelBuilder::default();
@@ -64,10 +64,17 @@ pub fn run_tracing(
         .attach_tracepoint(libbpf_rs::TracepointCategory::Sched, "sched_process_fork")
         .expect("Failed to attach sched_process_fork");
 
+    let tracepoint_process_exit = skel
+        .progs
+        .handle_process_exit
+        .attach_tracepoint(libbpf_rs::TracepointCategory::Sched, "sched_process_exit")
+        .expect("Failed to attach sched_process_exit");
+
     tracepoint_vector.push(tracepoint_sys_enter);
     tracepoint_vector.push(tracepoint_sys_exit);
     tracepoint_vector.push(tracepoint_proc_start);
     tracepoint_vector.push(tracepoint_fork_enter);
+    tracepoint_vector.push(tracepoint_process_exit);
 
     hashmap_links.insert(LOCATION_TRACEPOINT_VECTOR, tracepoint_vector);
 

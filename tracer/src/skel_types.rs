@@ -1,5 +1,5 @@
-use crate::auxiliary::pin_maps::PinMapsSkel;
-use crate::auxiliary::{
+use crate::manager::pin_maps::PinMapsSkel;
+use crate::manager::{
     end_trace, process_syscall_counters_map, process_uprobes_counters_map, write_to_file,
 };
 use libbpf_rs::Link;
@@ -31,6 +31,11 @@ use sys_all_tracer::*;
 pub trait SkelUpdatePidTrait {
     fn update(&mut self, pid_vec: &[u8; 4], one: &[u8; 4]);
 }
+
+pub trait SkelCheckPidTrait {
+    fn check(&mut self, pid_vec: &[u8; 4]) -> bool;
+}
+
 pub trait SkelAttachUprobe {
     fn attach_uprobe(
         &mut self,
@@ -93,6 +98,42 @@ impl<'a, 'obj> SkelUpdatePidTrait for SkelEnum<'a, 'obj> {
         }
     }
 }
+
+impl<'a, 'obj> SkelCheckPidTrait for SkelEnum<'a, 'obj> {
+    fn check(&mut self, pid_vec: &[u8; 4]) -> bool {
+        match self {
+            SkelEnum::Production(skel_instance) => {
+                match skel_instance.maps.pid_tree.lookup(pid_vec, MapFlags::ANY) {
+                    Ok(Some(_)) => true,
+                    Ok(None) => false,
+                    Err(_) => false,
+                }
+            }
+            SkelEnum::SysAllTracer(skel_instance) => {
+                match skel_instance.maps.pid_tree.lookup(pid_vec, MapFlags::ANY) {
+                    Ok(Some(_)) => true,
+                    Ok(None) => false,
+                    Err(_) => false,
+                }
+            }
+            SkelEnum::RwTracer(skel_instance) => {
+                match skel_instance.maps.pid_tree.lookup(pid_vec, MapFlags::ANY) {
+                    Ok(Some(_)) => true,
+                    Ok(None) => false,
+                    Err(_) => false,
+                }
+            }
+            SkelEnum::StatisticsTracer(skel_instance) => {
+                match skel_instance.maps.pid_tree.lookup(pid_vec, MapFlags::ANY) {
+                    Ok(Some(_)) => true,
+                    Ok(None) => false,
+                    Err(_) => false,
+                }
+            }
+        }
+    }
+}
+
 impl<'a, 'obj> SkelAttachUprobe for SkelEnum<'a, 'obj> {
     fn attach_uprobe(
         &mut self,
