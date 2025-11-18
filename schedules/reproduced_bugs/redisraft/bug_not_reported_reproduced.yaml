@@ -3,8 +3,6 @@ execution_plan:
   setup:
     script: /vagrant/schedules/reproduced_bugs/redisraft/setup/startrediscluster2d1cf30.sh
     duration: 5
-  cleanup:
-    duration: 30
   workload:
     wait_time: 15
     script: /vagrant/schedules/reproduced_bugs/redisraft/setup/runworkload.sh

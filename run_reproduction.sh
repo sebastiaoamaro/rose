@@ -20,6 +20,7 @@ if [ "$#" -eq 1 ]; then
         sudo rm /tmp/containerpid_read
         sudo rm /tmp/containerpid_write
         sudo rm /tmp/history.txt
+        sudo rm /tmp/pid_tree.txt
         python3 parser.py $schedule
         mv fault_schedule.c executor/c/
         cd executor/c/
@@ -43,6 +44,7 @@ if [ "$#" -gt 4 ]; then
                 sudo rm /tmp/containerpid_read
                 sudo rm /tmp/containerpid_write
                 sudo rm /tmp/history.txt
+                sudo rm /tmp/pid_tree.txt
                 python3 parser.py $schedule
                 mv fault_schedule.c executor/c/
                 cd executor/c/
@@ -68,6 +70,7 @@ if [ "$#" -gt 4 ]; then
             sudo rm /tmp/containerpid_read
             sudo rm /tmp/containerpid_write
             sudo rm /tmp/history.txt
+            sudo rm /tmp/pid_tree.txt
             python3 parser.py $schedule
             mv faultschedule.c executor/c/
             cd executor/c/

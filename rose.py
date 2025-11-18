@@ -1,20 +1,26 @@
+import itertools
+import math
 import random
-from types import new_class
-import yaml
+import shutil
 import signal
-import sys
 import subprocess
+import sys
+import time
+from copy import deepcopy
+from types import new_class
+
+import yaml
+from analyzer.binary_parser import (
+    calculate_call_offsets,
+    calculate_offsets,
+    calculate_plt_offsets,
+)
 from analyzer.trace_analysis import (
     History,
     choose_faults,
     compare_faults,
-    write_new_schedule,
     get_fault_by_name,
-)
-from analyzer.binary_parser import (
-    calculate_offsets,
-    calculate_plt_offsets,
-    calculate_call_offsets,
+    write_new_schedule,
 )
 from schedule_parser.conditions import (
     file_syscall_condition,
@@ -22,11 +28,6 @@ from schedule_parser.conditions import (
     time_cond,
     user_function_condition,
 )
-import shutil
-import time
-import math
-from copy import deepcopy
-import itertools
 
 
 class BugReproduction:
@@ -200,7 +201,7 @@ def main():
     run_cleanup(bug_reproduction.cleanup)
 
     # Parse faultless schedule
-    print("Parsing faultless schedule located at " + bug_reproduction.trace_location)
+    print("Parsing faultless schedule located at " + trace_location)
     history = History()
     history.parse_schedule(bug_reproduction.schedule)
     history.process_history(trace_location)
@@ -222,6 +223,7 @@ def main():
     print("Faults to use:\n", faults_detected)
     schedule_location = "temp_sched.yaml"
     buggy_schedules = []
+
     print("Running Level 1: First Guess")
     buggy_run = run_test(bug_reproduction, faults_detected)
     history = collect_and_parse(
@@ -467,15 +469,14 @@ def main():
                     (True for x in history.faults_injected if fault.name in x.name),
                     False,
                 )
-
                 fault_order = True
+
                 if not fault_occuring:
+                    print("FAULT DID NOT OCCUR")
                     if amplification:
                         fault.begin_conditions = deepcopy(last_used_conditions)
                         continue
-                    else:
-                        fault_occuring = True
-                        amplification = 1
+                    elif fault.type != "block_ips":
                         print(
                             "FAULT_OCCURING:{},CONDITION_ORDER:{},FAULT_ORDER:{},LEN_LUC:{}".format(
                                 fault_occuring,
@@ -484,6 +485,8 @@ def main():
                                 len(last_used_conditions),
                             )
                         )
+                        fault_occuring = True
+                        amplification = 1
                         continue
 
                 elif not amplification:
@@ -492,6 +495,7 @@ def main():
                     )
 
                 if not fault_order and not amplification:
+                    print("Skipped because faults are out of order.")
                     fault_counter += 1
                     fault.begin_conditions = deepcopy(last_used_conditions)
                     continue
@@ -500,10 +504,10 @@ def main():
                 count += 1
                 for fault_injected_event in history.faults_injected:
                     if fault.name in fault_injected_event.name:
-                        print("Checking order")
+                        print("CHECKING ORDER")
                         fault_cond_order = history.check_order(
                             fault_injected_event,
-                            functions_before[1],
+                            window,
                             functions_before[2],
                         )
                         # fault_cond_order = history.check_order(fault_injected_event,window,functions_before[2])
@@ -518,7 +522,7 @@ def main():
                             "CONDITION ORDER:",
                             condition_order,
                             "WINDOW:",
-                            functions_before[1],
+                            functions_before[2],
                         )
                         if not condition_order:
                             fault.begin_conditions = deepcopy(last_used_conditions)
@@ -578,15 +582,27 @@ def main():
                         )
                         fault_to_offsets_plt.append(offsets)
                         faults_with_function_counter += 1
-                        # (runs,replay_rate,buggy_schedules_3_1) = test_offsets_for_fault(offsets,faults_detected,fault,bug_reproduction,runs_counter,schedule_location,cond)
-                        # if replay_rate > 75:
-                        #     runs_counter+=runs
-                        #     end_reproduction(replay_rate,runs_counter,schedule_location,start_time)
-                        #     return
-                        # for buggy_schedule in buggy_schedules_3_1:
-                        #     buggy_schedules.append(buggy_schedule)
-                        # #Reset offsets back to 0
-                        # reset_offset_for_fault(faults_detected,fault,cond)
+                        (runs, replay_rate, buggy_schedules_3_1) = (
+                            test_offsets_for_fault(
+                                offsets,
+                                faults_detected,
+                                fault,
+                                bug_reproduction,
+                                runs_counter,
+                                schedule_location,
+                                cond,
+                            )
+                        )
+                        if replay_rate > 75:
+                            runs_counter += runs
+                            end_reproduction(
+                                replay_rate, runs_counter, schedule_location, start_time
+                            )
+                            return
+                        for buggy_schedule in buggy_schedules_3_1:
+                            buggy_schedules.append(buggy_schedule)
+                        # Reset offsets back to 0
+                        reset_offset_for_fault(faults_detected, fault, cond)
                         break
 
         print("Running Level 3.2: Not all Offsets are Equal: calls")
@@ -612,15 +628,27 @@ def main():
                         )
                         fault_to_offsets_call.append(offsets)
                         faults_with_function_counter += 1
-                        # (runs,replay_rate,buggy_schedules_3_2) = test_offsets_for_fault(offsets,faults_detected,fault,bug_reproduction,runs_counter,schedule_location,cond)
-                        # if replay_rate > 75:
-                        #     runs_counter+=runs
-                        #     end_reproduction(replay_rate,runs_counter,schedule_location,start_time)
-                        #     return
-                        # for buggy_schedule in buggy_schedules_3_2:
-                        #     buggy_schedules.append(buggy_schedule)
-                        # #Reset offsets back to 0
-                        # reset_offset_for_fault(faults_detected,fault,cond)
+                        (runs, replay_rate, buggy_schedules_3_2) = (
+                            test_offsets_for_fault(
+                                offsets,
+                                faults_detected,
+                                fault,
+                                bug_reproduction,
+                                runs_counter,
+                                schedule_location,
+                                cond,
+                            )
+                        )
+                        if replay_rate > 75:
+                            runs_counter += runs
+                            end_reproduction(
+                                replay_rate, runs_counter, schedule_location, start_time
+                            )
+                            return
+                        for buggy_schedule in buggy_schedules_3_2:
+                            buggy_schedules.append(buggy_schedule)
+                        # Reset offsets back to 0
+                        reset_offset_for_fault(faults_detected, fault, cond)
                         break
 
     # print("Running Level 4.1: Combining Faults in different plt offsets")
@@ -821,14 +849,8 @@ def get_time_for_fault(fault, faults_detected_time_sorted, fault_before, history
         (x for x in history.faults_injected if fault_before.name in x.name), None
     )
     if fault_before_testing is None:
-        print("Time is time of fault {} in original".format(fault_before.name))
         time_rounded = time_rounded_before
     else:
-        print(
-            "Time is time of fault {} in most recent history".format(
-                fault_before_testing.name
-            )
-        )
         # Relax time
         ts = fault_before_testing.relative_time - 1000
         time_rounded = math.floor((ts / 1000000) / 10) * 10

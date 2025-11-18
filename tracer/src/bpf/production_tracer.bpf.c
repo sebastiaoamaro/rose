@@ -21,9 +21,10 @@ struct {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__type(key, int);
+	__type(key, struct process_and_syscall);
 	__type(value, u32);
 	__uint(max_entries, 1024);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } connect_map SEC(".maps");
 
 struct {
@@ -172,7 +173,8 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
     	int pid_relevant = check_pid_prog(pid_tgid);
         if (!pid_relevant)
             return 0;
-        struct process_and_syscall psys = {
+
+        struct process_and_syscall p_sys = {
             id,
             pid_tgid,
         };
@@ -182,12 +184,138 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
         char path[FILENAME_MAX_SIZE];
 
         int len = bpf_probe_read_user_str(path, FILENAME_MAX_SIZE,(void *)filename);
-        int res = bpf_map_update_elem(&important_arguments,&psys, &path, BPF_ANY);
+        int res = bpf_map_update_elem(&important_arguments,&p_sys, &path, BPF_ANY);
         //bpf_printk("NAME:%s, POINTER:%p, PID_TGID:%llu \n",filename,filename,pid_tgid);
-        //int res = bpf_map_update_elem(&important_arguments,&psys, &filename, BPF_ANY);
+        //int res = bpf_map_update_elem(&important_arguments,&p_sys, &filename, BPF_ANY);
         if (res < 0)
             bpf_printk("Failed to add with code %d \n", res);
 
+	}
+	else if (id == 42) { /* connect */
+		u64 pid_tgid = bpf_get_current_pid_tgid();
+		int pid_relevant = check_pid_prog(pid_tgid);
+		if (!pid_relevant)
+			return 0;
+
+		int fd = (int)ctx->args[0];
+		const void *uaddr = (const void *)ctx->args[1];
+		int addrlen = (int)ctx->args[2];
+
+		if (!uaddr) {
+			bpf_printk("connect-enter: pid_tgid=%llu fd=%d uaddr=NULL addrlen=%d\n",
+			           pid_tgid, fd, addrlen);
+			return 0;
+		}
+
+		/* Read family as 16-bit */
+		__u16 family16 = 0;
+		if (bpf_probe_read_user(&family16, sizeof(family16),
+		                        &((const __u8 *)uaddr)[0]) < 0) {
+			bpf_printk("connect-enter: pid_tgid=%llu fd=%d failed to read family\n",
+			           pid_tgid, fd);
+			return 0;
+		}
+
+		/* IPv4 */
+		if (family16 == AF_INET) {
+			struct sa_in {
+				__u16 sin_family;
+				__u16 sin_port;
+				__u32 sin_addr;
+			} a4 = {};
+
+			if (addrlen < (int)sizeof(a4)) {
+				/* still attempt to read what we can */
+			}
+
+			if (bpf_probe_read_user(&a4, sizeof(a4), uaddr) < 0) {
+				bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_INET read failed\n",
+				           pid_tgid, fd);
+				return 0;
+			}
+			__u32 daddr = a4.sin_addr;
+			__u16 dport = a4.sin_port;
+
+			__u32 h = bpf_ntohl(daddr);
+			__u8 o1 = (h >> 24) & 0xff;
+			__u8 o2 = (h >> 16) & 0xff;
+			__u8 o3 = (h >> 8) & 0xff;
+			__u8 o4 = h & 0xff;
+
+
+            struct process_and_syscall p_sys = {
+                id,
+                pid_tgid,
+            };
+
+            u64 timestamp = bpf_ktime_get_ns();
+
+            struct connect_info c_info = {
+                daddr,
+                dport,
+                timestamp
+            };
+
+            int err = bpf_map_update_elem(&connect_map, &p_sys, &c_info, BPF_ANY);
+
+			if (err < 0) {
+				// bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_INET map_update failed\n", pid_tgid, fd);
+			} else {
+				// bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_INET stored %u.%u.%u.%u:%d\n", pid_tgid, fd, (unsigned int)o1, (unsigned int)o2, (unsigned int)o3, (unsigned int)o4, bpf_ntohs(dport));
+			}
+		}
+
+		/* IPv6 */
+		else if (family16 == AF_INET6) {
+			struct sa_in6 {
+				__u16 sin6_family;
+				__u16 sin6_port;
+				__u32 sin6_flowinfo;
+				unsigned char sin6_addr[16];
+				__u32 sin6_scope_id;
+			} a6 = {};
+
+			if (bpf_probe_read_user(&a6, sizeof(a6), uaddr) < 0) {
+				bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_INET6 read failed\n",
+				           pid_tgid, fd);
+				return 0;
+			}
+			bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_INET6 dport=%d\n",
+			           pid_tgid, fd, bpf_ntohs(a6.sin6_port));
+		}
+		/* UNIX domain sockets */
+		else if (family16 == AF_UNIX) {
+			/* sockaddr_un has family then sun_path; read sun_path string */
+			struct sa_un {
+				__u16 sun_family;
+				char sun_path[108];
+			} sun = {};
+
+			/* read path starting after family (offset 2). Use probe_read_user_str which NUL-terminates */
+			int path_off = sizeof(sun.sun_family);
+			int max_path_len = sizeof(sun.sun_path);
+			int res = bpf_probe_read_user_str(sun.sun_path, max_path_len,
+			                                  (const void *)((const char *)uaddr + path_off));
+			if (res > 0) {
+				/* log the unix socket path */
+				bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_UNIX path=%s\n",
+				           pid_tgid, fd, sun.sun_path);
+			} else {
+				bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_UNIX path read failed res=%d addrlen=%d\n",
+				           pid_tgid, fd, res, addrlen);
+			}
+
+			/* store sentinel in connect_map to indicate AF_UNIX (no IPv4 addr) */
+			__u32 sentinel = (__u32)-1;
+			bpf_map_update_elem(&connect_map, &fd, &sentinel, BPF_ANY);
+		}
+		/* unknown family */
+		else {
+			bpf_printk("connect-enter: pid_tgid=%llu fd=%d unknown family=%u addrlen=%d\n",
+			           pid_tgid, fd, family16, addrlen);
+		}
+
+		return 0;
 	}
 
     return 0;
@@ -235,13 +363,13 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 
 		if (id == 262){
 		    //verbose = 0;
-            struct process_and_syscall psys = {
+            struct process_and_syscall p_sys = {
                 id,
                 pid_tgid,
             };
             //bpf_printk("Looking for filename for pid_tgid %llu \n",pid_tgid);
-		    //long unsigned int *file_addr = bpf_map_lookup_elem(&important_arguments,&psys);
-		    char *filename = bpf_map_lookup_elem(&important_arguments,&psys);
+		    //long unsigned int *file_addr = bpf_map_lookup_elem(&important_arguments,&p_sys);
+		    char *filename = bpf_map_lookup_elem(&important_arguments,&p_sys);
 
        	    if (!filename) {
                 //bpf_printk("FAILED, PID_TGID:%llu\n",pid_tgid);
@@ -398,6 +526,7 @@ int handle_uprobe(struct pt_regs *ctx) {
 	u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
 	u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
 
+	//bpf_printk("Added %d to pid %d and tid %d \n",cookie,pid,tid);
 
 	struct event key = {
 		UPROBE,

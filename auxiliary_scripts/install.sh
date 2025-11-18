@@ -3,7 +3,14 @@
 ###############################################################
 #### AFTER RUNNING THIS SCRIPT, PLEASE REBOOT YOUR MACHINE ####
 ###############################################################
+cp tmux.conf ~/.tmux.conf
 echo -e '\n# Set default working directory\nexport WORKDIR="/vagrant" && [ -d "$WORKDIR" ] && cd "$WORKDIR" || echo "Directory $WORKDIR not found"' >> ~/.bashrc
+
+cd ..
+echo "Updating git submodules..."
+git submodule update --init --recursive > /dev/null
+echo "Updating package list..."
+cd auxiliary_scripts/
 
 cp tmux.conf ~/.tmux.conf
 sudo apt-get update
@@ -26,64 +33,73 @@ sudo docker run hello-world
 #RUST
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 . "$HOME/.cargo/env"
+rustup install 1.86.0
+rustup override set 1.86.0
+
 
 #Github
 sudo apt install git
 
 #Kernel module
+echo "Setting up kernel module dependencies..."
 cd ..
 cd executor/kernelmodule
-sudo apt-get install -y libdw1 dwarves elfutils libdw-dev pahole libdwarf-dev
+sudo apt-get -qq install -y libdw1 dwarves elfutils libdw-dev pahole libdwarf-dev
 sudo cp /sys/kernel/btf/vmlinux /usr/lib/modules/`uname -r`/build/
-git clone https://github.com/acmel/dwarves.git
+# dwarves is already a submodule, no need to clone manually
+echo "Building dwarves..."
 cd dwarves
-git checkout *
-git pull
-git submodule update --init --recursive
-mkdir build
+git config --global --add safe.directory /rose/executor/kernelmodule/dwarves
+git submodule update --init --recursive > /dev/null
+mkdir -p build
 cd build
-cmake ..
-sudo make install
-cd ../../../../
+cmake .. > /dev/null
+make > /dev/null
+sudo make install > /dev/null
+sudo ldconfig
+cd ../../../../auxiliary_scripts
 
 #libbpf
-cd libbpf/src
-make
-sudo make install
-cd ../..
+echo "Building libbpf..."
+cd ../libbpf/src
+make > /dev/null
+sudo make install > /dev/null
+cd ../../auxiliary_scripts
 
 #bpftool
-
-cd bpftool
-git checkout *
-git checkout .github/*
-git pull
+echo "Setting up bpftool..."
+cd ../bpftool
+git reset --hard HEAD > /dev/null 2>&1 || true
+git submodule update --init --recursive > /dev/null
 
 cd libbpf
-git checkout *
-git checkout .git/*
-git checkout master
-git pull
+git checkout master > /dev/null 2>&1 || git checkout -b master > /dev/null
+git pull origin master > /dev/null 2>&1 || true
 cd src
-make
+echo "Building libbpf for bpftool..."
+make clean > /dev/null
+make > /dev/null
 
 echo "DIRECTORY:"$(pwd)
 cd ../..
 cd src
-make
-sudo make install
+echo "Building bpftool..."
+make clean > /dev/null
+make > /dev/null
+sudo make install > /dev/null
 export PATH=/usr/local/bin:$PATH
+cd ../../auxiliary_scripts
 
-# #Anduril
-# # sudo apt-get update
-# # sudo apt install git maven ant vim openjdk-8-jdk
-# # sudo update-alternatives --set java $(sudo update-alternatives --list java | grep "java-8")
+#Anduril
+sudo apt-get update
+sudo apt install git maven ant vim openjdk-8-jdk
+sudo update-alternatives --set java $(sudo update-alternatives --list java | grep "java-8")
 
-# # export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
-# # echo export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 >> ~/.bashrc
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+echo export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 >> ~/.bashrc
 
 #Build vmlinux.h
-cd ../..
+cd ../
 cd tracer/src/bpf
 sudo bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
 

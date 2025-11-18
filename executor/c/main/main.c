@@ -69,6 +69,7 @@ void open_tracer_pipe();
 void write_start_event();
 void handle_lazyfs_events();
 void start_lazyfs_handler(void* args);
+void setup_uprobes();
 
 const char *argp_program_version = "Tool for FI 0.01";
 const char *argp_program_bug_address = "sebastiao.amaro@ŧecnico.ulisboa.pt";
@@ -166,6 +167,9 @@ int main()
 	collect_container_pids();
 	setup_node_scripts();
 	collect_container_processes();
+
+	//We need the executor to run first then the trace, for some reason the order of running uprobes is reversed.
+	setup_uprobes();
 
 	if (deployment_tracer){
 	    send_info_to_tracer();
@@ -343,7 +347,7 @@ int main()
 		ring_buffer__free(rb);
 
 	// printf("REAPING CHILD PROCESSES\n");
-	// kill_child_processes(getpid());
+	kill_child_processes(getpid());
 
 	printf("KILLING NODES and TC PROGS\n");
 	for(int i =0; i< NODE_COUNT;i++){
@@ -356,11 +360,11 @@ int main()
 		}
 
 		if(nodes[i].pid_tc_in > 0){
-			kill(nodes[i].pid_tc_in,SIGINT);
+			kill(nodes[i].pid_tc_in,SIGTERM);
 			waitpid(nodes[i].pid_tc_in,NULL,0);
 		}
 		if(nodes[i].pid_tc_out > 0){
-			kill(nodes[i].pid_tc_out,SIGINT);
+			kill(nodes[i].pid_tc_out,SIGTERM);
 			waitpid(nodes[i].pid_tc_in,NULL,0);
 		}
 	}
@@ -1026,24 +1030,24 @@ void setup_begin_conditions(){
 			if(type == USER_FUNCTION){
 				//user_func_cond_nr is the position where the call_count will reside in fault_type_conditions
 				user_function user_function = faults[i].fault_conditions_begin[j].condition.user_function;
-				faults[i].fault_conditions_begin[j].condition.user_function.cond_nr = user_func_cond_nr+STATE_PROPERTIES_COUNT;
+				// faults[i].fault_conditions_begin[j].condition.user_function.cond_nr = user_func_cond_nr+STATE_PROPERTIES_COUNT;
 
-				if(nodes[traced].container){
+				// if(nodes[traced].container){
 
-					//Find the directory in hostnamespace
-					char* dir;
-					if (nodes[traced].container_type == CONTAINER_TYPE_DOCKER)
-					   dir = get_docker_container_location(nodes[traced].name);
-					if (nodes[traced].container_type == CONTAINER_TYPE_LXC)
-					   dir = get_lxc_container_location(nodes[traced].name);
-					//Combine paths
-					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
-					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
+				// 	//Find the directory in hostnamespace
+				// 	char* dir;
+				// 	if (nodes[traced].container_type == CONTAINER_TYPE_DOCKER)
+				// 	   dir = get_docker_container_location(nodes[traced].name);
+				// 	if (nodes[traced].container_type == CONTAINER_TYPE_LXC)
+				// 	   dir = get_lxc_container_location(nodes[traced].name);
+				// 	//Combine paths
+				// 	char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
+				// 	snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
 
-					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
-				}else{
-					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
-				}
+				// 	faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
+				// }else{
+				// 	faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
+				// }
 				insert_relevant_condition_in_ebpf(i,pid,faults[i].fault_conditions_begin[j].condition.user_function.cond_nr,user_function.call_count);
 				user_func_cond_nr++;
 			}
@@ -1067,27 +1071,27 @@ void setup_begin_conditions(){
 			constants.timemode = 1;
 		}
 
-		if (faults[i].target == -1){
-			for(int i = 0; i < NODE_COUNT; i++){
-				if (nodes[i].leader_probe)
-					continue;
-				if(nodes[i].container){
-					//Find the directory in hostnamespace
-					char *dir;
-					if (nodes[i].container_type == CONTAINER_TYPE_DOCKER)
-					   dir = get_docker_container_location(nodes[i].name);
-					if (nodes[i].container_type == CONTAINER_TYPE_LXC)
-					   dir = get_lxc_container_location(nodes[i].name);
+		// if (faults[i].target == -1){
+		// 	for(int i = 0; i < NODE_COUNT; i++){
+		// 		if (nodes[i].leader_probe)
+		// 			continue;
+		// 		if(nodes[i].container){
+		// 			//Find the directory in hostnamespace
+		// 			char *dir;
+		// 			if (nodes[i].container_type == CONTAINER_TYPE_DOCKER)
+		// 			   dir = get_docker_container_location(nodes[i].name);
+		// 			if (nodes[i].container_type == CONTAINER_TYPE_LXC)
+		// 			   dir = get_lxc_container_location(nodes[i].name);
 
-					//Combine paths
-					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
-					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1,0);
-				}else{
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].leader_symbol,FAULT_COUNT,0,constants.timemode, 1,0);
-				}
-			}
-		}
+		// 			//Combine paths
+		// 			char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
+		// 			snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
+		// 			nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1,0);
+		// 		}else{
+		// 			nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].leader_symbol,FAULT_COUNT,0,constants.timemode, 1,0);
+		// 		}
+		// 	}
+		// }
 		if (faults[i].target == -2){
 			for(int i = 0; i < NODE_COUNT; i++){
 				if (nodes[i].leader_probe)
@@ -1114,6 +1118,66 @@ void setup_begin_conditions(){
 
 
 
+	}
+}
+void setup_uprobes(){
+    printf("SETTING UP USER-FUNCTION PROBES \n");
+    int user_func_cond_nr = 0;
+    for(int i = 0; i < FAULT_COUNT; i++){
+		int has_time_condition = 0;
+		for(int j = 0; j < faults[i].relevant_conditions;j++){
+			int type = faults[i].fault_conditions_begin[j].type;
+			int traced = faults[i].traced;
+			int pid = nodes[traced].pid;
+			int error;
+			if(type == USER_FUNCTION){
+				//user_func_cond_nr is the position where the call_count will reside in fault_type_conditions
+				user_function user_function = faults[i].fault_conditions_begin[j].condition.user_function;
+				faults[i].fault_conditions_begin[j].condition.user_function.cond_nr = user_func_cond_nr+STATE_PROPERTIES_COUNT;
+
+				if(nodes[traced].container){
+					//Find the directory in hostnamespace
+					char* dir;
+					if (nodes[traced].container_type == CONTAINER_TYPE_DOCKER)
+					   dir = get_docker_container_location(nodes[traced].name);
+					if (nodes[traced].container_type == CONTAINER_TYPE_LXC)
+					   dir = get_lxc_container_location(nodes[traced].name);
+					//Combine paths
+					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
+					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
+
+					printf("Added uprobe %s in location %s\n",user_function.symbol,combined_path);
+
+					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
+				}else{
+					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
+				}
+				insert_relevant_condition_in_ebpf(i,pid,faults[i].fault_conditions_begin[j].condition.user_function.cond_nr,user_function.call_count);
+				user_func_cond_nr++;
+			}
+		}
+
+		if (faults[i].target == -1){
+			for(int i = 0; i < NODE_COUNT; i++){
+				if (nodes[i].leader_probe)
+					continue;
+				if(nodes[i].container){
+					//Find the directory in hostnamespace
+					char *dir;
+					if (nodes[i].container_type == CONTAINER_TYPE_DOCKER)
+					   dir = get_docker_container_location(nodes[i].name);
+					if (nodes[i].container_type == CONTAINER_TYPE_LXC)
+					   dir = get_lxc_container_location(nodes[i].name);
+
+					//Combine paths
+					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
+					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1,0);
+				}else{
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].leader_symbol,FAULT_COUNT,0,constants.timemode, 1,0);
+				}
+			}
+		}
 	}
 }
 
@@ -1489,7 +1553,6 @@ void handle_event(void *ctx,void *data,size_t data_sz)
 	int fault_nr = e->fault_nr;
 	switch(e->type){
 		case PROCESS_STOP: {
-			printf("Will stop process with target_pid %d \n",e->pid);
 			pthread_t thread_id;
 			struct process_fault_args *args = (struct process_fault_args*)malloc(sizeof(struct process_fault_args));
 
@@ -1500,7 +1563,7 @@ void handle_event(void *ctx,void *data,size_t data_sz)
 			}
 
 			if (fault->target == -1){
-				printf("Stopping LEADER %d \n ",LEADER_PID);
+				printf("STOPPING LEADER %d \n ",LEADER_PID);
 				args->pid = LEADER_PID;
 			}else{
 				args->pid = e->pid;
@@ -1509,9 +1572,11 @@ void handle_event(void *ctx,void *data,size_t data_sz)
 			args->duration = fault->duration;
 			args->name = nodes[get_node_nr_from_pid(args->pid)].name;
 
+			printf("STOPPING: %s FOR %d \n",args->name,fault->duration);
+
 			pthread_create(&thread_id, NULL, (void*)pause_process, (void*)args);
 			fault->done++;
-			printf("Fault %d done %d \n",fault_nr,fault->done);
+			printf("FAULT[%d]:DONE -> %d \n",fault_nr,fault->done);
 
 			break;
 		}
@@ -1625,7 +1690,6 @@ void restart_process(void* args){
 	int node_to_restart = ((struct process_fault_args*)args)->node_to_restart;
 	node *node = &nodes[node_to_restart];
 	if (duration){
-		printf("SLEEPING FOR  %d BEFORE START \n",duration/1000);
 		sleep(duration/1000);
 	}
 	int current_pid_pre_restart = node->current_pid;
@@ -1647,16 +1711,14 @@ void restart_process(void* args){
 	}
 
 	if(node->container){
-	    //Sleeping before sending the signal to give time for the popen process to setup the signal handling
 		//TODO: MAKE BETTER MECHANISM
 	    sleep_for_ms(10);
 		send_signal(node->current_pid,SIGUSR1,node->name);
     	//For Faults we need the actual pid of the restarted process
     	retrieve_new_pid_container(node_to_restart,temp_pid);
-        //if (node->container_type == CONTAINER_TYPE_DOCKER){
-		//     send_signal(node->current_pid,SIGSTOP,node->name);
-		// }
+        send_signal(node->current_pid,SIGSTOP,node->name);
     	update_node_pid_ebpf(node_to_restart,node->current_pid,node->pid,current_pid_pre_restart);
+        send_signal(node->current_pid,SIGCONT,node->name);
         //reinject_uprobes(node_to_restart);
         //if (node->container_type == CONTAINER_TYPE_DOCKER){
 		//     send_signal(node->current_pid,SIGCONT,node->name);

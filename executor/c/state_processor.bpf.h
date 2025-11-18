@@ -87,7 +87,7 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 				if (current_state->relevant_states[i]){
 					u64 relevant_value = current_state->relevant_states[i];
 					if ((value % relevant_value == 0) && relevant_value != 0){
-					   bpf_printk("COND[%d]=TRUE, UPDATING STATE \n",state_key);
+					   //bpf_printk("COND[%d]=TRUE, UPDATING STATE \n",state_key);
 					   //For all the faults which leverage this condition we sheck if the rest of the conditions are already triggered
 					   process_counter(state_key,relevant_value,pid_to_use,current_pid,fault_count,faults_specification,faults,rb,leader,nodes_status);
 					}

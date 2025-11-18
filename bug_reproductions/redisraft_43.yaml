@@ -5,5 +5,6 @@ reproduction:
   binary: "/vagrant/schedules/reproduced_bugs/redisraft/setup/redisraft_binaries/18.04redisraftb9ee410.so"
   result_folder: "/vagrant/tests/bugdetection/redisraft/"
   trace_location: "/tmp/history.txt"
-  buggy_trace: "/vagrant/bug_reproductions/traces/rr_43.txt"
-  cleanup: "/vagrant/schedules/reproduced_bugs/redisraft/scripts/cleanup.sh"
+  #buggy_trace: "/vagrant/bug_reproductions/traces/rr_43.txt"
+  buggy_trace: "/tmp/rr_43.txt"
+  cleanup: "/vagrant/schedules/reproduced_bugs/redisraft/setup/cleanup.sh"

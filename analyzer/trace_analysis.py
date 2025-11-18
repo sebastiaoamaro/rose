@@ -38,23 +38,17 @@ class Event:
 
         if name == "connect":
             big_endian_bytes = struct.pack("<I", int(arg1))  # Pack as little-endian
-            big_endian_int = struct.unpack(">I", big_endian_bytes)[
-                0
-            ]  # Unpack as big-endian
+            big_endian_int = struct.unpack(">I", big_endian_bytes)[0]
             self.arg1 = ipaddress.IPv4Address(big_endian_int)
             self.arg2 = arg2
 
         elif name == "network_delay" or name == "network_information":
             big_endian_bytes = struct.pack("<I", int(arg1))  # Pack as little-endian
-            big_endian_int = struct.unpack(">I", big_endian_bytes)[
-                0
-            ]  # Unpack as big-endian
+            big_endian_int = struct.unpack(">I", big_endian_bytes)[0]
             self.arg1 = ipaddress.IPv4Address(big_endian_int)
 
             big_endian_bytes = struct.pack("<I", int(arg2))  # Pack as little-endian
-            big_endian_int = struct.unpack(">I", big_endian_bytes)[
-                0
-            ]  # Unpack as big-endian
+            big_endian_int = struct.unpack(">I", big_endian_bytes)[0]
             self.arg2 = ipaddress.IPv4Address(big_endian_int)
         else:
             self.arg1 = arg1
@@ -75,7 +69,6 @@ class Event:
         seconds = self.relative_time // 1_000_000_000
         milliseconds = (self.relative_time % 1_000_000_000) // 1_000_000
         remaining_nanoseconds = self.relative_time % 1_000_000
-
         return f"{seconds} seconds, {milliseconds} milliseconds, {remaining_nanoseconds} nanoseconds"
 
     def check_if_fault(self):
@@ -93,14 +86,14 @@ class Event:
 
 class History:
     """
-    A class responsible for reading and parsing events from a file.
-    The events are stored in a dictionary organized by node.
+    Represents a trace.
     """
 
     def __init__(self):
         self.nodes = {}
         self.events = []
         self.events_by_node = {}
+        # Maps nodes to pid
         self.pids = {}
         self.ids = {}
         self.new_pid_events = {}
@@ -119,24 +112,14 @@ class History:
         self.first_event_id = 0
 
     def parse_event_line(self, line):
-        """
-        Parses a single line of the event log and returns an Event object.
-
-        Example line format: "Node:{},Pid:{},Tid:{},Function:{},time:{} \n"
-        """
         # Strip any extra whitespace and newlines
         line = line.strip()
-
         # Split the line into its components based on the format
         event_data = {}
         parts = line.split(",")
-
         for part in parts:
             key, value = part.split(":", 1)
             event_data[key] = value
-
-        # Create an Event object using the parsed data
-
         # First event we see
         if self.start_time == 0 and not self.start_time_event:
             self.start_time = int(event_data["time"])
@@ -173,13 +156,9 @@ class History:
         :param file_path: Path to the file to read.
         :return: Dictionary with node IDs as keys and a list of Event objects as values.
         """
-        # Open the file and read line by line
         with open(file_path, "r") as file:
             for line in file:
-                # Parse the current line to extract the event
                 event = self.parse_event_line(line)
-
-                # Get the node ID for the current event
                 node_id = event.node
 
                 # If the node doesn't exist in the dictionary, initialize a list
@@ -188,7 +167,6 @@ class History:
                 if node_id not in self.function_calls_by_node:
                     self.function_calls_by_node[node_id] = {}
 
-                # Append the event to the list for the corresponding node
                 self.events.append(event)
 
                 if event.type == "Fault":
@@ -266,6 +244,7 @@ class History:
 
     def process_history(self, history_file):
         self.read_and_parse_events(history_file)
+        # self.collect_origin_pids()
         self.count_sys_exit_errors()
         self.order_all_events()
         self.get_events_by_node()
@@ -349,8 +328,45 @@ class History:
                     fault.state_score = 0
 
                 self.faults.append(fault)
-                # Find process pauses/waits
-            if event.type == "process_state_change":
+            # Find process crashes
+            if event.type == "process_state_change" and event.arg1 == "1":
+                for node_name, pid_list in self.pids.items():
+                    if event.pid in pid_list:
+                        event.node = node_name
+
+                fault = Fault()
+                fault.name = "process_kill" + str(fault_nr)
+                fault.fault_category = 0
+                fault.type = "process_kill"
+                fault.state_score = 3
+                fault.target = event.node
+                fault.traced = event.node
+                fault.begin_conditions = []
+
+                events = self.events_by_node[event.node]
+                prev_event = None
+                for previous_event in reversed(events):
+                    if (
+                        previous_event.time < event.time
+                        and previous_event.pid == event.pid
+                    ):
+                        prev_event = previous_event
+                        break
+
+                fault.event_id = prev_event.id
+
+                time = int((prev_event.time - self.start_time) / 1000000)
+                time_rounded = math.floor(time / 10) * 10
+                fault.start_time = time_rounded
+
+                cond = time_cond()
+                cond.time = time_rounded
+                fault.begin_conditions.append(cond)
+
+                self.faults.append(fault)
+
+            # Find process pauses/waits
+            if event.type == "process_state_change" and event.arg1 == "2":
                 for node_name, pid_list in self.pids.items():
                     if event.pid in pid_list:
                         event.node = node_name
@@ -385,10 +401,9 @@ class History:
                     fault_timestamp, event.node
                 )
 
-                if len(fault.begin_conditions) == 0:
-                    cond = time_cond()
-                    cond.time = time_rounded
-                    fault.begin_conditions.append(cond)
+                cond = time_cond()
+                cond.time = time_rounded
+                fault.begin_conditions.append(cond)
 
                 fault_nr += 1
                 self.faults.append(fault)
@@ -402,10 +417,12 @@ class History:
 
                 if event.node == "any":
                     continue
+
                 dest_node = 0
                 try:
                     dest_node = self.ip_to_node[str(ip_dst)]
                 except:
+                    print("No destination node found for network_event")
                     continue
 
                 start = event.time - int(event.arg3) * 1000000
@@ -480,7 +497,7 @@ class History:
                         continue
                     if frequency / self.experiment_time < 0.5:
                         print(
-                            "Frequency too low"
+                            "Skipped network delay, frequency too low"
                             + " time: "
                             + str(self.experiment_time)
                             + " count: "
@@ -637,6 +654,7 @@ class History:
         return fault_before_correct.name == fault_before_injected.name
 
     def check_order(self, fault_injected_event, window, origin_order):
+        print("WINDOW:", window, "ORIGIN_ORDER:", origin_order)
         if fault_injected_event.id == 0:
             print("Fault not injected")
             return False
@@ -644,9 +662,6 @@ class History:
             fault_injected_event.node, fault_injected_event.id, window
         )
         new_order = functions_before[2]
-
-        print("ORIGIN ORDER:", origin_order)
-        print("NEW ORDER:", new_order)
         for i in range(0, len(new_order) - 1):
             print(
                 "Comparing {} with {}".format(new_order[i].name, origin_order[i].name)
