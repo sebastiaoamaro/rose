@@ -3,8 +3,8 @@ execution_plan:
     duration: 15
   maximum_time: 60
   setup:
-    duration: 5
     script: /vagrant/schedules/reproduced_bugs/redisraft/setup/startredisclusterb9ee410.sh
+    duration: 5
   tracer:
     binary_to_examine: /redisraft.so
     functions_file: /vagrant/profiler/redisraft/functions_b9ee410.txt
@@ -27,8 +27,7 @@ faults:
     type: process_kill
     target: redis1
     traced: redis1
-    duration: 0
     begin_conditions:
       - condition_nr0:
           type: time
-          time: 25500
+          time: 15000

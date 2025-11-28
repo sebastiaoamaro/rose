@@ -272,13 +272,12 @@ class History:
         for event in self.events:
             # Process sycall Fault
             if event.type == "sys_exit":
-                syscall_name = event.name
-                return_value = event.ret
-                # TEMPORARY SOLUTION FOR TESTING
+                # TEMPORARY SOLUTION IN THEORY WE SHOULD SUPPORT ALL
                 support = self.check_syscall_support(event.name)
                 if not support:
-                    return_value = -115
-                    syscall_name = "connect"
+                    continue
+                syscall_name = event.name
+                return_value = event.ret
                 fault = Fault()
                 fault.name = "syscall" + str(fault_nr)
                 fault.fault_category = 2.0
@@ -301,7 +300,6 @@ class History:
                     cond.file_name = remove_numbers(get_name_from_path(event.arg5))
                     cond.call_count = 1
                     fault.begin_conditions.append(cond)
-                    fault_nr += 1
                     fault.state_score = 1.5
                 # If it does not try to leverage the counter only
                 elif len(self.event_counter[event.name]) < 100:
@@ -313,8 +311,8 @@ class History:
                     cond.syscall_name = syscall_name
                     cond.call_count = 1
                     fault.begin_conditions.append(cond)
-                    fault_nr += 1
                     fault.state_score = 1.0
+
                     time = int((event.time - self.start_time) / 1000000)
                     time_rounded = math.floor(time / 10) * 10
                     fault.start_time = time_rounded
@@ -324,9 +322,9 @@ class History:
                     # fault.begin_conditions.append(cond)
                 # If we can not leverage information from the syscall itself, look for previous ones, this can not be done here takes to much time
                 else:
-                    fault_nr += 1
-                    fault.state_score = 0
+                    continue
 
+                fault_nr += 1
                 self.faults.append(fault)
             # Find process crashes
             if event.type == "process_state_change" and event.arg1 == "1":
@@ -363,10 +361,11 @@ class History:
                 cond.time = time_rounded
                 fault.begin_conditions.append(cond)
 
+                fault_nr += 1
                 self.faults.append(fault)
 
             # Find process pauses/waits
-            if event.type == "process_state_change" and event.arg1 == "2":
+            if event.type == "process_state_change" and event.arg1 == "4":
                 for node_name, pid_list in self.pids.items():
                     if event.pid in pid_list:
                         event.node = node_name
@@ -396,11 +395,16 @@ class History:
                     continue
 
                 fault_timestamp = int(event.time) - fault.duration * 1000000
-                # print("Updating event_id for process pause in node {} with duration {} at timestamp {}".format(event.node,fault.duration,fault_timestamp))
+                print(
+                    "Updating event_id for process pause in node {} with duration {} at timestamp {}".format(
+                        event.node, fault.duration, fault_timestamp
+                    )
+                )
                 fault.event_id = self.find_event_by_id_by_time(
                     fault_timestamp, event.node
                 )
 
+                print("EVENT ID: {}, FAULT: {}".format(fault.event_id, fault.name))
                 cond = time_cond()
                 cond.time = time_rounded
                 fault.begin_conditions.append(cond)
@@ -589,7 +593,7 @@ class History:
                     break
 
         # Checks for unique events in window
-        # print("Function calls in window:\n", function_calls)
+        print("Function calls in window:\n", function_calls)
         for function_call in function_calls:
             if (
                 function_call.name in function_calls_counter
@@ -597,7 +601,7 @@ class History:
             ):
                 function_calls_counter.pop(function_call.name)
 
-        # Returns number of events found: int and the important events: dict
+        # Returns number of events found: int, important events: dict and the events:list
         return (event_counter, function_calls_counter, function_calls)
 
     # TODO: Needs to look in the normal trace if the event is common
@@ -624,34 +628,31 @@ class History:
                 count += 1
         return count
 
-    def check_fault_order(self, faults_detected, fault_name):
-        print("faults_detected:", faults_detected)
-        print("faults_injected:", self.faults_injected)
+    # def check_fault_order(self, faults_detected, fault_name):
+    #     correct_order_index = next(
+    #         (i for i, f in enumerate(faults_detected) if f.name == fault_name), None
+    #     )
+    #     schedule_index = next(
+    #         (i for i, f in enumerate(self.faults_injected) if f.name == fault_name),
+    #         None,
+    #     )
 
-        correct_order_index = next(
-            (i for i, f in enumerate(faults_detected) if f.name == fault_name), None
-        )
-        schedule_index = next(
-            (i for i, f in enumerate(self.faults_injected) if f.name == fault_name),
-            None,
-        )
+    #     if correct_order_index is None or schedule_index is None:
+    #         return False
+    #     elif correct_order_index == 0 and schedule_index == 0:
+    #         return True
+    #     elif correct_order_index == 0 or schedule_index == 0:
+    #         return False
 
-        if correct_order_index is None or schedule_index is None:
-            return False
-        elif correct_order_index == 0 and schedule_index == 0:
-            return True
-        elif correct_order_index == 0 or schedule_index == 0:
-            return False
+    #     fault_before_correct = faults_detected[correct_order_index - 1]
+    #     fault_before_injected = self.faults_injected[schedule_index - 1]
 
-        fault_before_correct = faults_detected[correct_order_index - 1]
-        fault_before_injected = self.faults_injected[schedule_index - 1]
-
-        print(
-            "Fault before correct:{} and fault before injected: {}".format(
-                fault_before_correct.name, fault_before_injected.name
-            )
-        )
-        return fault_before_correct.name == fault_before_injected.name
+    #     print(
+    #         "Fault before correct:{} and fault before injected: {}".format(
+    #             fault_before_correct.name, fault_before_injected.name
+    #         )
+    #     )
+    #     return fault_before_correct.name == fault_before_injected.name
 
     def check_order(self, fault_injected_event, window, origin_order):
         print("WINDOW:", window, "ORIGIN_ORDER:", origin_order)
@@ -694,7 +695,6 @@ class History:
                 event_id = event.id
             else:
                 break
-                print("Found new event id for a fault process pause/network_partition")
         return event_id
 
     def write_to_file(self, filename):
@@ -829,20 +829,20 @@ def choose_faults(faults, history_buggy, history):
         if fault.type == "process_kill":
             faults_choosen.append(fault)
         if fault.type == "syscall":
-            if fault.state_score == 0:
-                cond = file_syscall_condition()
-                last_syscall_event = history_buggy.get_context_syscall_before(
-                    fault.target, fault.event_id
-                )
-                if last_syscall_event is None:
-                    continue
-                count = history.count_syscall_on_filename(
-                    fault.target, last_syscall_event.name, last_syscall_event.arg5
-                )
-                cond.syscall_name = last_syscall_event.name
-                cond.file_name = get_name_from_path(last_syscall_event.arg5)
-                cond.call_count = 1
-                fault.begin_conditions.append(cond)
+            # if fault.state_score == 0:
+            #     cond = file_syscall_condition()
+            #     last_syscall_event = history_buggy.get_context_syscall_before(
+            #         fault.target, fault.event_id
+            #     )
+            #     if last_syscall_event is None:
+            #         continue
+            #     count = history.count_syscall_on_filename(
+            #         fault.target, last_syscall_event.name, last_syscall_event.arg5
+            #     )
+            #     cond.syscall_name = last_syscall_event.name
+            #     cond.file_name = get_name_from_path(last_syscall_event.arg5)
+            #     cond.call_count = 1
+            #     fault.begin_conditions.append(cond)
             faults_choosen.append(fault)
         if fault.type == "process_pause":
             faults_choosen.append(fault)

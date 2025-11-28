@@ -425,7 +425,7 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 
 	struct sys_info sys_info = {
 		0,
-		OPENNAT_COUNT,
+		OPENNAT_STATE,
 		OPENAT_SPECIFIC,
 		OPENAT_FAULT,
 		OPENAT_FILE,

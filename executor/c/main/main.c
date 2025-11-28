@@ -236,21 +236,6 @@ int main()
 	}
 
 	if(plan){
-	    if (plan->setup.pid){
-    	    printf("KILLING SETUP(PID:%d)\n",plan->setup.pid);
-       		kill(plan->setup.pid,SIGTERM);
-    		// Wait for it to exit
-                int status;
-                if (waitpid(plan->setup.pid, &status, 0) == -1) {
-                    perror("waitpid failed");
-                } else {
-                    printf("Setup terminated with status %d\n", status);
-            }
-
-            printf("CLOSING SETUP PIPE\n");
-            fclose(plan->setup.read_end);
-            printf("CLOSED SETUP PIPE\n");
-		}
 
 		if (plan->workload.pid){
 		    printf("KILLING WORKLOAD(PID:%d)\n",plan->workload.pid);
@@ -368,6 +353,22 @@ int main()
 			waitpid(nodes[i].pid_tc_in,NULL,0);
 		}
 	}
+
+    if (plan->setup.pid){
+       	    printf("KILLING SETUP(PID:%d)\n",plan->setup.pid);
+          		kill(plan->setup.pid,SIGTERM);
+      		// Wait for it to exit
+                    int status;
+                    if (waitpid(plan->setup.pid, &status, 0) == -1) {
+                        perror("waitpid failed");
+                    } else {
+                        printf("Setup terminated with status %d\n", status);
+                }
+
+                printf("CLOSING SETUP PIPE\n");
+                fclose(plan->setup.read_end);
+                printf("CLOSED SETUP PIPE\n");
+    }
 
 	if(plan->lazyfs.script){
 	    kill(plan->lazyfs.pid,SIGTERM);
@@ -632,7 +633,7 @@ void collect_container_pids(){
 		for(int i=0; i < NODE_COUNT;i++){
 			if (nodes[i].container){
 			    int container_pid = 0;
-				if (nodes[i].container_type == CONTAINER_TYPE_DOCKER){
+				if (nodes[i].container_type == CONTAINER_TYPE_DOCKER || nodes[i].container_type == CONTAINER_TYPE_DOCKER_AUTOMATIC){
 					container_pid = get_docker_container_pid(nodes[i].name);
 				}
 				if (nodes[i].container_type == CONTAINER_TYPE_LXC){
@@ -693,7 +694,7 @@ void collect_container_processes(){
 		     //If the node pid is in a file inside the container check for it
           	 if (strlen(nodes[i].pid_file)){
                 char *dir;
-                if (nodes[i].container_type == CONTAINER_TYPE_DOCKER){
+                if (nodes[i].container_type == CONTAINER_TYPE_DOCKER || nodes[i].container_type == CONTAINER_TYPE_DOCKER_AUTOMATIC){
                     dir = get_docker_container_location(nodes[i].name);
                 }
                 if (nodes[i].container_type == CONTAINER_TYPE_LXC){
@@ -795,8 +796,9 @@ void start_nodes_scripts(){
 void start_container_nodes_scripts(){
 	print_block("CONTAINER SCRIPTS: STARTED");
 	for(int i=0;i<NODE_COUNT;i++){
-
-		if (nodes[i].container && !(strlen(nodes[i].pid_file))){
+	    printf("Container type is %d \n",nodes[i].container_type);
+		if (nodes[i].container && !(strlen(nodes[i].pid_file)) && nodes[i].container_type != CONTAINER_TYPE_DOCKER_AUTOMATIC){
+		    printf("Finding PID for %s \n",nodes[i].name);
 			kill(nodes[i].pid,SIGUSR1);
 			//Need to have the pid of the process inside the container
 			//TODO: DOES NOT WORK FOR LXC
@@ -804,6 +806,11 @@ void start_container_nodes_scripts(){
 			retrieve_new_pid_container(i, nodes[i].pid);
 			bpf_map_update_elem(constants.pids, &nodes[i].current_pid, &one, BPF_ANY);
 			nodes[i].pid = nodes[i].current_pid;
+		}
+		if (nodes[i].container && nodes[i].container_type == CONTAINER_TYPE_DOCKER_AUTOMATIC){
+		    //TODO: Implement this
+    		// bpf_map_update_elem(constants.pids, &nodes[i].current_pid, &one, BPF_ANY);
+    		// nodes[i].pid = nodes[i].current_pid;
 		}
 		if(nodes[i].pid_tc_in !=0){
 		    printf("Start TC prog for node %d \n",i);
@@ -1372,7 +1379,7 @@ int setup_tc_progs(){
 			//In containers the index inside is always -1 from the one in the host namespace
 			__u32 index_in_unsigned = 0;
 			if (nodes[target].container){
-			    if (nodes[target].container_type == CONTAINER_TYPE_DOCKER){
+			    if (nodes[target].container_type == CONTAINER_TYPE_DOCKER || nodes[target].container_type == CONTAINER_TYPE_DOCKER_AUTOMATIC){
 			        index_in_unsigned = (__u32)2;
 			    }if(nodes[target].container_type == CONTAINER_TYPE_LXC){
 					index_in_unsigned = (__u32)index-1;

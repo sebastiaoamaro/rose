@@ -21,7 +21,7 @@
 #define MAX_RESPONSE_LEN 1024
 #define CONTAINER_TYPE_DOCKER 1
 #define CONTAINER_TYPE_LXC 2
-
+#define CONTAINER_TYPE_DOCKER_AUTOMATIC 3
 struct fault;
 
 struct tc_key{
@@ -148,7 +148,7 @@ enum stateinfo{
     OPENS = 13,
     DIRCREATED =14,
     NEWFSTATAT_STATE = 15,
-    OPENNAT_COUNT = 16,
+    OPENNAT_STATE = 16,
     // VFS_FSTATAT_COUNT = 17,
     // VFS_FSTATAT_SPECIFIC = 18,
     NEWFSTATAT_FILE_STATE = 19,

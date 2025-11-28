@@ -4,13 +4,13 @@ export TERM=xterm
 sudo sh -c 'echo 1048576 > /proc/sys/fs/aio-max-nr'
 n=5
 # Launch LXD Containers (5 nodes)
-for i in $(seq 1 $n); do lxc launch ubuntu:22.04 n${i}; done
+for i in $(seq 1 $n); do lxc launch ubuntu:18.04 n${i}; done
 
 echo "Started 5 LXD containers"
 
 # Install Required Packages
 for i in $(seq 1 $n); do
-	lxc exec n${i} -n -- sh -c "apt-get -qy update && apt-get -qy install curl gnupg2 openssh-server sudo && apt-get upgrade -qy"
+	lxc exec n${i} -n -- sh -c "apt-get -qy update && apt-get -qy install curl openssh-server sudo && apt-get upgrade -qy"
 	echo "Installed packages on n${i}"
 done
 

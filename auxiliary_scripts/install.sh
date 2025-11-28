@@ -63,7 +63,7 @@ cd ../../../../auxiliary_scripts
 echo "Building libbpf..."
 cd ../libbpf/src
 make > /dev/null
-sudo make install > /dev/null
+sudo make install
 cd ../../auxiliary_scripts
 
 #bpftool
@@ -86,13 +86,13 @@ cd src
 echo "Building bpftool..."
 make clean > /dev/null
 make > /dev/null
-sudo make install > /dev/null
+sudo make install
 export PATH=/usr/local/bin:$PATH
 cd ../../auxiliary_scripts
 
 #Anduril
 sudo apt-get update
-sudo apt install git maven ant vim openjdk-8-jdk
+sudo apt install -y git maven ant vim openjdk-8-jdk
 sudo update-alternatives --set java $(sudo update-alternatives --list java | grep "java-8")
 
 export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64

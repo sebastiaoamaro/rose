@@ -10,14 +10,17 @@ execution_plan:
   tracer:
     tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
-    tracing_type: sys_all_trace,container_controlled
+    tracing_type: production_trace,container_controlled
 nodes:
   mongo-0:
     container: true
     ip: 172.19.0.2
+    container_type: docker_automatic
   mongo-1:
     container: true
     ip: 172.19.0.3
+    container_type: docker_automatic
   mongo-2:
     container: true
     ip: 172.19.0.4
+    container_type: docker_automatic

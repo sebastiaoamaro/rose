@@ -14,18 +14,23 @@ execution_plan:
 nodes:
   mongo-0:
     container: true
+    container_type: docker_automatic
     ip: 172.20.0.2
   mongo-1:
     container: true
+    container_type: docker_automatic
     ip: 172.20.0.3
   mongo-2:
     container: true
+    container_type: docker_automatic
     ip: 172.20.0.4
   mongo-3:
     container: true
+    container_type: docker_automatic
     ip: 172.20.0.5
   mongo-4:
     container: true
+    container_type: docker_automatic
     ip: 172.20.0.6
 
 faults:

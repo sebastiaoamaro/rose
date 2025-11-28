@@ -34,7 +34,10 @@ use std::time;
 use std::time::Duration;
 pub const CONTAINER_TYPE_DOCKER: i32 = 1;
 pub const CONTAINER_TYPE_LXC: i32 = 2;
+pub const CONTAINER_TYPE_DOCKER_AUTOMATIC: i32 = 3;
 pub const LOCATION_TRACEPOINT_VECTOR: i32 = 0;
+pub const PROCESS_PAUSE: u32 = 4;
+pub const PROCESS_CRASH: u32 = 1;
 use std::fmt;
 pub mod pin_maps {
     include!(concat!(env!("OUT_DIR"), "/pin_maps.skel.rs"));
@@ -153,17 +156,7 @@ pub fn start_tracing(
 ) -> Result<()> {
     let _xdp_prog;
 
-    if mode == "container" {
-        trace_containers(
-            nodes_info,
-            skel_enum,
-            hashmap_pid_to_node,
-            hashmap_links,
-            functions.clone(),
-            binary_path,
-        )
-        .expect("Failed to trace containers");
-    } else if mode == "container_controlled" {
+    if mode == "container_controlled" {
         trace_containers_controlled(
             nodes_info.clone(),
             skel_enum,
@@ -327,102 +320,6 @@ pub fn start_tracing_process(
     }
 }
 
-pub fn trace_containers(
-    nodes_info: String,
-    skel: &mut SkelEnum<'_, 'static>,
-    hashmap_pid_to_node: &mut HashMap<i32, String>,
-    mut hashmap_links: &mut HashMap<i32, Vec<Link>>,
-    functions: Vec<(String, usize)>,
-    binary_path: String,
-) -> Result<()> {
-    let mut join_handles = vec![];
-    let mut tx_handles = vec![];
-
-    let path = nodes_info;
-    let file: File = File::open(&path).expect("File not found");
-    let reader = BufReader::new(file);
-    for line in reader.lines() {
-        let line = line?;
-        let parts: Vec<&str> = line.split(',').collect();
-
-        if parts.len() == 3 {
-            let node_name = parts[0].trim();
-            let pid: i32 = match parts[1].trim().parse() {
-                Ok(num) => num,
-                Err(_) => {
-                    tracer_println!("Failed to parse integer on line: {}", line);
-                    continue;
-                }
-            };
-            let veth = parts[2].trim();
-
-            let veth_index = if_nametoindex(veth).map_err(|e| e.to_string()).unwrap();
-
-            let pid_vec = u32_to_u8_array_little_endian(pid);
-            let one = u32_to_u8_array_little_endian(1);
-            skel.update(&pid_vec, &one);
-
-            hashmap_pid_to_node.insert(pid, node_name.to_string().clone());
-
-            let (tx, rx) = mpsc::channel();
-            tx_handles.push(tx);
-            //CONTAINER_TYPE_DOCKER is temporary
-            start_tracing_container(
-                pid,
-                CONTAINER_TYPE_DOCKER,
-                node_name.to_string(),
-                &mut hashmap_links,
-                functions.clone(),
-                binary_path.clone(),
-                skel,
-                rx,
-                &mut join_handles,
-                false,
-            );
-            start_xdp_in_container(pid, (veth_index) as i32, CONTAINER_TYPE_DOCKER);
-        } else {
-            tracer_println!("Incorrect format on line: {}", line);
-        }
-    }
-
-    write_to_file("check.txt".to_string(), "ready".to_string()).expect("Failed to write to file");
-
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    })?;
-
-    while running.load(Ordering::SeqCst) {
-        //TODO: Check for bug
-        sleep(Duration::from_secs(1));
-    }
-
-    for tx in tx_handles {
-        let send_res = tx.send(());
-
-        match send_res {
-            Ok(_) => {
-                //tracer_println!("Sent successfully")
-            }
-            Err(e) => tracer_println!("Error sending: {}", e),
-        }
-    }
-
-    for handle in join_handles {
-        let result = handle.join();
-
-        match result {
-            Ok(_) => {
-                //tracer_println!("Thread finished successfully")
-            }
-            Err(_e) => tracer_println!("Thread finished with an error"),
-        }
-    }
-
-    Ok(())
-}
-
 pub fn start_tracing_container(
     pid: i32,
     container_type: i32,
@@ -529,24 +426,35 @@ pub fn trace_containers_controlled(
 
             while !skel.check(&pid_vec) {}
 
+            hashmap_links.insert(pid, vec![]);
+
             let (tx, rx) = mpsc::channel();
             tx_handles.push(tx);
 
             let mut container_location = "".to_string();
+            let mut controlled = true;
             if container_type == CONTAINER_TYPE_DOCKER {
                 container_location = get_overlay2_location(&node_name).unwrap();
+                controlled = true;
+                let binary_location = format!("{}{}", container_location, binary_path);
+                if !probes_attached {
+                    for (index_function, function) in functions.clone().iter().enumerate() {
+                        skel.attach_uprobe(
+                            index_function,
+                            &function.0,
+                            function.1,
+                            binary_location.clone(),
+                            pid,
+                            hashmap_links,
+                        );
+                    }
+                    probes_attached = true;
+                }
             }
             if container_type == CONTAINER_TYPE_LXC {
                 container_location = get_lxc_rootfs_location(&node_name);
-            }
-            //Hold the references to the uprobes so they are not dropped
-            hashmap_links.insert(pid, vec![]);
-
-            let binary_location = format!("{}{}", container_location, binary_path);
-
-            //tracer_println!("BINARY LOCATION: {}", binary_location);
-
-            if !probes_attached {
+                controlled = false;
+                let binary_location = format!("{}{}", container_location, binary_path);
                 for (index_function, function) in functions.clone().iter().enumerate() {
                     skel.attach_uprobe(
                         index_function,
@@ -557,8 +465,27 @@ pub fn trace_containers_controlled(
                         hashmap_links,
                     );
                 }
-                probes_attached = true;
             }
+            //If the type is docker automatic it means the compose started the nodes
+            if container_type == CONTAINER_TYPE_DOCKER_AUTOMATIC {
+                container_location = get_overlay2_location(&node_name).unwrap();
+                controlled = false;
+                let binary_location = format!("{}{}", container_location, binary_path);
+                if !probes_attached {
+                    for (index_function, function) in functions.clone().iter().enumerate() {
+                        skel.attach_uprobe(
+                            index_function,
+                            &function.0,
+                            function.1,
+                            binary_location.clone(),
+                            pid,
+                            hashmap_links,
+                        );
+                    }
+                    probes_attached = true;
+                }
+            }
+
             start_tracing_container(
                 pid,
                 container_type,
@@ -569,7 +496,7 @@ pub fn trace_containers_controlled(
                 skel,
                 rx,
                 &mut join_handles,
-                true,
+                controlled,
             );
 
             let node_already_traced = hashmap_node_to_pid.get(&node_name.clone()).is_some();
@@ -1268,24 +1195,27 @@ pub fn monitor_pid(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_duration = time::Duration::from_millis(1000);
     let mut events_process_pause = vec![];
-    let check_process = Process::new(pid);
-    let process = match check_process {
-        Ok(process_alive) => process_alive,
+
+    let target_pid = pid;
+
+    let check_target = Process::new(target_pid);
+    let process = match check_target {
+        Ok(p) => p,
         Err(e) => {
-            tracer_println!("Process with PID {} not found: {}", pid, e);
+            tracer_println!("Target process {} not found: {}", target_pid, e);
             return Ok(());
         }
     };
+
     let mut duration = 0;
     let mut state = Running;
-    //Default process is Running
+
     loop {
         if stop_signal.try_recv().is_ok() {
-            tracer_println!("Stopping monitoring for PID:{}", pid);
+            tracer_println!("Stopping monitoring for PID:{}", target_pid);
             break;
         }
 
-        // Fetch process information
         let p_info = process.stat();
         let timestamp = std::time::Duration::from(nix::time::clock_gettime(
             nix::time::ClockId::CLOCK_MONOTONIC,
@@ -1296,60 +1226,59 @@ pub fn monitor_pid(
                 state = p_info.state().unwrap();
                 if state == Waiting || state == Stopped {
                     duration += 1;
-                    tracer_println!("Process detected as stopped");
                 }
                 //If the process was waiting/stopped for more than 3 seconds we generate an event and clear the variables
                 else if duration > 3 {
                     let event = Event {
                         event_type: 5,
                         id: 0,
-                        pid: pid as u32,
+                        pid: target_pid as u32,
                         tid: 0,
                         timestamp: timestamp as u64,
                         ret: 0,
-                        arg1: state as u32,
+                        arg1: PROCESS_PAUSE,
                         arg2: duration,
                         arg3: 0,
                         arg4: 0,
                         extra: [0; 256],
                     };
                     events_process_pause.push(event);
+                    tracer_println!("PROCESS:{} NO LONGER PAUSED, ADDING EVENT", target_pid);
                     duration = 0;
                 } else if state != Waiting && state != Stopped {
                     duration = 0;
+                } else if state == Zombie {
+                    //Process finished event
+                    let event = Event {
+                        event_type: 6,
+                        id: 0,
+                        pid: target_pid as u32,
+                        tid: 0,
+                        timestamp: timestamp as u64,
+                        ret: 0,
+                        arg1: PROCESS_CRASH,
+                        arg2: duration,
+                        arg3: 0,
+                        arg4: 0,
+                        extra: [0; 256],
+                    };
+                    tracer_println!("PROCESS:{} DEAD, ADDING EVENT", target_pid);
+                    events_process_pause.push(event);
+                    break;
                 }
-                //TODO: Maybe usefull in other scenarios
-                // if state == Zombie {
-                //     //Process finished event
-                //     let event = Event {
-                //         event_type: 6,
-                //         id: 0,
-                //         pid: pid as u32,
-                //         tid: 0,
-                //         timestamp: timestamp as u64,
-                //         ret: 0,
-                //         arg1: state as u32,
-                //         arg2: duration,
-                //         arg3: 0,
-                //         arg4: 0,
-                //         extra: [0; 256],
-                //     };
-                //     //events_process_pause.push(event);
-                //     tracer_println!("PROCESS:{} DEAD, ADDING EVENT", pid);
-                //     break;
-                // }
+
                 thread::sleep(sleep_duration);
             }
-            Err(e) => {
+            Err(_e) => {
                 if duration > 3 {
                     let event = Event {
                         event_type: 5,
                         id: 0,
-                        pid: pid as u32,
+                        pid: target_pid as u32,
                         tid: 0,
                         timestamp: timestamp as u64,
                         ret: 0,
-                        arg1: state as u32,
+                        arg1: PROCESS_PAUSE,
                         arg2: duration,
                         arg3: 0,
                         arg4: 0,
@@ -1357,12 +1286,26 @@ pub fn monitor_pid(
                     };
                     events_process_pause.push(event);
                 }
-                tracer_println!("Finished tracing for PID:{}", pid);
+
+                let event = Event {
+                    event_type: 6,
+                    id: 0,
+                    pid: target_pid as u32,
+                    tid: 0,
+                    timestamp: timestamp as u64,
+                    ret: 0,
+                    arg1: PROCESS_CRASH,
+                    arg2: duration,
+                    arg3: 0,
+                    arg4: 0,
+                    extra: [0; 256],
+                };
+                tracer_println!("PROCESS:{} DEAD, ADDING EVENT", target_pid);
+                events_process_pause.push(event);
                 break;
             }
         }
     }
-    tracer_println!("Monitoring process with PID finished {} has exited.", pid);
 
     for event in events_process_pause {
         let event_name = "process_state_change".to_string();
@@ -1451,7 +1394,7 @@ pub fn monitor_pid_controlled(
                         tid: 0,
                         timestamp: timestamp as u64,
                         ret: 0,
-                        arg1: Waiting as u32,
+                        arg1: PROCESS_PAUSE,
                         arg2: duration,
                         arg3: 0,
                         arg4: 0,
@@ -1471,8 +1414,7 @@ pub fn monitor_pid_controlled(
                         tid: 0,
                         timestamp: timestamp as u64,
                         ret: 0,
-                        //1 Represents process death
-                        arg1: 1,
+                        arg1: PROCESS_CRASH,
                         arg2: duration,
                         arg3: 0,
                         arg4: 0,
@@ -1494,7 +1436,7 @@ pub fn monitor_pid_controlled(
                         tid: 0,
                         timestamp: timestamp as u64,
                         ret: 0,
-                        arg1: state as u32,
+                        arg1: PROCESS_PAUSE,
                         arg2: duration,
                         arg3: 0,
                         arg4: 0,
@@ -1510,7 +1452,7 @@ pub fn monitor_pid_controlled(
                     tid: 0,
                     timestamp: timestamp as u64,
                     ret: 0,
-                    arg1: state as u32,
+                    arg1: PROCESS_CRASH,
                     arg2: duration,
                     arg3: 0,
                     arg4: 0,

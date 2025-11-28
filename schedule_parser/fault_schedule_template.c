@@ -108,7 +108,7 @@ void create_node(node* node, char* name,int pid,char* pid_file, char* veth, char
 
 
     if (container){
-        if (container_type == CONTAINER_TYPE_DOCKER){
+        if (container_type == CONTAINER_TYPE_DOCKER || container_type == CONTAINER_TYPE_DOCKER_AUTOMATIC){
             char* interface_name = get_veth_interface_name_docker(node->name);
             //printf("Interface name is %s \n",interface_name);
             // memset(node->veth,'\0',strlen(interface_name));

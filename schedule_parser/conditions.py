@@ -237,7 +237,7 @@ def get_cond_type_nr(type, condition):
                 case "newfstatat":
                     return "NEWFSTATAT_STATE"
                 case "openat":
-                    return 16
+                    return "OPENNAT_STATE"
                 case "fdatasync":
                     return "FDATASYNC_STATE"
                 case "fsync":

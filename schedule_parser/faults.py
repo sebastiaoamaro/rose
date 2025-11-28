@@ -1,12 +1,13 @@
 import re
+
 from schedule_parser.conditions import (
+    build_fault_conditions,
     build_file_syscall,
     build_syscall,
-    build_user_function,
-    get_cond_type_nr,
-    build_fault_conditions,
-    file_syscall_condition,
     build_time,
+    build_user_function,
+    file_syscall_condition,
+    get_cond_type_nr,
 )
 
 
@@ -70,7 +71,7 @@ class Fault:
                     details = details + " " + self.begin_conditions[0].file_name
         else:
             details = self.type
-        return f"Fault (name={self.name}, state_score = {self.state_score}, type={self.type},details={details},target={self.target},traced={self.traced},start_time={self.start_time},duration={self.duration})\n"
+        return f"Fault (name={self.name}, state_score = {self.state_score}, type={self.type},details={details},target={self.target},traced={self.traced},start_time={self.start_time},duration={self.duration},event={self.event_id})\n"
 
 
 # Type of faults
