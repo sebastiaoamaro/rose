@@ -4,6 +4,7 @@
 #include <bits/pthreadtypes.h>
 #include <linux/bpf.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <time.h>
 #include <sys/resource.h>
@@ -796,9 +797,7 @@ void start_nodes_scripts(){
 void start_container_nodes_scripts(){
 	print_block("CONTAINER SCRIPTS: STARTED");
 	for(int i=0;i<NODE_COUNT;i++){
-	    printf("Container type is %d \n",nodes[i].container_type);
 		if (nodes[i].container && !(strlen(nodes[i].pid_file)) && nodes[i].container_type != CONTAINER_TYPE_DOCKER_AUTOMATIC){
-		    printf("Finding PID for %s \n",nodes[i].name);
 			kill(nodes[i].pid,SIGUSR1);
 			//Need to have the pid of the process inside the container
 			//TODO: DOES NOT WORK FOR LXC
@@ -1099,29 +1098,7 @@ void setup_begin_conditions(){
 		// 		}
 		// 	}
 		// }
-		if (faults[i].target == -2){
-			for(int i = 0; i < NODE_COUNT; i++){
-				if (nodes[i].leader_probe)
-					continue;
-				if(nodes[i].container){
-					//Find the directory in hostnamespace
-					char *dir;
-					if (nodes[i].container_type == CONTAINER_TYPE_DOCKER)
-					   dir = get_docker_container_location(nodes[i].name);
-					if (nodes[i].container_type == CONTAINER_TYPE_LXC)
-					   dir = get_lxc_container_location(nodes[i].name);
 
-					//Combine paths
-					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
-					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1,0);
-
-				}else{
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].binary,FAULT_COUNT,0,constants.timemode, 1,0);
-				}
-
-			}
-		}
 
 
 
@@ -1155,9 +1132,9 @@ void setup_uprobes(){
 
 					printf("Added uprobe %s in location %s\n",user_function.symbol,combined_path);
 
-					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
+					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset,user_function.absolute_offset);
 				}else{
-					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
+					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset,user_function.absolute_offset);
 				}
 				insert_relevant_condition_in_ebpf(i,pid,faults[i].fault_conditions_begin[j].condition.user_function.cond_nr,user_function.call_count);
 				user_func_cond_nr++;
@@ -1179,10 +1156,33 @@ void setup_uprobes(){
 					//Combine paths
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1,0);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1,0,false);
 				}else{
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].leader_symbol,FAULT_COUNT,0,constants.timemode, 1,0);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].leader_symbol,FAULT_COUNT,0,constants.timemode, 1,0,false);
 				}
+			}
+		}
+		if (faults[i].target == -2){
+			for(int i = 0; i < NODE_COUNT; i++){
+				if (nodes[i].leader_probe)
+					continue;
+				if(nodes[i].container){
+					//Find the directory in hostnamespace
+					char *dir;
+					if (nodes[i].container_type == CONTAINER_TYPE_DOCKER)
+					   dir = get_docker_container_location(nodes[i].name);
+					if (nodes[i].container_type == CONTAINER_TYPE_LXC)
+					   dir = get_lxc_container_location(nodes[i].name);
+
+					//Combine paths
+					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
+					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1,0,false);
+
+				}else{
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].binary,FAULT_COUNT,0,constants.timemode, 1,0,false);
+				}
+
 			}
 		}
 	}
@@ -1826,7 +1826,7 @@ void reinject_uprobes(int node_nr){
                 dir = get_lxc_container_location(nodes[node_nr].name);
       		char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
       		snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes->binary);
-      		node->leader_probe = uprobe(nodes->current_pid,nodes->leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode,1,0);
+      		node->leader_probe = uprobe(nodes->current_pid,nodes->leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode,1,0,false);
 		}
 	}
 	int user_func_cond_nr = 0;
@@ -1846,9 +1846,9 @@ void reinject_uprobes(int node_nr){
 						//Combine paths
 						char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 						snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
-						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
+						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset,user_function.absolute_offset);
 					}else{
-						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
+						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset,user_function.absolute_offset);
 					}
 					user_func_cond_nr++;
 				}

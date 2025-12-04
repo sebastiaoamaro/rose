@@ -1,12 +1,10 @@
 execution_plan:
-  maximum_time: 120
+  maximum_time: 90
   setup:
     script: /vagrant/schedules/reproduced_bugs/mongo/mongo_3.2.10/scripts/start_cluster.sh
     duration: 60
   workload:
     script: /vagrant/schedules/reproduced_bugs/mongo/mongo_3.2.10/scripts/run_workload.sh
-  cleanup:
-    duration: 10
   tracer:
     tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
@@ -34,6 +32,20 @@ faults:
       - mongo-0
     ips_out:
       - mongo-0
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 20000
+
+  block_primary2:
+    type: block_ips
+    target: mongo-0
+    traced: mongo-0
+    duration: 60000
+    ips_in:
+      - mongo-1
+    ips_out:
+      - mongo-1
     begin_conditions:
       - condition1:
           type: time

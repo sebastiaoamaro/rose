@@ -564,6 +564,7 @@ char* get_docker_container_location(const char* container_name) {
     char command[MAX_COMMAND_LEN];
     char response[MAX_RESPONSE_LEN];
 
+    printf("Finding location for %s \n",container_name);
     // Execute docker container inspect command
     snprintf(command, MAX_COMMAND_LEN, "docker container inspect %s | jq -r '.[0].GraphDriver.Data.MergedDir'", container_name);
     FILE* fp = popen(command, "r");

@@ -11,6 +11,7 @@
 #include <argp.h>
 #include <errno.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -127,28 +128,28 @@ static const char *unit_str(void)
 // 	return 0;
 // }
 
-static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *function,int offset)
+static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *function,int offset, int absolute_offset)
 {
 	char bin_path[PATH_MAX];
 	off_t func_off;
 	int ret = -1;
 	long err;
-
 	if (binary_location)
 		strcpy(bin_path,binary_location);
 	else if(resolve_binary_path(binary_location, env.pid, bin_path, sizeof(bin_path)))
 		goto out_binary;
 
-	func_off = get_elf_func_offset(bin_path, function);
-	if (func_off < 0) {
-		warn("Could not find %s in %s\n", function, bin_path);
-		goto out_binary;
+	if (absolute_offset){
+	    func_off = 0;
+	}else{
+    	func_off = get_elf_func_offset(bin_path, function);
+    	if (func_off < 0) {
+    		warn("Could not find %s in %s\n", function, bin_path);
+    		goto out_binary;
+    	}
 	}
 
-
-	obj->links.dummy_kprobe =
-		bpf_program__attach_uprobe(obj->progs.dummy_kprobe, false,
-					   env.pid, bin_path, func_off+offset);
+	obj->links.dummy_kprobe = bpf_program__attach_uprobe(obj->progs.dummy_kprobe, false, env.pid, bin_path, func_off+offset);
 	//printf("Injected probe for function %s at offset %d\n",function,func_off+offset);
 	if (!obj->links.dummy_kprobe) {
 		err = -errno;
@@ -164,7 +165,7 @@ out_binary:
 	return ret;
 }
 
-struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faultcount,int cond_pos,int timemode, int primary_function,int offset)
+struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faultcount,int cond_pos,int timemode, int primary_function,int offset, int absolute_offset)
 {
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
 
@@ -210,7 +211,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 		return NULL;
 	}
 
-		err = attach_uprobes(obj,binary_location,funcname,offset);
+		err = attach_uprobes(obj,binary_location,funcname,offset,absolute_offset);
 		if (err){
 			printf("Error is %d \n",err);
 			return NULL;

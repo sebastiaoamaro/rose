@@ -30,6 +30,14 @@ sudo apt-get update
 sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 sudo docker run hello-world
 
+sudo apt-get install --yes --allow-downgrades \
+  docker-ce="5:28.5.2-1~ubuntu.24.04~noble" \
+  docker-ce-cli="5:28.5.2-1~ubuntu.24.04~noble" \
+  docker-ce-rootless-extras="5:28.5.2-1~ubuntu.24.04~noble" \
+  containerd.io \
+  docker-buildx-plugin \
+  docker-compose-plugin
+
 #RUST
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 . "$HOME/.cargo/env"
@@ -50,12 +58,12 @@ sudo cp /sys/kernel/btf/vmlinux /usr/lib/modules/`uname -r`/build/
 echo "Building dwarves..."
 cd dwarves
 git config --global --add safe.directory /rose/executor/kernelmodule/dwarves
-git submodule update --init --recursive > /dev/null
+git submodule update --init --recursive
 mkdir -p build
 cd build
-cmake .. > /dev/null
-make > /dev/null
-sudo make install > /dev/null
+cmake ..
+make
+sudo make install
 sudo ldconfig
 cd ../../../../auxiliary_scripts
 

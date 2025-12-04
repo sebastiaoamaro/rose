@@ -1,5 +1,5 @@
 execution_plan:
-  maximum_time: 120
+  maximum_time: 180
   setup:
     script: /vagrant/schedules/reproduced_bugs/mongo/mongo_2.4.3/scripts/start_cluster.sh
     duration: 90

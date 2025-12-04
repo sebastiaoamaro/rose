@@ -461,7 +461,7 @@ class History:
 
                 frequency = event.arg3
                 ratio = int(frequency) / (self.experiment_time)
-                if ratio > 1:
+                if ratio > 0.5:
                     # Calculate the delay possible partition which never healed
                     delay = int((self.end_time - event.time) / 1000000)
                     # If delay is less than 5000, then it is not relevant
@@ -710,7 +710,7 @@ def get_fault_by_name(faults, fault_name):
     print("Failed to find previous fault ", fault_name, "faults is ", faults)
 
 
-def write_new_schedule(base_schedule, faults):
+def write_new_schedule(base_schedule, faults, output_schedule):
     # Put faults by time order to facilitate readability
     faults = sorted(faults, key=lambda x: x.start_time)
     file = open(base_schedule, "r")
@@ -719,8 +719,8 @@ def write_new_schedule(base_schedule, faults):
     exe_plan = {"execution_plan": base_schedule["execution_plan"]}
     nodes = {"nodes": base_schedule["nodes"]}
 
-    schedule_location = "temp_sched.yaml"
-    with open("temp_sched.yaml", "w") as file:
+    schedule_location = output_schedule
+    with open(schedule_location, "w") as file:
         yaml.dump(exe_plan, file, default_flow_style=False)
         yaml.dump(nodes, file, default_flow_style=False)
 

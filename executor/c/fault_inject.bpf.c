@@ -257,7 +257,6 @@ int BPF_KPROBE(__x64_sys_read,struct pt_regs *regs)
 
 	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
 
-
 	FileFDKey fdkey = {};
 
 	int process_fd = 1;

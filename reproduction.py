@@ -99,11 +99,9 @@ def parse_bug_reproduction(filename: str):
 
 
 def run_reproduction(schedule: str):
-    command = ["sudo", "./run_reproduction.sh", schedule]
+    command = ["sudo", "/vagrant/run_schedule.sh", schedule]
     try:
-        with open(
-            "/tmp/run_reproduction.log", "w", buffering=1
-        ) as file:  # Line buffering
+        with open("/tmp/run_schedule.log", "w", buffering=1) as file:  # Line buffering
             with subprocess.Popen(
                 command,
                 stdout=subprocess.PIPE,
@@ -545,7 +543,9 @@ def main():
             end_reproduction(replay_rate, runs_counter, schedule_location, start_time)
             return
 
-    schedule_location = write_new_schedule(bug_reproduction.schedule, faults_detected)
+    schedule_location = write_new_schedule(
+        bug_reproduction.schedule, faults_detected, "temp_sched.yaml"
+    )
 
     # Third attempts run schedules based on third level context information
     fault_to_condition_map_plt = {}
@@ -734,7 +734,9 @@ def main():
 
 
 def run_test(bug_reproduction, faults_detected):
-    schedule_location = write_new_schedule(bug_reproduction.schedule, faults_detected)
+    schedule_location = write_new_schedule(
+        bug_reproduction.schedule, faults_detected, "temp_sched.yaml"
+    )
     run_reproduction(schedule_location)
     buggy_run = check_oracle(
         bug_reproduction.oracle, str(0), bug_reproduction.result_folder
@@ -744,9 +746,8 @@ def run_test(bug_reproduction, faults_detected):
 
 
 def run_schedule(schedule, faults):
-    schedule_location = write_new_schedule(schedule, faults)
-    run_reproduction(schedule_location)
-    return schedule_location
+    run_reproduction(schedule)
+    return schedule
 
 
 def collect_and_parse(trace_location, result_folder, schedule_location, name):

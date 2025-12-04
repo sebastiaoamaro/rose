@@ -166,7 +166,7 @@ void add_begin_condition(struct fault* fault,fault_condition fault_condition,int
     fault->fault_conditions_begin[position] = fault_condition;
 }
 
-void build_user_function(user_function* user_func,char* binary_location,char* symbol,int call_count,int offset){
+void build_user_function(user_function* user_func,char* binary_location,char* symbol,int call_count,int offset, int absolute_offset){
 
     // memset(user_func->binary_location,'\0',sizeof(user_func->binary_location));
     strcpy(user_func->binary_location,binary_location);
@@ -174,6 +174,7 @@ void build_user_function(user_function* user_func,char* binary_location,char* sy
     strcpy(user_func->symbol,symbol);
     user_func->call_count = call_count;
     user_func->offset = offset;
+    user_func->absolute_offset = absolute_offset;
 }
 
 void build_file_syscall(file_system_call* file_syscall,int syscall, char* file_name,int call_count){

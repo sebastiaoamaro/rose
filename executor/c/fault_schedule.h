@@ -156,6 +156,7 @@ typedef struct user_function{
     int call_count;
     int cond_nr;
     int offset;
+    int absolute_offset;
 }user_function;
 
 typedef struct file_system_call{

@@ -46,6 +46,12 @@ fn main() -> Result<()> {
                 .attach_xdp(if_index - 1)
                 .expect("Failed to attach XDP program"),
         ),
+        3 => Some(
+            skel.progs
+                .xdp_pass
+                .attach_xdp(2)
+                .expect("Failed to attach XDP program"),
+        ),
         _ => None,
     };
 

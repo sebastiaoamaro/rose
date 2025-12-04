@@ -254,12 +254,11 @@ off_t get_elf_func_offset(const char *path, const char *func)
 			//printf("Not a relevant symbol \n");
 			continue;
 		}
-			
+
 		data = NULL;
 		while ((data = elf_getdata(scn, data))) {
 			for (i = 0; gelf_getsym(data, i, sym); i++) {
 				n = elf_strptr(e, shdr->sh_link, sym->st_name);
-				//printf("Func in pid is %s \n",n);
 				if (!n)
 					continue;
 				if (GELF_ST_TYPE(sym->st_info) != STT_FUNC)

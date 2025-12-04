@@ -3,6 +3,7 @@ class user_function_condition:
     binary_location = ""
     symbol = ""
     arguments = []
+    absolute_offset = False
     offset = 0
     call_count = 0
 
@@ -12,6 +13,7 @@ class user_function_condition:
             "binary_location": str(self.binary_location),
             "symbol": str(self.symbol),
             "offset": str(self.offset),
+            "absolute_offset": self.absolute_offset,
             "call_count": str(self.call_count),
         }
 
@@ -76,6 +78,9 @@ def build_user_function(user_function_config):
 
     if "offset" in user_function_config:
         user_function.offset = int(user_function_config["offset"])
+
+    if "absolute_offset" in user_function_config:
+        user_function.absolute_offset = user_function_config["absolute_offset"]
 
     return user_function
 
@@ -165,7 +170,7 @@ def build_fault_conditions(file, fault_nr, begin_conditions):
             fault_condition += (
                 """    fault_condition_#faultnr_#condnr.type = USER_FUNCTION;\n"""
             )
-            fault_condition += """    build_user_function(&user_func_#faultnr_#condnr,"#binary_location","#location",#call_count,#offset);\n"""
+            fault_condition += """    build_user_function(&user_func_#faultnr_#condnr,"#binary_location","#location",#call_count,#offset,#absolute_offset);\n"""
             fault_condition = fault_condition.replace(
                 "#binary_location", condition.binary_location
             )
@@ -178,6 +183,11 @@ def build_fault_conditions(file, fault_nr, begin_conditions):
             fault_condition = fault_condition.replace("#faultnr", str(fault_nr))
             fault_condition = fault_condition.replace("#condnr", str(condition_counter))
             fault_condition = fault_condition.replace("#offset", str(condition.offset))
+
+            if condition.absolute_offset:
+                fault_condition = fault_condition.replace("#absolute_offset", "true")
+            else:
+                fault_condition = fault_condition.replace("#absolute_offset", "false")
 
             file.write(fault_condition)
         if isinstance(condition, time_cond):
