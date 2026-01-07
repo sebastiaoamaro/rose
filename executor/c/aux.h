@@ -128,6 +128,8 @@ enum fault_type{
     CONNECT_FAULT = 42,
     TORN_SEQ = 43,
     CLEAR_CACHE = 44,
+    CRASH_FS = 45,
+    TORN_OP = 46,
     TEMP_EMPTY = 999
 };
 
@@ -210,7 +212,7 @@ bool is_element_in_array(int arr[], int size, int element);
 void print_fault_schedule();
 int send_signal(int pid, int signal,char*);
 long get_children_pids(pid_t pid);
-void kill_child_processes(pid_t parent_pid);
+void kill_child_processes(pid_t parent_pid)
 void bump_memlock_rlimit(void);
 void bump_file_rlimit(void);
 pid_t find_host_pid_for_container_pid(pid_t target_pid);

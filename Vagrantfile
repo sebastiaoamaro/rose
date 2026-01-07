@@ -4,7 +4,7 @@
 Vagrant.configure("2") do |config|
     config.vm.define "test1" do |test1|
         test1.vm.box = "bento/ubuntu-24.04"
-        test1.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","checkouts","build","repos","temp_sched.yaml","tests/bugdetection/redisraft/*"]
+        test1.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","checkouts","build","repos","temp_sched.yaml","tests/bugdetection/redisraft/*","lazyfs/tmp"]
         test1.vm.synced_folder "~/shared/test1/", "/shared",type:"virtualbox"
         test1.disksize.size = '128GB'
         test1.vm.network "private_network", ip: "192.168.56.10"
@@ -41,7 +41,7 @@ Vagrant.configure("2") do |config|
         "schedules/tracing_tests/redis/traces","tests/bugdetection/redisraft/*","temp_sched.yaml"]
         remote1.vm.synced_folder "~/shared/remote1/", "/shared",type:"virtualbox"
         remote1.vm.provider "virtualbox" do |v|
-            v.cpus = 20       # Set number of CPUs
+            v.cpus = 16       # Set number of CPUs
             v.memory = "30000"
         end
     end

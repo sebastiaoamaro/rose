@@ -24,4 +24,4 @@ faults:
       - condition1:
           type: syscall
           syscall_name: connect
-          call_count: 65
+          call_count: 25

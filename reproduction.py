@@ -99,7 +99,7 @@ def parse_bug_reproduction(filename: str):
 
 
 def run_reproduction(schedule: str):
-    command = ["sudo", "/vagrant/run_schedule.sh", schedule]
+    command = ["/vagrant/run_schedule.sh", schedule]
     try:
         with open("/tmp/run_schedule.log", "w", buffering=1) as file:  # Line buffering
             with subprocess.Popen(
@@ -272,7 +272,7 @@ def main():
         if fault.type == "syscall" and functions_to_analyze == 0:
             call_count = 1
 
-            while replay_rate < 75 and fault_occuring and call_count < 50:
+            while replay_rate < 75 and fault_occuring and call_count < 100:
                 call_count += 1
                 fault.begin_conditions[0].call_count = call_count
                 print("Testing fault ", faults_detected[fault_counter])

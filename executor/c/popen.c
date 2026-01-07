@@ -43,7 +43,6 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
             dup2(fd[0],0);
         }
 
-        //setpgid(0, 0);
         setpgid(child_pid, child_pid); //Needed so negative PIDs can kill children of /bin/sh
 
         //If it is not a container process, wait for the signal to start

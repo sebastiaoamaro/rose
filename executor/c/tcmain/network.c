@@ -91,6 +91,7 @@ int main(int,char **argv)
 		return 0;
 	}
 
+
 	if (signal(SIGINT, sig_int) == SIG_ERR) {
 		err = errno;
 		fprintf(stderr, "Can't set signal handler: %s\n", strerror(errno));
@@ -101,8 +102,12 @@ int main(int,char **argv)
 		sleep(1);
 	}
 
-	tc_opts.flags = tc_opts.prog_fd = tc_opts.prog_id = 0;
-	err = bpf_tc_detach(&tc_hook, &tc_opts);
+	struct bpf_tc_opts det_opts = {};
+	det_opts.handle = tc_opts.handle;
+	det_opts.priority = tc_opts.priority;
+
+	det_opts.flags = det_opts.prog_fd = det_opts.prog_id = 0;
+	err = bpf_tc_detach(&tc_hook, &det_opts);
 	if (err) {
 		fprintf(stderr, "Failed to detach TC: %d\n", err);
 		goto cleanup;

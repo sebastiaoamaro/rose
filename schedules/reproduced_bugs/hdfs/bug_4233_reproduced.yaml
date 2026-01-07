@@ -1,4 +1,5 @@
 execution_plan:
+  maximum_time: 120
   setup:
     script: /vagrant/schedules/reproduced_bugs/hdfs/scripts/setup.sh
     duration: 5
@@ -25,7 +26,6 @@ nodes:
   secondary_name_node:
     container: false
     script: /vagrant/schedules/reproduced_bugs/hdfs/scripts/start_secondary_name_node.sh
-
 faults:
   syscall_fail:
     type: syscall

@@ -71,6 +71,7 @@ void write_start_event();
 void handle_lazyfs_events();
 void start_lazyfs_handler(void* args);
 void setup_uprobes();
+void start_lazyfs();
 
 const char *argp_program_version = "Tool for FI 0.01";
 const char *argp_program_bug_address = "sebastiao.amaro@ŧecnico.ulisboa.pt";
@@ -341,17 +342,16 @@ int main()
 		if(strlen(nodes[i].script)){
 			kill(nodes[i].current_pid,SIGTERM);
 			waitpid(nodes[i].current_pid,NULL,0);
-			//fclose(nodes[i].read_end);
 			printf("KILLED PID: %d\n",nodes[i].current_pid);
 		}
 
 		if(nodes[i].pid_tc_in > 0){
-			kill(nodes[i].pid_tc_in,SIGTERM);
-			waitpid(nodes[i].pid_tc_in,NULL,0);
+			kill(nodes[i].pid_tc_in,SIGINT);
+			//waitpid(nodes[i].pid_tc_in,NULL,0);
 		}
 		if(nodes[i].pid_tc_out > 0){
-			kill(nodes[i].pid_tc_out,SIGTERM);
-			waitpid(nodes[i].pid_tc_in,NULL,0);
+			kill(nodes[i].pid_tc_out,SIGINT);
+			//waitpid(nodes[i].pid_tc_in,NULL,0);
 		}
 	}
 
@@ -373,6 +373,7 @@ int main()
 
 	if(plan->lazyfs.script){
 	    kill(plan->lazyfs.pid,SIGTERM);
+		kill_child_processes(plan->lazyfs.pid);
 	}
 	printf("FINISHED CLEANUP\n");
 	return 0;
@@ -540,7 +541,7 @@ void run_setup(){
 
 		args->fp= fp;
 		args->pid = &(plan->workload.pid);
-		//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+		pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 	}
 
 	if(strlen(plan->lazyfs.script)){
@@ -564,7 +565,7 @@ void run_setup(){
 
     	args->fp= fp;
     	args->pid = &(plan->lazyfs.pid);
-    	//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+    	pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 	}
 	//Start setup
 	if(strlen(plan->setup.script)){
@@ -595,7 +596,7 @@ void start_pre_workload(){
 		return;
 	if(plan->pre_workload.pid == 0)
 		return;
-	printf("STARTED PRE_WORKLOAd, PID:%d\n",plan->pre_workload.pid);
+	printf("STARTED PRE_WORKLOAD, PID:%d\n",plan->pre_workload.pid);
 	kill(plan->pre_workload.pid,SIGUSR1);
 
     int status;
@@ -1413,7 +1414,7 @@ int setup_tc_progs(){
 
 			args->fp= fp;
 			args->pid = &nodes[target].pid_tc_out;
-			//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+			pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 
 			tc_ebpf_progs_counter++;
 
@@ -1463,7 +1464,7 @@ int setup_tc_progs(){
 			args2->fp= fp2;
 			args2->pid = &nodes[target].pid_tc_in;
 
-			//pthread_create(&thread_id2, NULL, (void *)print_output, (void*)args2);
+			pthread_create(&thread_id2, NULL, (void *)print_output, (void*)args2);
 
 			tc_ebpf_progs_counter++;
 
@@ -1631,20 +1632,22 @@ void handle_event(void *ctx,void *data,size_t data_sz)
 			}
 			break;
 		}
-		case CLEAR_CACHE:
+		case CLEAR_CACHE:{
 		    printf("Received CLEAR_CACHE from eBPF \n");
 			FILE *file;
-            // Open the file for writing ("w" mode overwrites; use "a" to append)
             file = fopen(plan->lazyfs.pipe_location, "w");
 
-            // Check if file opened successfully
             if (file == NULL) {
                 perror("Error opening file");
                 break;
             }
 
-            // Write some text to the file
-            fprintf(file, "lazyfs::clear-cache");
+            const char *msg = "lazyfs::clear-cache";
+            size_t msg_len = sizeof("lazyfs::clear-cache");
+            ssize_t _written = write(fileno(file), msg, msg_len);
+            if (_written == -1) {
+                perror("write failed");
+            }
 
             fclose(file);
 
@@ -1653,6 +1656,78 @@ void handle_event(void *ctx,void *data,size_t data_sz)
             fault->done++;
 
             break;
+		}
+        case TORN_OP:{
+   	        printf("Received TORN_OP from eBPF \n");
+    		FILE *file;
+            file = fopen(plan->lazyfs.pipe_location, "w");
+
+            if (file == NULL) {
+                perror("Error opening file");
+                break;
+            }
+            const char *msg = "lazyfs::clear-cache";
+            size_t msg_len = sizeof("lazyfs::clear-cache");
+            ssize_t _written = write(fileno(file), msg, msg_len);
+            if (_written == -1) {
+                perror("write failed");
+            }
+
+            fclose(file);
+
+            printf("Data written successfully to lazyfs pipe\n");
+            struct fault *fault = &faults[fault_nr];
+            fault->done++;
+
+            break;
+        }
+        case TORN_SEQ:{
+   	        printf("Received TORN_SEQ from eBPF \n");
+      		FILE *file;
+            file = fopen(plan->lazyfs.pipe_location, "w");
+
+            if (file == NULL) {
+                perror("Error opening file");
+                break;
+            }
+            const char *msg = "lazyfs::clear-cache";
+            size_t msg_len = sizeof("lazyfs::clear-cache");
+            ssize_t _written = write(fileno(file), msg, msg_len);
+            if (_written == -1) {
+                perror("write failed");
+            }
+
+            fclose(file);
+
+            printf("Data written successfully to lazyfs pipe\n");
+            struct fault *fault = &faults[fault_nr];
+            fault->done++;
+
+            break;
+        }
+        case CRASH_FS:{
+            printf("Received CRASH_FS from eBPF \n");
+      		FILE *file;
+            file = fopen(plan->lazyfs.pipe_location, "w");
+
+            if (file == NULL) {
+                perror("Error opening file");
+                break;
+            }
+            const char *msg = "lazyfs::crash";
+            size_t msg_len = sizeof("lazyfs::clear-cache");
+            ssize_t _written = write(fileno(file), msg, msg_len);
+            if (_written == -1) {
+                perror("write failed");
+            }
+
+            fclose(file);
+
+            printf("Data written successfully to lazyfs pipe\n");
+            struct fault *fault = &faults[fault_nr];
+            fault->done++;
+            break;
+        }
 	}
 
 	if(faults[fault_nr].exit){

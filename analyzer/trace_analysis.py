@@ -302,7 +302,7 @@ class History:
                     fault.begin_conditions.append(cond)
                     fault.state_score = 1.5
                 # If it does not try to leverage the counter only
-                elif len(self.event_counter[event.name]) < 100:
+                elif len(self.event_counter[event.name]) < 150:
                     # if not normal_history is None:
                     #     if len(normal_history.event_counter[event.name]) > 200:
                     #         continue
@@ -322,6 +322,7 @@ class History:
                     # fault.begin_conditions.append(cond)
                 # If we can not leverage information from the syscall itself, look for previous ones, this can not be done here takes to much time
                 else:
+                    # print("System call is common and does not have a filename")
                     continue
 
                 fault_nr += 1
@@ -420,6 +421,7 @@ class History:
                         event.node = node.name
 
                 if event.node == "any":
+                    print("Delay between nodes outside of the deployment")
                     continue
 
                 dest_node = 0
@@ -443,16 +445,13 @@ class History:
                         event.node = node.name
 
                 if event.node == "any":
+                    print("Delay between nodes outside of the deployment")
                     continue
 
                 dest_node = 0
                 try:
                     dest_node = self.ip_to_node[str(ip_dst)]
                 except:
-                    continue
-
-                # Skip IPs not in experiment
-                if dest_node == 0:
                     continue
 
                 # Skip packets to itself
@@ -690,12 +689,16 @@ class History:
 
     def find_event_by_id_by_time(self, time, node):
         event_id = 0
-        for event in self.events_by_node[node]:
-            if event.time <= time:
-                event_id = event.id
-            else:
-                break
-        return event_id
+        # Sometimes there are no events in a node which suffered a fault
+        if node in self.events_by_node:
+            for event in self.events_by_node[node]:
+                if event.time <= time:
+                    event_id = event.id
+                else:
+                    break
+            return event_id
+        else:
+            return event_id
 
     def write_to_file(self, filename):
         with open(filename, "w") as file:

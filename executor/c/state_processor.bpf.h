@@ -252,10 +252,13 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
     					if (!(fault->initial.conditions_match[state_condition])){
     						//Needed because in the above function we do not know for what fault the relevant fault is
     						if (condition_value == state_condition_value){
-    								bpf_printk("FAULT: %d, COND: %d, CURRENT_VALUE: %d, NEEDED: %d\n",*pos,state_condition,condition_value,state_condition_value);
-    								__sync_fetch_and_add(&(fault->initial.conditions_match[state_condition]),1);
-    								run+=1;
-    								fault->run = run;
+                                __u64 pid_tgid = bpf_get_current_pid_tgid();
+                                __u32 pid = pid_tgid >> 32;
+                                __u32 tid = (__u32)pid_tgid;
+								bpf_printk("PID: %d, TID: %d, FAULT: %d, COND: %d, CURRENT_VALUE: %d, NEEDED: %d\n",pid,tid,*pos,state_condition,condition_value,state_condition_value);
+								__sync_fetch_and_add(&(fault->initial.conditions_match[state_condition]),1);
+								run+=1;
+								fault->run = run;
     							}
     						}
 
@@ -436,10 +439,58 @@ static inline int inject_fault(int fault_type,int current_pid,struct simplified_
 			bpf_printk("SENT FAULT_TYPE:%d, PID:%d, FAULT_NR:%d TO USERSPACE\n",fault_type,e->pid,fault->fault_nr);
 			bpf_ringbuf_submit(e, 0);
 		}
+		else if (fault_type == TORN_SEQ){
+		    fault->done++;
+		    bpf_printk("FAULT:%d INJECTING TORN_SEQ, PID: %d\n",fault->fault_nr,pid_to_target);
+			//Send message to user space to restart process
+			struct event *e;
+			e = bpf_ringbuf_reserve(maps->rb, sizeof(*e), 0);
+			if (!e)
+				return 0;
+
+			e->type = fault_type;
+			e->pid = pid_to_target;
+			e->fault_nr = fault->fault_nr;
+
+			bpf_printk("SENT FAULT_TYPE:%d, PID:%d, FAULT_NR:%d TO USERSPACE\n",fault_type,e->pid,fault->fault_nr);
+			bpf_ringbuf_submit(e, 0);
+		}
+		else if (fault_type == TORN_OP){
+		    fault->done++;
+		    bpf_printk("FAULT:%d INJECTING TORN_OP, PID: %d\n",fault->fault_nr,pid_to_target);
+			//Send message to user space to restart process
+			struct event *e;
+			e = bpf_ringbuf_reserve(maps->rb, sizeof(*e), 0);
+			if (!e)
+				return 0;
+
+			e->type = fault_type;
+			e->pid = pid_to_target;
+			e->fault_nr = fault->fault_nr;
+
+			bpf_printk("SENT FAULT_TYPE:%d, PID:%d, FAULT_NR:%d TO USERSPACE\n",fault_type,e->pid,fault->fault_nr);
+			bpf_ringbuf_submit(e, 0);
+		}
+		else if (fault_type == CRASH_FS){
+		    fault->done++;
+		    bpf_printk("FAULT:%d INJECTING CRASH_FS, PID: %d\n",fault->fault_nr,pid_to_target);
+			//Send message to user space to restart process
+			struct event *e;
+			e = bpf_ringbuf_reserve(maps->rb, sizeof(*e), 0);
+			if (!e)
+				return 0;
+
+			e->type = fault_type;
+			e->pid = pid_to_target;
+			e->fault_nr = fault->fault_nr;
+
+			bpf_printk("SENT FAULT_TYPE:%d, PID:%d, FAULT_NR:%d TO USERSPACE\n",fault_type,e->pid,fault->fault_nr);
+			bpf_ringbuf_submit(e, 0);
+		}
 
 
 		else{
-			bpf_printk("FAULT:%d, TYPE:%d, PID:%d STARTING\n",fault->fault_nr,fault_type,pid_to_target);
+			bpf_printk("FAULT:%d, TYPE:%d, PID:%d SETUP\n",fault->fault_nr,fault_type,pid_to_target);
 			__u64 time = bpf_ktime_get_ns();
 			__u64 time_ms = time / 1000000;
 			fault->start_time = time_ms;
@@ -471,25 +522,27 @@ static inline void inject_override(int pid,int fault,struct pt_regs* ctx,int sys
 		pid,
 		fault,
 	};
-	//bpf_printk("Checking for pid %d and fault %d \n",pid,fault);
 	struct fault_description *description_of_fault;
 
 	description_of_fault = bpf_map_lookup_elem(faults_specification,&fault_to_inject);
 
 
 	if (description_of_fault){
-		//bpf_printk("Fault is ON occurrences is %d counter is %d \n",description_of_fault->occurences,description_of_fault->counter);
+		//bpf_printk("FAULT:ON, OCCURRENCES:%d, CURRENT:%d \n",description_of_fault->occurences,description_of_fault->counter);
 			if (description_of_fault->on){
 				if (description_of_fault->counter < description_of_fault->occurences){
 					description_of_fault->counter+=1;
 					//u64 ts = bpf_ktime_get_ns();
-					bpf_printk("INJECTED FAULT: %d, OCURRENCE: %d, RETURN VALUE %d\n",fault,description_of_fault->occurences,description_of_fault->return_value);
+					bpf_printk("INJECTED FAULT:%d, OCURRENCE:%d, RETURN VALUE:%d\n",fault,description_of_fault->occurences,description_of_fault->return_value);
 					bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
 
 				}
 				else if(description_of_fault->occurences == 0){
 					//u64 ts = bpf_ktime_get_ns();
-					bpf_printk("INJECTED FAULT: %d, RETURN VALUE %d\n",fault,description_of_fault->return_value);
+					__u64 pid_tgid = bpf_get_current_pid_tgid();
+                    __u32 pid = pid_tgid >> 32;
+                    __u32 tid = (__u32)pid_tgid;
+					bpf_printk("PID: %d, TID: %d, INJECTED FAULT: %d, RETURN VALUE %d\n",pid,tid,fault,description_of_fault->return_value);
 					description_of_fault->on = 0;
 					bpf_override_return((struct pt_regs *) ctx, description_of_fault->return_value);
 

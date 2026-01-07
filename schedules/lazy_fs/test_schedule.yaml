@@ -14,9 +14,9 @@ execution_plan:
     enabled: true
     lazyfs_script: /vagrant/lazyfs/lazyfs/scripts/mount-lazyfs.sh
     #TODO: CRIAR OUTRA PASTA
-    root_dir: /tmp/lazyfs.root
-    mount_dir: /tmp/lazyfs.mnt
-    pipe_location: /tmp/faults.fifo
+    root_dir: /vagrant/lazyfs/tmp/lazyfs.root
+    mount_dir: /vagrant/lazyfs/tmp/lazyfs.mnt
+    pipe_location: /vagrant/lazyfs/tmp/faults.fifo
 
   tracer:
     tracer_location: "/vagrant/tracer/target/release/tracer"
@@ -38,7 +38,7 @@ nodes:
     ip: 172.38.0.13
 
 faults:
-  lazyfs_fault:
+  lazyfs_clear_cache:
     type: lazyfs
     target: node1
     details:
@@ -47,3 +47,30 @@ faults:
       - condition1:
           type: time
           time: 10000
+  lazyfs_torn_op:
+    type: lazyfs
+    target: node1
+    details:
+      operation: torn_op
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 15000
+  lazyfs_torn_sec:
+    type: lazyfs
+    target: node1
+    details:
+      operation: torn_seq
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 20000
+  lazyfs_crash_fs:
+    type: lazyfs
+    target: node1
+    details:
+      operation: crash_fs
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 25000

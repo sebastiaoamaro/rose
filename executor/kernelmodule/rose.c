@@ -14,28 +14,60 @@ MODULE_VERSION("1.0");
 /* === Define the BPF kfunc === */
 __bpf_kfunc_start_defs();
 
-/* This function checks if str2 is contained in str1 up to str_len characters */
+/* This function checks if str1 (needle) is contained in str2 (haystack)
+ * within the first str_len bytes of str2. It looks for a contiguous ordered
+ * match (not just presence of each character in any order).
+ */
 __bpf_kfunc int bpf_strstr(const char *str1, const char *str2, int str_len)
 {
-    int found_end = 0;
+    /* Bound constants to keep loops provably finite (helpful for eBPF verifier). */
+    const int MAX_NEEDLE = 64;
+    const int MAX_HAY = 256; /* increased from 64 to handle longer paths */
 
-    for (size_t i = 0; i < 64; i++) {
-        if (str2[i] == '\0') {
-            found_end = i;
-            break;
+    int needle_len = 0;
+
+    if (!str1 || !str2 || str_len <= 0)
+        return 0;
+
+    pr_info("Comparing %s and %s\n", str1, str2);
+
+    /* Compute needle length up to MAX_NEEDLE */
+    for (needle_len = 0; needle_len < MAX_NEEDLE && str1[needle_len] != '\0'; needle_len++)
+        ;
+
+    pr_info("Needle len is %d, str_len is %d \n",needle_len,str_len);
+
+    if (needle_len == 0 && str1[0] == '\0')
+        return 1;
+
+    /* If needle wasn't NUL-terminated within MAX_NEEDLE, treat as no match (safer) */
+    if (needle_len == MAX_NEEDLE && str1[needle_len - 1] != '\0'){
+        pr_info("Needle not nul-terminated %d \n",needle_len);
+        return 0;
+    }
+    /* If needle is longer than the provided hay length, no match is possible */
+    // if (needle_len > str_len){
+    //     pr_info("Needle is longer than str_len %d \n",needle_len);
+    //     return 0;
+    // }
+
+    /* Scan haystack (str2) up to the min(str_len, MAX_HAY). Look for contiguous match. */
+    for (int i = 0; i < MAX_HAY && i < str_len && str2[i] != '\0'; i++) {
+        int j;
+
+        for (j = 0; j < needle_len; j++) {
+            pr_info("Comparing char: %c and %c \n", str2[i + j], str1[j]);
+            if (str2[i + j] != str1[j])
+                break;
+        }
+
+        if (j == needle_len) {
+            pr_info("bpf_strstr(): match found: needle=%s hay=%s str_len=%d\n",
+                    str1, str2, str_len);
+            return 1;
         }
     }
 
-    for (int i = 0; i < str_len && str1[i] != '\0'; i++) {
-        int j = 0;
-        while (i + j < str_len && str1[i + j] == str2[j]) {
-            j++;
-            if (j == found_end) {
-                pr_info("bpf_strstr(): match found between %s and %s, str_len=%d\n",str1,str2, str_len);
-                return 1;
-            }
-        }
-    }
     return 0;
 }
 

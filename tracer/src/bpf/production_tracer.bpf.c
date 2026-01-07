@@ -202,8 +202,7 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 		int addrlen = (int)ctx->args[2];
 
 		if (!uaddr) {
-			bpf_printk("connect-enter: pid_tgid=%llu fd=%d uaddr=NULL addrlen=%d\n",
-			           pid_tgid, fd, addrlen);
+			//bpf_printk("connect-enter: pid_tgid=%llu fd=%d uaddr=NULL addrlen=%d\n", pid_tgid, fd, addrlen);
 			return 0;
 		}
 
@@ -211,8 +210,7 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 		__u16 family16 = 0;
 		if (bpf_probe_read_user(&family16, sizeof(family16),
 		                        &((const __u8 *)uaddr)[0]) < 0) {
-			bpf_printk("connect-enter: pid_tgid=%llu fd=%d failed to read family\n",
-			           pid_tgid, fd);
+			//bpf_printk("connect-enter: pid_tgid=%llu fd=%d failed to read family\n", pid_tgid, fd);
 			return 0;
 		}
 
@@ -229,8 +227,7 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 			}
 
 			if (bpf_probe_read_user(&a4, sizeof(a4), uaddr) < 0) {
-				bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_INET read failed\n",
-				           pid_tgid, fd);
+				//bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_INET read failed\n",pid_tgid, fd);
 				return 0;
 			}
 			__u32 daddr = a4.sin_addr;
@@ -276,12 +273,10 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 			} a6 = {};
 
 			if (bpf_probe_read_user(&a6, sizeof(a6), uaddr) < 0) {
-				bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_INET6 read failed\n",
-				           pid_tgid, fd);
+				//bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_INET6 read failed\n",pid_tgid, fd);
 				return 0;
 			}
-			bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_INET6 dport=%d\n",
-			           pid_tgid, fd, bpf_ntohs(a6.sin6_port));
+			//bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_INET6 dport=%d\n",pid_tgid, fd, bpf_ntohs(a6.sin6_port));
 		}
 		/* UNIX domain sockets */
 		else if (family16 == AF_UNIX) {
@@ -298,11 +293,9 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 			                                  (const void *)((const char *)uaddr + path_off));
 			if (res > 0) {
 				/* log the unix socket path */
-				bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_UNIX path=%s\n",
-				           pid_tgid, fd, sun.sun_path);
+				//bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_UNIX path=%s\n",pid_tgid, fd, sun.sun_path);
 			} else {
-				bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_UNIX path read failed res=%d addrlen=%d\n",
-				           pid_tgid, fd, res, addrlen);
+				//bpf_printk("connect-enter: pid_tgid=%llu fd=%d AF_UNIX path read failed res=%d addrlen=%d\n",pid_tgid, fd, res, addrlen);
 			}
 
 			/* store sentinel in connect_map to indicate AF_UNIX (no IPv4 addr) */
@@ -573,7 +566,7 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 	   return 0;
 	}
 
-    bpf_printk("TRACER EXEC: ADDED PID:%d, PARENT:%d \n",pid,ppid);
+    //bpf_printk("TRACER EXEC: ADDED PID:%d, PARENT:%d \n",pid,ppid);
     bpf_map_update_elem(&pid_tree, &pid, &ppid, BPF_ANY);
 
 	return 0;

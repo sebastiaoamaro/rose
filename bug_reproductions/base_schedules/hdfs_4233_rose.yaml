@@ -1,14 +1,15 @@
 execution_plan:
+  maximum_time: 120
   setup:
     script: /vagrant/schedules/reproduced_bugs/hdfs/scripts/setup.sh
     duration: 5
   tracer:
     tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
-    tracing_type: sys_all_trace,process_controlled
+    tracing_type: production_trace,process_controlled
   workload:
     wait_time: 10
-    script: /vagrant/schedules/reproduced_bugs/hdfs/scripts/startworkload.sh
+    script: /vagrant/schedules/reproduced_bugs/hdfs/scripts/start_workload.sh
   cleanup:
     duration: 15
     script: /vagrant/schedules/reproduced_bugs/hdfs/scripts/stop_cluster.sh

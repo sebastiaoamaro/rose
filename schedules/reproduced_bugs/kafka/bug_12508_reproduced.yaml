@@ -16,8 +16,6 @@ faults:
     details:
       name: openat
       return_value: -11
-      #success: True
-    #repeatable: True
     target: kafka
     traced: kafka
     begin_conditions:
