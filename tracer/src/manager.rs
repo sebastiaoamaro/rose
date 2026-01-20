@@ -156,6 +156,18 @@ pub fn start_tracing(
 ) -> Result<()> {
     let _xdp_prog;
 
+    //Only usefull for tracing only scenarios, does not communicate with executor
+    if mode == "container" {
+        trace_containers(
+            nodes_info.clone(),
+            skel_enum,
+            hashmap_pid_to_node,
+            hashmap_links,
+            functions.clone(),
+            binary_path.clone(),
+        )
+        .expect("Failed to trace containers");
+    }
     if mode == "container_controlled" {
         trace_containers_controlled(
             nodes_info.clone(),
@@ -221,6 +233,7 @@ pub fn start_tracing(
 
     Ok(())
 }
+
 pub fn trace_processes(
     nodes_info: String,
     skel: &mut SkelEnum,
@@ -284,6 +297,96 @@ pub fn trace_processes(
 
     Ok(())
 }
+pub fn trace_processes_controlled(
+    nodes_info: String,
+    skel: &mut SkelEnum<'_, 'static>,
+    hashmap_pid_to_node: &mut HashMap<i32, String>,
+    hashmap_node_to_pid: &mut HashMap<String, i32>,
+    hashmap_links: &mut HashMap<i32, Vec<Link>>,
+    functions: Vec<(String, usize)>,
+    binary_path: String,
+) -> Result<()> {
+    let mut join_handles = vec![];
+    let mut tx_handles = vec![];
+    let read_pipe_name = format!("{}_write", nodes_info.clone());
+    let write_pipe_name = format!("{}_read", nodes_info.clone());
+    if Path::new(&read_pipe_name).exists() {
+        let file = File::open(read_pipe_name.clone()).unwrap();
+        tracer_println!("Opening FIFO for reading...{}", read_pipe_name.clone());
+        let reader = BufReader::new(file);
+
+        let mut file_write = OpenOptions::new()
+            .write(true)
+            .open(&write_pipe_name)
+            .unwrap();
+
+        for line in reader.lines() {
+            let line = line?;
+
+            tracer_println!("Received:{}", line);
+
+            if line == "finished" {
+                break;
+            }
+
+            let parts: Vec<&str> = line.split(',').collect();
+
+            let node_name = parts[0].to_string();
+
+            let _container_pid: i32 = parts[1].parse().unwrap();
+
+            let pid: i32 = parts[2].parse().unwrap();
+
+            let _if_index: i32 = parts[3].parse().unwrap();
+
+            let pid_vec = u32_to_u8_array_little_endian(pid);
+
+            let one = u32_to_u8_array_little_endian(1);
+
+            skel.update(&pid_vec, &one);
+
+            hashmap_pid_to_node.insert(pid, node_name.clone());
+            hashmap_node_to_pid.insert(node_name.clone(), pid);
+
+            let (tx, rx) = mpsc::channel();
+            tx_handles.push(tx);
+            start_tracing_process(
+                pid,
+                node_name.clone(),
+                hashmap_links,
+                functions.clone(),
+                binary_path.clone(),
+                skel,
+                rx,
+                &mut join_handles,
+            );
+            let buf = vec![0; 8];
+            file_write.write(&buf).expect("Failed to send ping to ROSE");
+        }
+    } else {
+        tracer_println!("FIFO does not exist.");
+    }
+
+    for tx in tx_handles {
+        let send_res = tx.send(());
+
+        match send_res {
+            Ok(_) => tracer_println!("Sent successfully"),
+            Err(e) => tracer_println!("Error sending: {}", e),
+        }
+    }
+
+    for handle in join_handles {
+        let result = handle.join();
+
+        match result {
+            Ok(_) => tracer_println!("Thread finished successfully"),
+            Err(_e) => tracer_println!("Thread finished with an error"),
+        }
+    }
+
+    Ok(())
+}
 pub fn start_tracing_process(
     pid: i32,
     container_name: String,
@@ -319,58 +422,120 @@ pub fn start_tracing_process(
         );
     }
 }
-
-pub fn start_tracing_container(
-    pid: i32,
-    container_type: i32,
-    container_name: String,
-    hashmap_links: &mut HashMap<i32, Vec<Link>>,
+pub fn trace_containers(
+    nodes_info: String,
+    skel: &mut SkelEnum<'_, 'static>,
+    hashmap_pid_to_node: &mut HashMap<i32, String>,
+    mut hashmap_links: &mut HashMap<i32, Vec<Link>>,
     functions: Vec<(String, usize)>,
     binary_path: String,
-    skel: &mut SkelEnum<'_, 'static>,
-    rx: Receiver<()>,
-    join_handles: &mut Vec<JoinHandle<()>>,
-    controlled: bool,
-) {
-    tracer_println!(
-        "Started tracing for pid {} with node_name {}",
-        pid,
-        container_name
-    );
-    //hashmap_links.insert(pid, vec![]);
+) -> Result<()> {
+    let mut join_handles = vec![];
+    let mut tx_handles = vec![];
 
-    // let mut container_location = "".to_string();
-    // if container_type == CONTAINER_TYPE_DOCKER {
-    //     container_location = get_overlay2_location(&container_name).unwrap();
-    // }
-    // if container_type == CONTAINER_TYPE_LXC {
-    //     container_location = get_lxc_rootfs_location(&container_name);
-    // }
+    let path = nodes_info;
+    let file: File = File::open(&path).expect("File not found");
+    let reader = BufReader::new(file);
 
-    // let binary_location = format!("{}{}", container_location, binary_path);
+    let mut probes_attached = false;
+    for line in reader.lines() {
+        let line = line?;
+        let parts: Vec<&str> = line.split(',').collect();
 
-    // for (index_function, function) in functions.clone().iter().enumerate() {
-    //     skel.attach_uprobe(
-    //         index_function,
-    //         &function.0,
-    //         function.1,
-    //         binary_location.clone(),
-    //         pid,
-    //         hashmap_links,
-    //     );
-    // }
-    let handle;
-    if controlled {
-        handle = thread::spawn(move || {
-            monitor_pid_controlled(pid, rx).expect("Monitoring failed");
-        });
-    } else {
-        handle = thread::spawn(move || {
-            monitor_pid(pid, rx).expect("Monitoring failed");
-        });
+        if parts.len() == 3 {
+            let node_name = parts[0].trim();
+            let pid: i32 = match parts[1].trim().parse() {
+                Ok(num) => num,
+                Err(_) => {
+                    tracer_println!("Failed to parse integer on line: {}", line);
+                    continue;
+                }
+            };
+            let veth = parts[2].trim();
+
+            let veth_index = if_nametoindex(veth).map_err(|e| e.to_string()).unwrap();
+
+            let pid_vec = u32_to_u8_array_little_endian(pid);
+            let one = u32_to_u8_array_little_endian(1);
+            skel.update(&pid_vec, &one);
+
+            hashmap_pid_to_node.insert(pid, node_name.to_string().clone());
+
+            let (tx, rx) = mpsc::channel();
+            tx_handles.push(tx);
+
+            hashmap_links.insert(pid, vec![]);
+            let mut container_location = get_overlay2_location(&node_name).unwrap();
+            let binary_location = format!("{}{}", container_location, binary_path);
+            if !probes_attached {
+                for (index_function, function) in functions.clone().iter().enumerate() {
+                    skel.attach_uprobe(
+                        index_function,
+                        &function.0,
+                        function.1,
+                        binary_location.clone(),
+                        pid,
+                        hashmap_links,
+                    );
+                }
+                probes_attached = true
+            }
+
+            //CONTAINER_TYPE_DOCKER is temporary
+            start_tracing_container(
+                pid,
+                CONTAINER_TYPE_DOCKER,
+                node_name.to_string(),
+                &mut hashmap_links,
+                functions.clone(),
+                binary_path.clone(),
+                skel,
+                rx,
+                &mut join_handles,
+                false,
+            );
+            start_xdp_in_container(pid, (veth_index) as i32, CONTAINER_TYPE_DOCKER);
+        } else {
+            tracer_println!("Incorrect format on line: {}", line);
+        }
     }
-    join_handles.push(handle);
-    tracer_println!("Finished adding uprobes for node {}", container_name);
+
+    write_to_file("check.txt".to_string(), "ready".to_string()).expect("Failed to write to file");
+
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })?;
+
+    while running.load(Ordering::SeqCst) {
+        //TODO: Check for bug
+        sleep(Duration::from_secs(1));
+    }
+
+    for tx in tx_handles {
+        let send_res = tx.send(());
+
+        match send_res {
+            Ok(_) => {
+                //tracer_println!("Sent successfully")
+            }
+            Err(e) => tracer_println!("Error sending: {}", e),
+        }
+    }
+
+    for handle in join_handles {
+        let result = handle.join();
+
+        match result {
+            Ok(_) => {
+                //tracer_println!("Thread finished successfully")
+            }
+            Err(_e) => tracer_println!("Thread finished with an error"),
+        }
+    }
+
+    Ok(())
 }
 
 pub fn trace_containers_controlled(
@@ -426,11 +591,10 @@ pub fn trace_containers_controlled(
 
             while !skel.check(&pid_vec) {}
 
-            hashmap_links.insert(pid, vec![]);
-
             let (tx, rx) = mpsc::channel();
             tx_handles.push(tx);
 
+            hashmap_links.insert(pid, vec![]);
             let mut container_location = "".to_string();
             let mut controlled = true;
             if container_type == CONTAINER_TYPE_DOCKER {
@@ -548,95 +712,57 @@ pub fn trace_containers_controlled(
     Ok(())
 }
 
-pub fn trace_processes_controlled(
-    nodes_info: String,
-    skel: &mut SkelEnum<'_, 'static>,
-    hashmap_pid_to_node: &mut HashMap<i32, String>,
-    hashmap_node_to_pid: &mut HashMap<String, i32>,
+pub fn start_tracing_container(
+    pid: i32,
+    container_type: i32,
+    container_name: String,
     hashmap_links: &mut HashMap<i32, Vec<Link>>,
     functions: Vec<(String, usize)>,
     binary_path: String,
-) -> Result<()> {
-    let mut join_handles = vec![];
-    let mut tx_handles = vec![];
-    let read_pipe_name = format!("{}_write", nodes_info.clone());
-    let write_pipe_name = format!("{}_read", nodes_info.clone());
-    if Path::new(&read_pipe_name).exists() {
-        let file = File::open(read_pipe_name.clone()).unwrap();
-        tracer_println!("Opening FIFO for reading...{}", read_pipe_name.clone());
-        let reader = BufReader::new(file);
+    skel: &mut SkelEnum<'_, 'static>,
+    rx: Receiver<()>,
+    join_handles: &mut Vec<JoinHandle<()>>,
+    controlled: bool,
+) {
+    tracer_println!(
+        "Started tracing for pid {} with node_name {}",
+        pid,
+        container_name
+    );
+    //hashmap_links.insert(pid, vec![]);
 
-        let mut file_write = OpenOptions::new()
-            .write(true)
-            .open(&write_pipe_name)
-            .unwrap();
+    // let mut container_location = "".to_string();
+    // if container_type == CONTAINER_TYPE_DOCKER {
+    //     container_location = get_overlay2_location(&container_name).unwrap();
+    // }
+    // if container_type == CONTAINER_TYPE_LXC {
+    //     container_location = get_lxc_rootfs_location(&container_name);
+    // }
 
-        for line in reader.lines() {
-            let line = line?;
+    // let binary_location = format!("{}{}", container_location, binary_path);
 
-            tracer_println!("Received:{}", line);
-
-            if line == "finished" {
-                break;
-            }
-
-            let parts: Vec<&str> = line.split(',').collect();
-
-            let node_name = parts[0].to_string();
-
-            let _container_pid: i32 = parts[1].parse().unwrap();
-
-            let pid: i32 = parts[2].parse().unwrap();
-
-            let _if_index: i32 = parts[3].parse().unwrap();
-
-            let pid_vec = u32_to_u8_array_little_endian(pid);
-
-            let one = u32_to_u8_array_little_endian(1);
-
-            skel.update(&pid_vec, &one);
-
-            hashmap_pid_to_node.insert(pid, node_name.clone());
-            hashmap_node_to_pid.insert(node_name.clone(), pid);
-
-            let (tx, rx) = mpsc::channel();
-            tx_handles.push(tx);
-            start_tracing_process(
-                pid,
-                node_name.clone(),
-                hashmap_links,
-                functions.clone(),
-                binary_path.clone(),
-                skel,
-                rx,
-                &mut join_handles,
-            );
-            let buf = vec![0; 8];
-            file_write.write(&buf).expect("Failed to send ping to ROSE");
-        }
+    // for (index_function, function) in functions.clone().iter().enumerate() {
+    //     skel.attach_uprobe(
+    //         index_function,
+    //         &function.0,
+    //         function.1,
+    //         binary_location.clone(),
+    //         pid,
+    //         hashmap_links,
+    //     );
+    // }
+    let handle;
+    if controlled {
+        handle = thread::spawn(move || {
+            monitor_pid_controlled(pid, rx).expect("Monitoring failed");
+        });
     } else {
-        tracer_println!("FIFO does not exist.");
+        handle = thread::spawn(move || {
+            monitor_pid(pid, rx).expect("Monitoring failed");
+        });
     }
-
-    for tx in tx_handles {
-        let send_res = tx.send(());
-
-        match send_res {
-            Ok(_) => tracer_println!("Sent successfully"),
-            Err(e) => tracer_println!("Error sending: {}", e),
-        }
-    }
-
-    for handle in join_handles {
-        let result = handle.join();
-
-        match result {
-            Ok(_) => tracer_println!("Thread finished successfully"),
-            Err(_e) => tracer_println!("Thread finished with an error"),
-        }
-    }
-
-    Ok(())
+    join_handles.push(handle);
+    tracer_println!("Finished adding uprobes for node {}", container_name);
 }
 
 pub fn end_trace(

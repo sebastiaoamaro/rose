@@ -56,31 +56,26 @@ def parse_bug_reproduction(filename: str):
         bug_reproduction.schedule = bug_reproduction_text["schedule"]
     else:
         print("No schedule paramater found")
-        return
 
     if "oracle" in bug_reproduction_text:
         bug_reproduction.oracle = bug_reproduction_text["oracle"]
     else:
         print("No oracle paramater found")
-        return
 
     if "result_folder" in bug_reproduction_text:
         bug_reproduction.result_folder = bug_reproduction_text["result_folder"]
     else:
         print("No result_folder paramater found")
-        return
 
     if "trace_location" in bug_reproduction_text:
         bug_reproduction.trace_location = bug_reproduction_text["trace_location"]
     else:
         print("No trace_location paramater found")
-        return
 
     if "buggy_trace" in bug_reproduction_text:
         bug_reproduction.buggy_trace = bug_reproduction_text["buggy_trace"]
     else:
         print("No buggy_trace paramater found")
-        return
 
     if "cleanup" in bug_reproduction_text:
         bug_reproduction.cleanup = bug_reproduction_text["cleanup"]

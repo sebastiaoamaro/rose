@@ -52,7 +52,7 @@ __bpf_kfunc int bpf_strstr(const char *str1, const char *str2, int str_len)
     // }
 
     /* Scan haystack (str2) up to the min(str_len, MAX_HAY). Look for contiguous match. */
-    for (int i = 0; i < MAX_HAY && i < str_len && str2[i] != '\0'; i++) {
+    for (int i = 0; i < MAX_HAY && str2[i] != '\0'; i++) {
         int j;
 
         for (j = 0; j < needle_len; j++) {

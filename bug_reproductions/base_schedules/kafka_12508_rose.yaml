@@ -2,7 +2,7 @@ execution_plan:
   tracer:
     tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
-    tracing_type: sys_all_trace,process_controlled
+    tracing_type: production_trace,process_controlled
   cleanup:
     duration: 90
 nodes:

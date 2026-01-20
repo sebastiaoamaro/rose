@@ -421,14 +421,14 @@ class History:
                         event.node = node.name
 
                 if event.node == "any":
-                    print("Delay between nodes outside of the deployment")
+                    # print("Delay between nodes outside of the deployment")
                     continue
 
                 dest_node = 0
                 try:
                     dest_node = self.ip_to_node[str(ip_dst)]
                 except:
-                    print("No destination node found for network_event")
+                    # print("No destination node found for network_event")
                     continue
 
                 start = event.time - int(event.arg3) * 1000000

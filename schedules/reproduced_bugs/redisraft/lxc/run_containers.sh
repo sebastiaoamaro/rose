@@ -66,11 +66,11 @@ rm /root/.ssh/config
 touch /root/.ssh/config
 for i in $(seq 1 $n); do echo -e "Host n${i}.lxd\n  user root\n ForwardAgent no\n    IdentityFile /home/vagrant/.ssh/id_rsa" >>/root/.ssh/config; done
 
-lxc config device set n1 eth0 ipv4.address 10.245.147.145
-lxc config device set n2 eth0 ipv4.address 10.245.147.242
-lxc config device set n3 eth0 ipv4.address 10.245.147.92
-lxc config device set n4 eth0 ipv4.address 10.245.147.132
-lxc config device set n5 eth0 ipv4.address 10.245.147.74
+lxc config device override n1 eth0 ipv4.address=10.245.147.145
+lxc config device override n2 eth0 ipv4.address=10.245.147.242
+lxc config device override n3 eth0 ipv4.address=10.245.147.92
+lxc config device override n4 eth0 ipv4.address=10.245.147.132
+lxc config device override n5 eth0 ipv4.address=10.245.147.74
 
 ./restart_containers.sh
 

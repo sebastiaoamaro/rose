@@ -1,0 +1,6 @@
+reproduction:
+  schedule: "/vagrant/schedules/function_statistics/redis.yaml"
+  profile: "/vagrant/profiler/redis/"
+  binary: "/vagrant/profiler/redis/redis-server"
+  trace_location: "/tmp/history.txt"
+  cleanup: "/vagrant/schedules/tracing_tests/redis/scripts/cleanup.sh"

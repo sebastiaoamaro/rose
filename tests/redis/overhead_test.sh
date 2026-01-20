@@ -1,5 +1,6 @@
 #!/bin/bash
 workload_size=25000000
+#workload_size=250000
 runs=5
 maindirectory=/vagrant/tracer/
 main=/vagrant/tracer/target/release/tracer
@@ -37,12 +38,12 @@ do
 
     #SysAll Tracer Active
     container_info="/vagrant/tests/redis/container_and_pid.txt"
-    functions_file="/vagrant/functionanalyzer/redis/functions_if_with_offsets.txt"
+    functions_file="/vagrant/profiler/redis/functions.txt"
     file="check.txt"
     binary_path="/usr/local/bin/redis-server"
 
     sudo rm $file
-    for (( run=1; run<=0; run++ ))
+    for (( run=1; run<=$runs; run++ ))
     do
         sudo /vagrant/tests/redis/configs/setup.sh $topology
         docker compose -f /vagrant/tests/redis/configs/docker-compose$topology.yaml up -d
@@ -51,7 +52,7 @@ do
         sleep 30
 
         /vagrant/tests/redis/retrieve_container_info.sh $container_info
-        sudo $main "sys_all_tracer,container" $functions_file $binary_path $container_info "none" &
+        sudo $main "sys_all_trace,container" $functions_file $binary_path $container_info "none" &
 
         ebpf_PID=$!
         while [ ! -s "$file" ]; do
@@ -60,7 +61,7 @@ do
         done
 
         echo Starting Workload
-        /vagrant/tests/redis/run_ycsb.sh $workload_size sys_all_tracer$topology:$run
+        /vagrant/tests/redis/run_ycsb.sh $workload_size sys_all_trace$topology:$run
 
         sudo kill -2 $ebpf_PID
 
@@ -73,13 +74,8 @@ do
     ############################################################################################################
     ############################################################################################################
     #RW Tracer Active
-    container_info="/vagrant/tests/redis/container_and_pid.txt"
-    functions_file="/vagrant/functionanalyzer/redis/functions_if_with_offsets.txt"
-    file="check.txt"
-    binary_path="/usr/local/bin/redis-server"
-
     sudo rm $file
-    for (( run=1; run<=0; run++ ))
+    for (( run=1; run<=$runs; run++ ))
     do
         sudo /vagrant/tests/redis/configs/setup.sh $topology
         docker compose -f /vagrant/tests/redis/configs/docker-compose$topology.yaml up -d
@@ -112,11 +108,6 @@ do
     ############################################################################################################
 
     #Prod Tracer Active
-    container_info="/vagrant/tests/redis/container_and_pid.txt"
-    functions_file="/vagrant/function_analyzer/redis/functions.txt"
-    file="check.txt"
-    binary_path="/usr/local/bin/redis-server"
-
     sudo rm $file
     for (( run=1; run<=$runs; run++ ))
     do

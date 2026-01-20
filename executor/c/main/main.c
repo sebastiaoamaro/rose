@@ -72,6 +72,7 @@ void handle_lazyfs_events();
 void start_lazyfs_handler(void* args);
 void setup_uprobes();
 void start_lazyfs();
+void start_pre_workload();
 
 const char *argp_program_version = "Tool for FI 0.01";
 const char *argp_program_bug_address = "sebastiao.amaro@ŧecnico.ulisboa.pt";
