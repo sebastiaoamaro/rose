@@ -50,7 +50,7 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
-tests/redis/ycsb-0.17.0/
+ycsb-0.17.0/
 tests/cometbft/cometbftconfig/*
 tracer/target/
 rose/c/.cache/
@@ -72,5 +72,6 @@ temp_sched.yaml
 .vagrant
 .zed
 schedules/reproduced_bugs/redpanda/setup/*
-/__pycache__/*
 pyrightconfig.json
+rose.egg-info
+__pycache__
