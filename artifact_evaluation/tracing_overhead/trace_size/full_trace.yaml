@@ -1,0 +1,7 @@
+reproduction:
+  schedule: "/vagrant/artifact_evaluation/tracing_overhead/trace_size/schedules/full_trace.yaml"
+  result_folder: "/vagrant/tests/tracing/redis/"
+  trace_location: "/tmp/history.txt"
+  binary: "/vagrant/profiler/redis/redis-server"
+  profile: "/vagrant/profiler/redis/"
+  buggy_trace: /vagrant/artifact_evaluation/tracing_overhead/trace_size/traces/history_full.txt

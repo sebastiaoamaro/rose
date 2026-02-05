@@ -1,8 +1,0 @@
-reproduction:
-  schedule: "/vagrant/schedules/tracing_tests/redis/schedules/redis_full_trace.yaml"
-  result_folder: "/vagrant/tests/bugdetection/redis/"
-  trace_location: "/tmp/history.txt"
-  binary: "/vagrant/profiler/redis/redis-server"
-  profile: "/vagrant/profiler/redis/"
-  buggy_trace: /vagrant/schedules/tracing_tests/redis/traces/history_full.txt
-  cleanup: /vagrant/schedules/tracing_tests/redis/scripts/cleanup.sh

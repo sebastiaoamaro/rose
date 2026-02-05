@@ -396,16 +396,10 @@ class History:
                     continue
 
                 fault_timestamp = int(event.time) - fault.duration * 1000000
-                print(
-                    "Updating event_id for process pause in node {} with duration {} at timestamp {}".format(
-                        event.node, fault.duration, fault_timestamp
-                    )
-                )
                 fault.event_id = self.find_event_by_id_by_time(
                     fault_timestamp, event.node
                 )
 
-                print("EVENT ID: {}, FAULT: {}".format(fault.event_id, fault.name))
                 cond = time_cond()
                 cond.time = time_rounded
                 fault.begin_conditions.append(cond)
@@ -743,19 +737,27 @@ def compare_faults(buggy_run, normal_run):
     faults_buggy = group_faults(buggy_run)
     faults_normal = group_faults(normal_run)
     unique_faults = set(faults_buggy.keys()) - set(faults_normal.keys())
-    # unique_faults = set(faults_buggy.keys())
-    # unique_faults_normal = set(faults_normal.keys()) - set(faults_buggy.keys())
-    # print("Faults normal unique:", len(faults_normal), "Total:", len(normal_run))
-    # print("Faults buggy unique:", len(faults_buggy), "Total:", len(buggy_run))
-    # print("Unique faults in Buggy:", len(unique_faults))
-    # print(unique_faults)
-    # print("Unique faults in Normal:", len(unique_faults_normal))
-    # print(unique_faults_normal)
     faults = []
     for name in unique_faults:
         for fault in faults_buggy[name]:
             faults.append(fault)
     return faults
+
+
+def calculate_faults_removed(buggy_run, normal_run):
+    faults_buggy = group_faults(buggy_run)
+    faults_normal = group_faults(normal_run)
+    unique_faults = set(faults_buggy.keys()) - set(faults_normal.keys())
+    unique_faults = set(faults_buggy.keys())
+    unique_faults_normal = set(faults_normal.keys()) - set(faults_buggy.keys())
+    print("Faults normal unique:", len(faults_normal), "Total:", len(normal_run))
+    print("Faults buggy unique:", len(faults_buggy), "Total:", len(buggy_run))
+    print("Unique faults in Buggy:", len(unique_faults))
+    print(unique_faults)
+    print("Unique faults in Normal:", len(unique_faults_normal))
+    print(unique_faults_normal)
+
+    return (len(faults_normal), len(normal_run), len(faults_buggy), len(buggy_run))
 
 
 def group_faults(fault_list):

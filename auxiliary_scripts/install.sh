@@ -115,7 +115,6 @@ cd ../../
 cargo build --release
 
 
-# #Sudo for docker
+#Sudo for docker
 sudo groupadd docker
 sudo usermod -aG docker $USER
-newgrp docker

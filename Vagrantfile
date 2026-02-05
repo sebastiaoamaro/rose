@@ -41,7 +41,7 @@ Vagrant.configure("2") do |config|
         "schedules/tracing_tests/redis/traces","tests/bugdetection/redisraft/*","temp_sched.yaml"]
         remote1.vm.synced_folder "~/shared/remote1/", "/shared",type:"virtualbox"
         remote1.vm.provider "virtualbox" do |v|
-            v.cpus = 16       # Set number of CPUs
+            v.cpus = 8       # Set number of CPUs
             v.memory = "30000"
         end
     end

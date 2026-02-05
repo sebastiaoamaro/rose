@@ -5,6 +5,7 @@ sudo rm /tmp/jepsen_pid
 sudo rm /tmp/signal_start_workload.txt
 sudo rm -r /vagrant/schedules/reproduced_bugs/redpanda/lxc/redpanda_jepsen/store/*
 export TERM=xterm
+/vagrant/auxiliary_scripts/change_java.sh 17
 cd /vagrant/schedules/reproduced_bugs/redpanda/lxc/scripts
 sudo sh -c 'echo 2097152 > /proc/sys/fs/aio-max-nr'
 for i in $(seq 1 5); do

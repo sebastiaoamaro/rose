@@ -181,7 +181,7 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 
         long unsigned int filename = ctx->args[1];
 
-        char path[FILENAME_MAX_SIZE];
+        char path[200];
 
         int len = bpf_probe_read_user_str(path, FILENAME_MAX_SIZE,(void *)filename);
         int res = bpf_map_update_elem(&important_arguments,&p_sys, &path, BPF_ANY);
@@ -389,7 +389,7 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
                 return 0;
             }
 
-            //bpf_printk("NAME:%s, SIZE:%d, POINTER:%p, PID_TGID:%llu \n",key.extra,key.extra,len,buff_addr,pid_tgid);
+            //bpf_printk("INSERTED NAME:%s, SIZE:%d, PID_TGID:%llu\n",key.extra,len,pid_tgid);
             bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
             update_event_counter();
 			return 0;

@@ -182,9 +182,8 @@ def move_file(source_path, destination_path):
         print(f"Error: {e}")
 
 
-def main():
+def reproduce_bug(bug_specification: str):
     start_time = time.time()
-    bug_specification = sys.argv[1]
     bug_reproduction = parse_bug_reproduction(bug_specification)
     print("Running faultless schedule")
     run_reproduction(bug_reproduction.schedule)
@@ -232,8 +231,9 @@ def main():
         (runs, replay_rate) = check_replay_rate(schedule_location, bug_reproduction)
         runs_counter += runs
         if replay_rate >= 75:
-            end_reproduction(replay_rate, runs_counter, schedule_location, start_time)
-            return
+            return end_reproduction(
+                replay_rate, runs_counter, schedule_location, start_time
+            )
 
         schedule = save_schedule(
             schedule_location, bug_reproduction.result_folder, "first_guess"
@@ -312,7 +312,7 @@ def main():
                         fault_counter += 1
 
             if replay_rate > 75:
-                end_reproduction(
+                return end_reproduction(
                     replay_rate, runs_counter, schedule_location, start_time
                 )
 
@@ -535,8 +535,9 @@ def main():
                         faults_detected.append(fault)
 
         if replay_rate > 75:
-            end_reproduction(replay_rate, runs_counter, schedule_location, start_time)
-            return
+            return end_reproduction(
+                replay_rate, runs_counter, schedule_location, start_time
+            )
 
     schedule_location = write_new_schedule(
         bug_reproduction.schedule, faults_detected, "temp_sched.yaml"
@@ -586,7 +587,7 @@ def main():
                         )
                         if replay_rate > 75:
                             runs_counter += runs
-                            end_reproduction(
+                            return end_reproduction(
                                 replay_rate, runs_counter, schedule_location, start_time
                             )
                             return
@@ -632,10 +633,9 @@ def main():
                         )
                         if replay_rate > 75:
                             runs_counter += runs
-                            end_reproduction(
+                            return end_reproduction(
                                 replay_rate, runs_counter, schedule_location, start_time
                             )
-                            return
                         for buggy_schedule in buggy_schedules_3_2:
                             buggy_schedules.append(buggy_schedule)
                         # Reset offsets back to 0
@@ -720,12 +720,14 @@ def main():
         runs_counter += 10
         replay_rate = check_replay_rate_post_phase(buggy_schedule, bug_reproduction)
         if replay_rate >= 75:
-            end_reproduction(replay_rate, runs_counter, buggy_schedule, start_time)
-            return
+            return end_reproduction(
+                replay_rate, runs_counter, buggy_schedule, start_time
+            )
         if replay_rate > best_rr_rate:
             best_rr_rate = replay_rate
             best_schedule = buggy_schedule
-    end_reproduction(replay_rate, runs_counter, best_schedule, start_time)
+
+    return end_reproduction(replay_rate, runs_counter, best_schedule, start_time)
 
 
 def run_test(bug_reproduction, faults_detected):
@@ -815,9 +817,29 @@ def save_schedule(schedule_location, result_folder, run_name):
 def end_reproduction(replay_rate, runs, schedule, start_time):
     end_time = time.time()
     elapsed_time = end_time - start_time
-    print(
-        "RR:", replay_rate, "RUNS:", runs, "TIME:", elapsed_time, "SCHEDULE:", schedule
-    )
+    if replay_rate > 60:
+        print(
+            "SUCCESS! RR:",
+            replay_rate,
+            "RUNS:",
+            runs,
+            "TIME:",
+            elapsed_time,
+            "SCHEDULE:",
+            schedule,
+        )
+    else:
+        print(
+            "FAILED! RR:",
+            replay_rate,
+            "RUNS:",
+            runs,
+            "TIME:",
+            elapsed_time,
+            "SCHEDULE:",
+            schedule,
+        )
+    return (replay_rate, runs, elapsed_time, schedule)
 
 
 # Creates the conditions based on faults for a specific fault
@@ -974,4 +996,5 @@ def generate_combinations(faults_and_offsets):
 
 
 if __name__ == "__main__":
-    main()
+    bug_specification = sys.argv[1]
+    reproduce_bug(bug_specification)
