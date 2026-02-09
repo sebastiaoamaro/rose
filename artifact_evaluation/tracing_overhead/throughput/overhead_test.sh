@@ -1,7 +1,7 @@
 #!/bin/bash
-#workload_size=25000000
-workload_size=250000
-runs=10
+workload_size=25000000
+#workload_size=250000
+runs=5
 maindirectory=/vagrant/tracer
 main=/vagrant/tracer/target/release/tracer
 date=$(date +"%H:%M")

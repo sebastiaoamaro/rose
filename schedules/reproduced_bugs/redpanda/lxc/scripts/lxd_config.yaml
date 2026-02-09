@@ -1,18 +1,13 @@
 config: {}
 networks:
-  - name: lxdbr0
+  - name: redpandabr0
     type: bridge
     config:
       ipv4.address: 10.245.147.1/24
       ipv4.nat: "true"
+      ipv4.dhcp: "true"
       ipv6.address: none
-      raw.dnsmasq: |
-        dhcp-range=10.245.147.50,10.245.147.200,255.255.255.0,12h
-
-storage_pools:
-  - name: default
-    driver: dir
-
+      ipv6.dhcp: "false"
 profiles:
   - name: default
     devices:
@@ -22,7 +17,11 @@ profiles:
         path: /
       eth0:
         type: nic
-        network: lxdbr0
+        network: redpandabr0
         name: eth0
+
+storage_pools:
+  - name: default
+    driver: dir
 
 cluster: null

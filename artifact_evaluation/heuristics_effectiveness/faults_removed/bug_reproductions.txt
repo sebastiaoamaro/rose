@@ -1,10 +1,10 @@
-/vagrant/bug_reproductions/hbase_19608.yaml
-/vagrant/bug_reproductions/hdfs_12070.yaml
-/vagrant/bug_reproductions/hdfs_15032.yaml
-/vagrant/bug_reproductions/hdfs_16332.yaml
-/vagrant/bug_reproductions/hdfs_4233.yaml
-/vagrant/bug_reproductions/kafka_12508.yaml
-/vagrant/bug_reproductions/mongo_2.4.3_dl.yaml
+#/vagrant/bug_reproductions/hbase_19608.yaml
+#/vagrant/bug_reproductions/hdfs_12070.yaml
+#/vagrant/bug_reproductions/hdfs_15032.yaml
+#/vagrant/bug_reproductions/hdfs_16332.yaml
+#/vagrant/bug_reproductions/hdfs_4233.yaml
+#/vagrant/bug_reproductions/kafka_12508.yaml
+#/vagrant/bug_reproductions/mongo_2.4.3_dl.yaml
 /vagrant/bug_reproductions/mongo_3.2.10_un.yaml
 /vagrant/bug_reproductions/redisraft_42.yaml
 /vagrant/bug_reproductions/redisraft_43.yaml

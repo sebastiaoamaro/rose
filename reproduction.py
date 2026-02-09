@@ -212,7 +212,7 @@ def reproduce_bug(bug_specification: str):
     # First attempt run a first schedule, based on first level context information
     faults_detected = choose_faults(faults_detected, history_buggy, history)
     print("Faults to use:\n", faults_detected)
-    schedule_location = "temp_sched.yaml"
+    schedule_location = "/tmp/temp_sched.yaml"
     buggy_schedules = []
 
     print("Running Level 1: First Guess")
@@ -224,10 +224,6 @@ def reproduce_bug(bug_specification: str):
         "first_guess",
     )
     if buggy_run:
-        buggy_schedule = (
-            bug_reproduction.result_folder + "buggy_run:" + "first_guess" + ".yaml"
-        )
-        move_file(schedule_location, buggy_schedule)
         (runs, replay_rate) = check_replay_rate(schedule_location, bug_reproduction)
         runs_counter += runs
         if replay_rate >= 75:
@@ -540,7 +536,7 @@ def reproduce_bug(bug_specification: str):
             )
 
     schedule_location = write_new_schedule(
-        bug_reproduction.schedule, faults_detected, "temp_sched.yaml"
+        bug_reproduction.schedule, faults_detected, "/tmp/temp_sched.yaml"
     )
 
     # Third attempts run schedules based on third level context information
@@ -732,7 +728,7 @@ def reproduce_bug(bug_specification: str):
 
 def run_test(bug_reproduction, faults_detected):
     schedule_location = write_new_schedule(
-        bug_reproduction.schedule, faults_detected, "temp_sched.yaml"
+        bug_reproduction.schedule, faults_detected, "/tmp/temp_sched.yaml"
     )
     run_reproduction(schedule_location)
     buggy_run = check_oracle(

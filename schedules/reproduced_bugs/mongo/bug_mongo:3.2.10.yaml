@@ -3,8 +3,8 @@ execution_plan:
   setup:
     script: /vagrant/schedules/reproduced_bugs/mongo/mongo_3.2.10/scripts/start_cluster.sh
     duration: 60
-  workload:
-    script: /vagrant/schedules/reproduced_bugs/mongo/mongo_3.2.10/scripts/run_workload.sh
+  # workload:
+  #   script: /vagrant/schedules/reproduced_bugs/mongo/mongo_3.2.10/scripts/run_workload.sh
   tracer:
     tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid

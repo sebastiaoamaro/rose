@@ -9,8 +9,6 @@ from reproduction import (
     parse_bug_reproduction,
     run_cleanup,
     run_reproduction,
-    save_schedule,
-    write_new_schedule,
 )
 
 _MIB = 1024 * 1024
@@ -131,6 +129,8 @@ def test_full_trace():
 
     bpf_log_path = bpf["output_path"]
     reset_appears_count = count_reset_appears(bpf_log_path)
+    if reset_appears_count == 0:
+        reset_appears_count = 1
     print("Events:", lines * reset_appears_count)
 
 
@@ -169,6 +169,8 @@ def test_io_trace():
 
     bpf_log_path = bpf["output_path"]
     reset_appears_count = count_reset_appears(bpf_log_path)
+    if reset_appears_count == 0:
+        reset_appears_count = 1
     print("Events:", lines * reset_appears_count)
 
 
@@ -207,6 +209,8 @@ def test_production_trace():
 
     bpf_log_path = bpf["output_path"]
     reset_appears_count = count_reset_appears(bpf_log_path)
+    if reset_appears_count == 0:
+        reset_appears_count = 1
     print("Events:", lines * reset_appears_count)
 
 

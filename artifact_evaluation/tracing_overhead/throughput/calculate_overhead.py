@@ -1,7 +1,8 @@
 import os
-import sys
 import re
+import sys
 from collections import defaultdict
+
 
 def process_directory(directory):
     category_data = defaultdict(list)
@@ -9,32 +10,35 @@ def process_directory(directory):
     for filename in os.listdir(directory):
         file_path = os.path.join(directory, filename)
 
-        if os.path.isdir(file_path) or 'history_' in filename:
+        if os.path.isdir(file_path) or "history_" in filename:
             continue
 
         try:
-            category = filename.split(':', 1)[0]
+            category = filename.split(":", 1)[0]
         except IndexError:
             continue
 
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path, "r") as f:
                 for line in f:
-                    if line.startswith('[OVERALL], Throughput(ops/sec),'):
-                        throughput = float(line.split(', ')[2].strip())
+                    if line.startswith("[OVERALL], Throughput(ops/sec),"):
+                        throughput = float(line.split(", ")[2].strip())
                         category_data[category].append(throughput)
                         break
         except Exception as e:
             print(f"Error processing {filename}: {str(e)}", file=sys.stderr)
 
-    averages = {cat: sum(vals)/len(vals) for cat, vals in category_data.items() if vals}
+    averages = {
+        cat: sum(vals) / len(vals) for cat, vals in category_data.items() if vals
+    }
     return averages
+
 
 def calculate_percentage_differences(averages):
     # Group categories by their numeric suffix (3 or 6)
     groups = defaultdict(dict)
     for cat, avg in averages.items():
-        match = re.search(r'(\d+)$', cat)
+        match = re.search(r"(\d+)$", cat)
         if match:
             group = match.group(1)
             groups[group][cat] = avg
@@ -42,27 +46,25 @@ def calculate_percentage_differences(averages):
     results = []
     for group, group_averages in groups.items():
         # Find baseline (topology{group})
-        baseline_name = f'vanilla{group}'
+        baseline_name = f"vanilla{group}"
         baseline = group_averages.get(baseline_name)
 
         if baseline is None or baseline == 0:
-            print(f"Warning: No valid baseline found for group {group}", file=sys.stderr)
+            print(
+                f"Warning: No valid baseline found for group {group}", file=sys.stderr
+            )
             continue
 
         for category, avg in group_averages.items():
             if category == baseline_name:
                 continue  # Skip baseline itself
             percentage_diff = ((avg - baseline) / baseline) * 100
-            results.append((
-                group,
-                category,
-                avg,
-                baseline_name,
-                baseline,
-                percentage_diff
-            ))
+            results.append(
+                (group, category, avg, baseline_name, baseline, percentage_diff)
+            )
 
     return results
+
 
 def main():
     if len(sys.argv) != 2:
@@ -78,11 +80,11 @@ def main():
     results = calculate_percentage_differences(averages)
 
     # Print results sorted by group and category
-    for group, category, avg, base_name, base_val, pct in sorted(results, key=lambda x: (x[0], x[1])):
-        print(f"Group {group}:")
-        print(f"  {category}: {avg:.2f} ops/sec")
-        print(f"  Baseline ({base_name}): {base_val:.2f} ops/sec")
-        print(f"  Difference: {pct:+.2f}%\n")
+    for group, category, avg, base_name, base_val, pct in sorted(
+        results, key=lambda x: (x[0], x[1])
+    ):
+        print(f"  {category} - per node overhead: {pct / 3:+.2f}%\n")
+
 
 if __name__ == "__main__":
     main()

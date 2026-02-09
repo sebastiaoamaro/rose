@@ -614,7 +614,7 @@ int BPF_KPROBE(__x64_sys_newfstatat,struct pt_regs *regs)
 	};
 	struct file_info_simple *file_open = bpf_map_lookup_elem(&files,&info_key);
 	if(file_open){
-		bpf_printk("In newfstatat comparing %s and %s \n",path,file_open->filename);
+		//bpf_printk("In newfstatat comparing %s and %s \n",path,file_open->filename);
 
 		int string_equal = 0;
 		for (int i = 0; i < 4; i++){

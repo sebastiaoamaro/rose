@@ -1,6 +1,7 @@
 version: "3"
 services:
   redis-1:
+    container_name: "node1"
     image: redis:8.0.3
     command: ["redis-server", "/etc/redis/redis.conf"]
     privileged: true
@@ -14,6 +15,7 @@ services:
       redis_network:
         ipv4_address: 172.38.0.11
   redis-2:
+    container_name: "node2"
     image: redis:8.0.3
     command: ["redis-server", "/etc/redis/redis.conf"]
     privileged: true
@@ -27,6 +29,7 @@ services:
       redis_network:
         ipv4_address: 172.38.0.12
   redis-3:
+    container_name: "node3"
     image: redis:8.0.3
     command: ["redis-server", "/etc/redis/redis.conf"]
     privileged: true

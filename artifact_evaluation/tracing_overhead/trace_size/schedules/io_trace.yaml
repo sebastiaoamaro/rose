@@ -1,5 +1,5 @@
 execution_plan:
-  maximum_time: 600
+  maximum_time: 300
   setup:
     script: /vagrant/artifact_evaluation/tracing_overhead/trace_size/scripts/start_cluster.sh
     duration: 20
@@ -9,7 +9,7 @@ execution_plan:
     script: /vagrant/artifact_evaluation/tracing_overhead/trace_size/scripts/cleanup.sh
     duration: 5
   pre_workload:
-    script: /vagrant/schedules/bug_discovery/redis_setup/init_cluster.sh
+    script: /vagrant/artifact_evaluation/tracing_overhead/trace_size/scripts/init_cluster.sh
   tracer:
     functions_file: /vagrant/profiler/redis/functions.txt
     tracer_location: "/vagrant/tracer/target/release/tracer"
@@ -19,13 +19,13 @@ execution_plan:
 nodes:
   node1:
     container: true
-    script: /scripts/start_redis.sh
+    container_type: docker_automatic
     ip: 172.38.0.11
   node2:
     container: true
-    script: /scripts/start_redis.sh
+    container_type: docker_automatic
     ip: 172.38.0.12
   node3:
     container: true
-    script: /scripts/start_redis.sh
+    container_type: docker_automatic
     ip: 172.38.0.13

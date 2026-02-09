@@ -63,5 +63,10 @@ for i in $(seq 1 $n); do
 	echo "Files to n${i}"
 done
 
-rm /root/.ssh/config
-# lein run test --nodes-file ~/nodes --username root
+lxc config device override n1 eth0 ipv4.address=10.245.147.10
+lxc config device override n2 eth0 ipv4.address=10.245.147.20
+lxc config device override n3 eth0 ipv4.address=10.245.147.30
+lxc config device override n4 eth0 ipv4.address=10.245.147.40
+lxc config device override n5 eth0 ipv4.address=10.245.147.50
+
+./restart_containers.sh

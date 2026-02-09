@@ -1732,9 +1732,35 @@ pub fn write_event_to_history(
     event_name: String,
     filename: String,
 ) {
-    write_to_file("/tmp/history.txt".to_string(),
-    format!("Node:{},Pid:{},Tid:{},event_type:{},event_name:{},ret:{},time:{},arg1:{},arg2:{},arg3:{},arg4:{},arg5:{}\n",
-    node_name,event.pid,event.tid,event_type,event_name,event.ret,event.timestamp,event.arg1,event.arg2,event.arg3,event.arg4,filename)).expect("Failed to dump history");
+    let extra_len = event
+        .extra
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(event.extra.len());
+
+    let extra_str =
+        String::from_utf8_lossy(&event.extra[..extra_len]).replace(['\n', '\r', ','], "a");
+
+    write_to_file(
+        "/tmp/history.txt".to_string(),
+        format!(
+            "Node:{},Pid:{},Tid:{},event_type:{},event_name:{},ret:{},time:{},arg1:{},arg2:{},arg3:{},arg4:{},arg5:{},extra:\"{}\"\n",
+            node_name,
+            event.pid,
+            event.tid,
+            event_type,
+            event_name,
+            event.ret,
+            event.timestamp,
+            event.arg1,
+            event.arg2,
+            event.arg3,
+            event.arg4,
+            filename,
+            extra_str
+        ),
+    )
+    .expect("Failed to dump history");
 }
 
 pub fn start_xdp_in_container(container_pid: i32, if_index: i32, container_type: i32) -> u32 {

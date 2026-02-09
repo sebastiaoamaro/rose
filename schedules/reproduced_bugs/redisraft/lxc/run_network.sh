@@ -3,7 +3,6 @@
 # Build the network
 echo 1048576 > /proc/sys/fs/aio-max-nr
 echo "Building the network"
-sudo lxd init --auto
 
 echo "Configuring the network"
 # Get the IPv4 address of lxdbr0

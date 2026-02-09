@@ -53,8 +53,6 @@ for i in $(seq 1 $n); do ssh-keyscan -t rsa n${i}redis.lxd >>/root/.ssh/known_ho
 
 echo "Added nodes to known hosts"
 
-# Create ~/nodes with has th DB hostnames one per line
-# echo -e 'n1\nn2\nn3\nn4\nn5' > ~/nodes
 rm /home/vagrant/nodes
 for i in $(seq 1 $n); do echo -e "n${i}redis.lxd" >>/home/vagrant/nodes; done
 
@@ -66,14 +64,10 @@ rm /root/.ssh/config
 touch /root/.ssh/config
 for i in $(seq 1 $n); do echo -e "Host n${i}redis.lxd\n  user root\n ForwardAgent no\n    IdentityFile /home/vagrant/.ssh/id_rsa" >>/root/.ssh/config; done
 
-lxc config device override n1 eth0 ipv4.address=10.245.147.145
-lxc config device override n2 eth0 ipv4.address=10.245.147.242
-lxc config device override n3 eth0 ipv4.address=10.245.147.92
-lxc config device override n4 eth0 ipv4.address=10.245.147.132
-lxc config device override n5 eth0 ipv4.address=10.245.147.74
+lxc config device override n1redis eth0 ipv4.address=10.245.147.145
+lxc config device override n2redis eth0 ipv4.address=10.245.147.242
+lxc config device override n3redis eth0 ipv4.address=10.245.147.92
+lxc config device override n4redis eth0 ipv4.address=10.245.147.132
+lxc config device override n5redis eth0 ipv4.address=10.245.147.74
 
 ./restart_containers.sh
-
-#./get-lxcs-info.sh info.txt
-
-# Push the configuration file to each container and run redpanda

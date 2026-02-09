@@ -16,4 +16,4 @@ done
 cd /vagrant/schedules/reproduced_bugs/redpanda/lxc/redpanda_jepsen/
 
 echo "go" >> /tmp/signal_start_workload.txt
-lein run test --concurrency 4n --nodes-file /root/nodes --username root -s --time-limit 90 --test-count 1
+lein run test --concurrency 4n --nodes-file /root/nodes --username root -s --time-limit 90 --test-count 1 > /tmp/jepsen.log

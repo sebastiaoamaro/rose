@@ -3,9 +3,9 @@ import selectors
 import subprocess
 import time
 
+from analyzer.trace_analysis import calculate_faults_removed
 from reproduction import (
     History,
-    calculate_faults_removed,
     collect_history,
     parse_bug_reproduction,
     run_cleanup,

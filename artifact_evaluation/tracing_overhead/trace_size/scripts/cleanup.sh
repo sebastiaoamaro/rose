@@ -1,3 +1,2 @@
 #!/bin/bash
-cd /vagrant/artifact_evaluation/tracing_overhead/trace_size
-docker compose -f docker-compose.yaml down
+docker compose -f /vagrant/artifact_evaluation/tracing_overhead/throughput/configs/docker-compose3.yaml down

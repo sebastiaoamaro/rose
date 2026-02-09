@@ -1,10 +1,10 @@
 use crate::manager::{self, pin_maps, start_tracing, LOCATION_TRACEPOINT_VECTOR};
 use crate::skel_types::{rw_tracer, SkelEnum};
 use anyhow::Result;
-use manager::pin_maps::PinMapsSkelBuilder;
 use libbpf_rs::skel::OpenSkel as _;
 use libbpf_rs::skel::SkelBuilder as _;
 use libbpf_rs::{Link, OpenObject};
+use manager::pin_maps::PinMapsSkelBuilder;
 use std::collections::HashMap;
 use std::mem::MaybeUninit;
 

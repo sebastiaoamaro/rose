@@ -118,8 +118,12 @@ class History:
         event_data = {}
         parts = line.split(",")
         for part in parts:
-            key, value = part.split(":", 1)
-            event_data[key] = value
+            try:
+                key, value = part.split(":", 1)
+                event_data[key] = value
+            except Exception:
+                print("Failed to parse part: ", part, " in line: ", line)
+                continue
         # First event we see
         if self.start_time == 0 and not self.start_time_event:
             self.start_time = int(event_data["time"])
@@ -439,7 +443,7 @@ class History:
                         event.node = node.name
 
                 if event.node == "any":
-                    print("Delay between nodes outside of the deployment")
+                    # print("Delay between nodes outside of the deployment")
                     continue
 
                 dest_node = 0

@@ -16,7 +16,7 @@ fi
 # Generate SSH key pair if it doesn't exist
 if [ ! -f "$PRIVATE_KEY" ]; then
     echo "Generating new SSH key pair..."
-    ssh-keygen -t rsa -b 4096 -m PEM -f $PRIVATE_KEY
+    ssh-keygen -t rsa -b 4096 -m PEM -f $PRIVATE_KEY -N "" -q
     chmod 600 "$PRIVATE_KEY"
     chmod 644 "$PUBLIC_KEY"
     echo "SSH key pair generated:"
