@@ -1099,29 +1099,3 @@ int handle_fork(struct trace_event_raw_sched_process_fork *ctx)
     }
 	return 0;
 }
-
-
-
-// SEC("usdt")
-// int entry_probe(struct pt_regs *ctx){
-
-//     char name[64] = {0};
-
-//     void *method_name = (void *)PT_REGS_PARM3(ctx);
-
-//     if (!method_name){
-//         bpf_printk("No method name provided\n");
-//         return 0;
-//     }
-//     //bpf_printk("Name is %s \n",(char *)method_name);
-
-//     int len = bpf_probe_read_user_str(&name, sizeof(name), method_name);
-
-//     if (len < 0){
-//         //bpf_printk("Failed to read method name, err is %d", len);
-//         return 0;
-//     }
-
-//     //bpf_printk("Entering method: %s\n", name);
-// 	return 0;
-// }

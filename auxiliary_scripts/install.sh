@@ -36,11 +36,11 @@ echo \
   "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
   "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
 sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt-get -y update
-sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo apt-get $APT_FLAGS update
+sudo apt-get $APT_FLAGS $DPKG_FLAGS install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 sudo docker run hello-world
 
-sudo apt-get install --yes --allow-downgrades \
+sudo apt-get $APT_FLAGS $DPKG_FLAGS install --allow-downgrades \
   docker-ce="5:28.5.2-1~ubuntu.24.04~noble" \
   docker-ce-cli="5:28.5.2-1~ubuntu.24.04~noble" \
   docker-ce-rootless-extras="5:28.5.2-1~ubuntu.24.04~noble" \
@@ -63,7 +63,7 @@ rustup override set 1.86.0
 
 
 #Github
-sudo apt -y install git
+sudo apt $APT_FLAGS $DPKG_FLAGS install git
 
 #libbpf
 echo "Building libbpf..."
@@ -96,7 +96,7 @@ export PATH=/usr/local/bin:$PATH
 #Kernel module
 echo "Setting up kernel module dependencies..."
 cd /vagrant/executor/kernelmodule
-sudo apt-get -qq install -y libdw1 dwarves elfutils libdw-dev pahole libdwarf-dev
+sudo apt-get $APT_FLAGS $DPKG_FLAGS -qq install -y libdw1 dwarves elfutils libdw-dev pahole libdwarf-dev
 sudo cp /sys/kernel/btf/vmlinux /usr/lib/modules/`uname -r`/build/
 # dwarves is already a submodule, no need to clone manually
 echo "Building dwarves..."
@@ -109,14 +109,6 @@ cmake ..
 make
 sudo make install
 sudo ldconfig
-
-#Anduril
-sudo apt-get update
-sudo apt install -y git maven ant vim openjdk-8-jdk
-sudo update-alternatives --set java $(sudo update-alternatives --list java | grep "java-8")
-
-export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
-echo export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 >> ~/.bashrc
 
 #Build vmlinux.h
 cd /vagrant/tracer/src/bpf

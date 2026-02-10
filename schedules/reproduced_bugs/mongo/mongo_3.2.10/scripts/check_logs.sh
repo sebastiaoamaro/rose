@@ -1,2 +1,2 @@
 #!/bin/bash
-docker logs mongo-0
+sudo docker logs mongo-0

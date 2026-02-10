@@ -79,11 +79,11 @@ def main():
     averages = process_directory(directory)
     results = calculate_percentage_differences(averages)
 
-    # Print results sorted by group and category
+    print("tracer,overhead")
     for group, category, avg, base_name, base_val, pct in sorted(
         results, key=lambda x: (x[0], x[1])
     ):
-        print(f"  {category} - per node overhead: {pct / 3:+.2f}%\n")
+        print(f"{category},{pct / 3:+.2f}")
 
 
 if __name__ == "__main__":

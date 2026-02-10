@@ -1,7 +1,7 @@
 #!/bin/bash
 #workload_size=25000000
 workload_size=250000
-runs=5
+runs=2
 maindirectory=/vagrant/tracer
 main=/vagrant/tracer/target/release/tracer
 date=$(date +"%H:%M")
@@ -23,7 +23,7 @@ do
     do
         sudo $HOME_DIR/configs/setup.sh $topology
         #Normal run
-        docker compose -f  $HOME_DIR/configs/docker-compose$topology.yaml up -d
+        sudo docker compose -f  $HOME_DIR/configs/docker-compose$topology.yaml up -d
         sleep 30
         redis-cli --cluster create $(cat $HOME_DIR/configs/ips$topology.txt) --cluster-yes
         sleep 30
@@ -48,7 +48,7 @@ do
     for (( run=1; run<=$runs; run++ ))
     do
         sudo $HOME_DIR/configs/setup.sh $topology
-        docker compose -f $HOME_DIR/configs/docker-compose$topology.yaml up -d
+        sudo docker compose -f $HOME_DIR/configs/docker-compose$topology.yaml up -d
         sleep 30
         redis-cli --cluster create $(cat $HOME_DIR/configs/ips$topology.txt) --cluster-yes
         sleep 30
@@ -63,13 +63,13 @@ do
         done
 
         echo Starting Workload
-        $HOME_DIR/run_ycsb.sh $workload_size $RESULT_DIR/sys_all_trace$topology:$run
+        $HOME_DIR/run_ycsb.sh $workload_size $RESULT_DIR/full_trace$topology:$run
 
         sudo kill -2 $ebpf_PID
 
         wait $ebpf_PID
-        docker compose -f  $HOME_DIR/configs/docker-compose$topology.yaml down
-        sudo mv /tmp/history.txt results/history_sys_all_tracer_$topology:$run.txt
+        sudo docker compose -f  $HOME_DIR/configs/docker-compose$topology.yaml down
+        sudo mv /tmp/history.txt results/history_full_tracer_$topology:$run.txt
         sudo rm -r /redis/*
     done
     ############################################################################################################
@@ -80,7 +80,7 @@ do
     for (( run=1; run<=$runs; run++ ))
     do
         sudo $HOME_DIR/configs/setup.sh $topology
-        docker compose -f $HOME_DIR/configs/docker-compose$topology.yaml up -d
+        sudo docker compose -f $HOME_DIR/configs/docker-compose$topology.yaml up -d
         sleep 30
         redis-cli --cluster create $(cat $HOME_DIR/configs/ips$topology.txt) --cluster-yes
         sleep 30
@@ -100,7 +100,7 @@ do
         sudo kill -2 $ebpf_PID
 
         wait $ebpf_PID
-        docker compose -f  $HOME_DIR/configs/docker-compose$topology.yaml down
+        sudo docker compose -f  $HOME_DIR/configs/docker-compose$topology.yaml down
         sudo mv /tmp/history.txt results/history_rw_tracer_$topology:$run.txt
         sudo rm -r /redis/*
     done
@@ -114,7 +114,7 @@ do
     for (( run=1; run<=$runs; run++ ))
     do
         sudo $HOME_DIR/configs/setup.sh $topology
-        docker compose -f $HOME_DIR/configs/docker-compose$topology.yaml up -d
+        sudo docker compose -f $HOME_DIR/configs/docker-compose$topology.yaml up -d
         sleep 30
         redis-cli --cluster create $(cat $HOME_DIR/configs/ips$topology.txt) --cluster-yes
         sleep 30
@@ -134,13 +134,12 @@ do
         sudo kill -2 $ebpf_PID
 
         wait $ebpf_PID
-        docker compose -f  $HOME_DIR/configs/docker-compose$topology.yaml down
+        sudo docker compose -f  $HOME_DIR/configs/docker-compose$topology.yaml down
         sudo mv /tmp/history.txt results/history_prod_tracer_$topology:$run.txt
         sudo rm -r /redis/*
     done
 
 done
 
-reset
 cd /vagrant/artifact_evaluation/tracing_overhead/throughput/
-python3 calculate_overhead.py result/ > results.txt
+python3 calculate_overhead.py results/ > /shared/throughtput_overhead.txt

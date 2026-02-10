@@ -1,2 +1,2 @@
 #!/bin/bash
-docker exec -ti client cat output.log
+sudo docker exec -ti client cat output.log

@@ -126,7 +126,7 @@ def test_full_trace():
         reset_appears_count = 1
     events = lines * reset_appears_count
 
-    out_path = os.path.join(os.path.dirname(__file__), "trace_size_results.csv")
+    out_path = os.path.join(os.path.dirname(__file__), "/shared/trace_size_results.csv")
     write_header = not os.path.exists(out_path)
     with open(out_path, "a", encoding="utf-8") as f:
         if write_header:
@@ -167,7 +167,7 @@ def test_io_trace():
         reset_appears_count = 1
     events = lines * reset_appears_count
 
-    out_path = os.path.join(os.path.dirname(__file__), "trace_size_results.csv")
+    out_path = os.path.join(os.path.dirname(__file__), "/shared/trace_size_results.csv")
     write_header = not os.path.exists(out_path)
     with open(out_path, "a", encoding="utf-8") as f:
         if write_header:
@@ -208,11 +208,11 @@ def test_production_trace():
         reset_appears_count = 1
     events = lines * reset_appears_count
 
-    out_path = os.path.join(os.path.dirname(__file__), "trace_size_results.csv")
+    out_path = os.path.join(os.path.dirname(__file__), "/shared/trace_size_results.csv")
     write_header = not os.path.exists(out_path)
     with open(out_path, "a", encoding="utf-8") as f:
         if write_header:
-            f.write("trace,events,lines,size_bytes,elapsed_time_s\n")
+            f.write("tracer,events,lines,size_bytes,elapsed_time_s\n")
         f.write(f"production_trace,{events},{lines},{size},{elapsed_time}\n")
 
 

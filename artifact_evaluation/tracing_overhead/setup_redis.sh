@@ -9,7 +9,7 @@ sudo apt-get -y upgrade
 export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
 echo export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 >> ~/.bashrc
 curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+
 #Sudo for docker
 sudo groupadd docker
 sudo usermod -aG docker $USER
-newgrp docker

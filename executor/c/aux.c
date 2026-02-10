@@ -505,7 +505,7 @@ pid_t get_docker_container_pid(const char *container_name) {
     char output[1024];
 
     // Construct the Docker command to inspect the container and fetch the PID
-    sprintf(command, "docker inspect --format='{{.State.Pid}}' %s", container_name);
+    sprintf(command, "sudo docker inspect --format='{{.State.Pid}}' %s", container_name);
 
     // Open a pipe to read the output of the command
     fp = popen(command, "r");
@@ -566,7 +566,7 @@ char* get_docker_container_location(const char* container_name) {
 
     printf("Finding location for %s \n",container_name);
     // Execute docker container inspect command
-    snprintf(command, MAX_COMMAND_LEN, "docker container inspect %s | jq -r '.[0].GraphDriver.Data.MergedDir'", container_name);
+    snprintf(command, MAX_COMMAND_LEN, "sudo docker container inspect %s | jq -r '.[0].GraphDriver.Data.MergedDir'", container_name);
     FILE* fp = popen(command, "r");
     if (fp == NULL) {
         perror("Failed to execute command");

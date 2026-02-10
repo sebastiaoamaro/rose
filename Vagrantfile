@@ -6,7 +6,7 @@ Vagrant.configure("2") do |config|
         test1.vm.box = "bento/ubuntu-24.04"
         test1.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","checkouts","build","repos","tests/bugdetection/redisraft/*","lazyfs/tmp"]
         test1.vm.synced_folder "~/shared/test1/", "/shared",type:"virtualbox"
-        test1.disksize.size = '80GB'
+        test1.disksize.size = '60GB'
         test1.vm.network "private_network", ip: "192.168.56.10"
         test1.vm.provider "virtualbox" do |v|
             v.cpus = 8        # Set number of CPUs
@@ -18,6 +18,7 @@ Vagrant.configure("2") do |config|
         test2.vm.box = "bento/ubuntu-24.04"
         test2.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","build","repos","rw/Anduril/*"]
         test2.vm.synced_folder "~/shared/test2/", "/shared",type:"virtualbox"
+        test2.disksize.size = '60GB'
         test2.vm.provider "virtualbox" do |v|
             v.cpus = 4       # Set number of CPUs
             v.memory = "8192"

@@ -854,7 +854,7 @@ pub fn write_to_file(filename: String, content: String) -> std::io::Result<()> {
 pub fn get_overlay2_location(container_name: &str) -> Result<String, io::Error> {
     // Construct the command
     let command = format!(
-        "docker container inspect {} | jq -r '.[0].GraphDriver.Data.MergedDir'",
+        "sudo docker container inspect {} | jq -r '.[0].GraphDriver.Data.MergedDir'",
         container_name
     );
 
@@ -1165,7 +1165,7 @@ pub fn collect_events(
                         let event_name = get_syscall_name(event.id);
                         let node_name = hashmap_pid_to_node
                             .get(&pid)
-                            .expect(&format!("Failed to node-name for pid {}", event.pid));
+                            .expect(&format!("Failed to find node-name for pid {}", event.pid));
                         write_event_to_history(
                             event,
                             node_name.clone(),
