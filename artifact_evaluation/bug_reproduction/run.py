@@ -1,3 +1,4 @@
+import os
 import sys
 from collections import defaultdict
 
@@ -33,28 +34,74 @@ def _safe_float(x) -> float | None:
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python run.py <bugs_file> [times]", file=sys.stderr)
-        raise SystemExit(1)
+        print("Usage: python run.py <bugs_file>", file=sys.stderr)
+        return
 
+    print("Starting reproducing bugs in file:", sys.argv[1])
     bugs_file = sys.argv[1]
-    times = int(sys.argv[2]) if len(sys.argv) > 2 else 1
-    files = read_lines(bugs_file)
+
+    entries = read_lines(bugs_file)
+
+    files: list[str] = []
+    times_by_file: dict[str, int] = {}
+
+    for entry in entries:
+        parts = entry.split()
+        if not parts:
+            continue
+
+        if len(parts) > 2:
+            raise ValueError(
+                f"Invalid line in {bugs_file!r}: {entry!r}. Expected: '<bug_file> [times]'"
+            )
+
+        bug_file = parts[0]
+        times = int(parts[1]) if len(parts) == 2 else 1
+
+        files.append(bug_file)
+        times_by_file[bug_file] = times
+
+    total_runs = sum(times_by_file[f] for f in files)
+    print(
+        f"Read {len(files)} bugs from {bugs_file}, "
+        f"will run {total_runs} total reproductions "
+        f"(per-bug times specified in file)"
+    )
 
     # Per-file aggregates across successful runs only
     per_file = defaultdict(
         lambda: {"success": 0, "replay_rate": 0.0, "runs": 0.0, "elapsed_time_sec": 0.0}
     )
 
-    out_path = "results.txt"
+    out_path = (
+        "/vagrant/artifact_evaluation/bug_reproduction/results/results_" + bugs_file
+    )
     with open(out_path, "w", encoding="utf-8") as out:
         out.write("bug_reproduction\treplay_rate\truns\telapsed_time_sec\tschedule\n")
 
         for file in files:
-            for _ in range(times):
+            t = times_by_file.get(file, 1)
+            print(f"Reproducing bug from file: {file} (times={t})")
+            sucess_count = 0
+            while sucess_count != t:
                 try:
                     # (replay_rate, runs, elapsed_time, schedule)
                     replay_rate, runs, elapsed_time, schedule = reproduce_bug(file)
 
+                    if replay_rate != 0:
+                        sucess_count += 1
+                    else:
+                        sucess_count += 1
+
+                    source = "/tmp/temp_sched.yaml"
+                    file_name = os.path.basename(file)
+                    destination = (
+                        "/vagrant/artifact_evaluation/bug_reproduction/results/reproduced_schedule_"
+                        + file_name
+                    )
+                    print("Moving schedule from", source, "to", destination)
+                    schedule = destination
+                    move_file(source, destination)
                     out.write(
                         f"{file}\t{replay_rate}\t{runs}\t{elapsed_time}\t{schedule}\n"
                     )
@@ -70,11 +117,6 @@ def main():
                         per_file[file]["runs"] += r
                         per_file[file]["elapsed_time_sec"] += et
 
-                    move_file(
-                        "/tmp/temp_sched.yaml",
-                        "/vagrant/artifact_evaluation/bug_reproduction/results/reproduced_schedule_"
-                        + file,
-                    )
                 except Exception as e:
                     out.write(f"{file}\tERROR\tERROR\tERROR\t{type(e).__name__}: {e}\n")
 

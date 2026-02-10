@@ -117,21 +117,21 @@ def test_full_trace():
     end_time = time.time()
     elapsed_time = end_time - start_time
 
-    print("full_trace:", elapsed_time)
     lines, size = get_file_stats(trace_location)
-    print("lines:", lines, "size:", f"{bytes_to_mib(size):.2f} MiB ({size} bytes)")
 
-    # Collect bpf logs via the shell script -> /tmp/bpf_logs.txt
     bpf = run_collect_bpf_logs_script(timeout=20)
-    print("collect_bpf_logs.sh returncode:", bpf["script_returncode"])
-    if bpf["script_output"]:
-        print("collect_bpf_logs.sh stdout/stderr:\n", bpf["script_output"])
-
     bpf_log_path = bpf["output_path"]
     reset_appears_count = count_reset_appears(bpf_log_path)
     if reset_appears_count == 0:
         reset_appears_count = 1
-    print("Events:", lines * reset_appears_count)
+    events = lines * reset_appears_count
+
+    out_path = os.path.join(os.path.dirname(__file__), "trace_size_results.csv")
+    write_header = not os.path.exists(out_path)
+    with open(out_path, "a", encoding="utf-8") as f:
+        if write_header:
+            f.write("trace,events,lines,size_bytes,elapsed_time_s\n")
+        f.write(f"full_trace,{events},{lines},{size},{elapsed_time}\n")
 
 
 def test_io_trace():
@@ -157,21 +157,22 @@ def test_io_trace():
 
     end_time = time.time()
     elapsed_time = end_time - start_time
-    print("io_trace:", elapsed_time)
+
     lines, size = get_file_stats(trace_location)
-    print("lines:", lines, "size:", f"{bytes_to_mib(size):.2f} MiB ({size} bytes)")
 
-    # Collect bpf logs via the shell script -> /tmp/bpf_logs.txt
     bpf = run_collect_bpf_logs_script(timeout=20)
-    print("collect_bpf_logs.sh returncode:", bpf["script_returncode"])
-    if bpf["script_output"]:
-        print("collect_bpf_logs.sh stdout/stderr:\n", bpf["script_output"])
-
     bpf_log_path = bpf["output_path"]
     reset_appears_count = count_reset_appears(bpf_log_path)
     if reset_appears_count == 0:
         reset_appears_count = 1
-    print("Events:", lines * reset_appears_count)
+    events = lines * reset_appears_count
+
+    out_path = os.path.join(os.path.dirname(__file__), "trace_size_results.csv")
+    write_header = not os.path.exists(out_path)
+    with open(out_path, "a", encoding="utf-8") as f:
+        if write_header:
+            f.write("trace,events,lines,size_bytes,elapsed_time_s\n")
+        f.write(f"io_trace,{events},{lines},{size},{elapsed_time}\n")
 
 
 def test_production_trace():
@@ -197,21 +198,22 @@ def test_production_trace():
 
     end_time = time.time()
     elapsed_time = end_time - start_time
-    print("production_trace:", elapsed_time)
+
     lines, size = get_file_stats(trace_location)
-    print("lines:", lines, "size:", f"{bytes_to_mib(size):.2f} MiB ({size} bytes)")
 
-    # Collect bpf logs via the shell script -> /tmp/bpf_logs.txt
     bpf = run_collect_bpf_logs_script(timeout=20)
-    print("collect_bpf_logs.sh returncode:", bpf["script_returncode"])
-    if bpf["script_output"]:
-        print("collect_bpf_logs.sh stdout/stderr:\n", bpf["script_output"])
-
     bpf_log_path = bpf["output_path"]
     reset_appears_count = count_reset_appears(bpf_log_path)
     if reset_appears_count == 0:
         reset_appears_count = 1
-    print("Events:", lines * reset_appears_count)
+    events = lines * reset_appears_count
+
+    out_path = os.path.join(os.path.dirname(__file__), "trace_size_results.csv")
+    write_header = not os.path.exists(out_path)
+    with open(out_path, "a", encoding="utf-8") as f:
+        if write_header:
+            f.write("trace,events,lines,size_bytes,elapsed_time_s\n")
+        f.write(f"production_trace,{events},{lines},{size},{elapsed_time}\n")
 
 
 def main():

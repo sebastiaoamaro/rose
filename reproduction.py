@@ -175,7 +175,7 @@ def move_file(source_path, destination_path):
         shutil.copy(source_path, destination_path)
         print(f"File moved successfully from {source_path} to {destination_path}")
     except FileNotFoundError:
-        print("Error: Source file not found.")
+        print("Error: File not found.")
     except PermissionError:
         print("Error: Permission denied.")
     except Exception as e:
@@ -224,6 +224,7 @@ def reproduce_bug(bug_specification: str):
         "first_guess",
     )
     if buggy_run:
+        print("Buggy run on first attempt, checking replay rate")
         (runs, replay_rate) = check_replay_rate(schedule_location, bug_reproduction)
         runs_counter += runs
         if replay_rate >= 75:

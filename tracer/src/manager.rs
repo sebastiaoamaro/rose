@@ -1738,8 +1738,26 @@ pub fn write_event_to_history(
         .position(|&b| b == 0)
         .unwrap_or(event.extra.len());
 
-    let extra_str =
-        String::from_utf8_lossy(&event.extra[..extra_len]).replace(['\n', '\r', ','], "a");
+    let extra_raw = String::from_utf8_lossy(&event.extra[..extra_len]);
+
+    // Sanitize to avoid breaking parsers:
+    // - remove other control chars
+    // - make it one-line
+    // - escape quotes/backslashes because we wrap in extra:"..."
+    // - avoid commas because the log format is comma-separated key/value pairs
+    let mut extra_str = String::with_capacity(extra_raw.len());
+    for ch in extra_raw.chars() {
+        match ch {
+            '\n' | '\r' | '\t' => extra_str.push(' '),
+            '"' => extra_str.push_str("\\\""),
+            '\\' => extra_str.push_str("\\\\"),
+            ',' => extra_str.push(' '),
+            c if c.is_control() => {
+                // drop other control characters
+            }
+            c => extra_str.push(c),
+        }
+    }
 
     write_to_file(
         "/tmp/history.txt".to_string(),

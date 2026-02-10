@@ -1,0 +1,27 @@
+config: {}
+networks:
+  - name: redpandabr0
+    type: bridge
+    config:
+      ipv4.address: 10.245.147.1/24
+      ipv4.nat: "true"
+      ipv4.dhcp: "true"
+      ipv6.address: none
+      ipv6.dhcp: "false"
+profiles:
+  - name: default
+    devices:
+      root:
+        type: disk
+        pool: default
+        path: /
+      eth0:
+        type: nic
+        network: redpandabr0
+        name: eth0
+
+storage_pools:
+  - name: default
+    driver: dir
+
+cluster: null

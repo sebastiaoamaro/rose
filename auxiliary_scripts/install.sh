@@ -1,4 +1,14 @@
 #!/bin/bash
+set -euo pipefail
+
+# Prevent interactive prompts (grub, services restarts, config-file questions)
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+
+# Common flags for non-interactive apt/dpkg
+APT_FLAGS="-y"
+DPKG_FLAGS='-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold'
+
 
 ###############################################################
 #### AFTER RUNNING THIS SCRIPT, PLEASE REBOOT YOUR MACHINE ####
@@ -8,14 +18,14 @@ echo -e '\n# Set default working directory\nexport WORKDIR="/vagrant" && [ -d "$
 
 cd /vagrant/
 echo "Updating git submodules..."
-git submodule update --init --recursive > /dev/null
+git submodule update --init --recursive
 echo "Updating package list..."
 
 cd /vagrant/auxiliary_scripts/
 cp /vagrant/auxiliary_scripts/tmux.conf /home/vagrant/.tmux.conf
-sudo apt-get update
-sudo apt-get -y install clang libelf1 libelf-dev zlib1g-dev libc6-dev-i386 autoconf make python3-pip pcp gnuplot gcc pkg-config gcc-14 cmake llvm jq linux-headers-$(uname -r)
-sudo apt-get  -y upgrade
+sudo apt-get update $APT_FLAGS
+sudo apt-get $APT_FLAGS $DPKG_FLAGS install clang libelf1 libelf-dev zlib1g-dev libc6-dev-i386 autoconf make python3-pip pcp gnuplot gcc pkg-config gcc-14 cmake llvm jq linux-headers-$(uname -r)
+sudo apt-get $APT_FLAGS $DPKG_FLAGS dist-upgrade
 
 #Docker
 sudo apt-get install ca-certificates curl gnupg
@@ -40,9 +50,16 @@ sudo apt-get install --yes --allow-downgrades \
 
 #RUST
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+# Make cargo/rustc available in future shells
+if ! grep -q 'cargo/env' "$HOME/.bashrc"; then
+  echo 'source "$HOME/.cargo/env"' >> "$HOME/.bashrc"
+fi
+# Make it available for the remainder of this script too
 . "$HOME/.cargo/env"
+
 rustup install 1.86.0
 rustup override set 1.86.0
+
 
 
 #Github
@@ -103,7 +120,7 @@ echo export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 >> ~/.bashrc
 
 #Build vmlinux.h
 cd /vagrant/tracer/src/bpf
-sudo bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
+bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
 
 cd /vagrant/tracer/
 cargo build --release

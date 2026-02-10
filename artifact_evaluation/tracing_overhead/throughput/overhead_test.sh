@@ -1,6 +1,6 @@
 #!/bin/bash
-workload_size=25000000
-#workload_size=250000
+#workload_size=25000000
+workload_size=250000
 runs=5
 maindirectory=/vagrant/tracer
 main=/vagrant/tracer/target/release/tracer
@@ -142,3 +142,5 @@ do
 done
 
 reset
+cd /vagrant/artifact_evaluation/tracing_overhead/throughput/
+python3 calculate_overhead.py result/ > results.txt
