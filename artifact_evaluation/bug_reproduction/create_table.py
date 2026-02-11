@@ -24,6 +24,7 @@ class Row:
     bug_reproduction: str
     replay_rate: str
     runs: str
+    schedules_generated: str
     elapsed_time_sec: str
     schedule: str
     fault_removal_pct: str
@@ -33,6 +34,7 @@ class Row:
             "bug_reproduction": self.bug_reproduction,
             "replay_rate": self.replay_rate,
             "runs": self.runs,
+            "schedules_generated": self.schedules_generated,
             "elapsed_time_sec": self.elapsed_time_sec,
             "schedule": self.schedule,
             "fault_removal_pct": self.fault_removal_pct,
@@ -60,9 +62,10 @@ def _parse_row(line: str, *, source_path: str, line_no: int) -> Row | None:
         bug_reproduction=parts[0].strip(),
         replay_rate=parts[1].strip(),
         runs=parts[2].strip(),
-        elapsed_time_sec=parts[3].strip(),
-        schedule=parts[4].strip(),
-        fault_removal_pct=parts[5].strip(),
+        schedules_generated=parts[3].strip(),
+        elapsed_time_sec=parts[4].strip(),
+        schedule=parts[5].strip(),
+        fault_removal_pct=parts[6].strip(),
     )
 
 
@@ -128,6 +131,7 @@ def main() -> int:
             r.schedule,
             r.replay_rate,
             r.runs,
+            r.schedules_generated,
             r.elapsed_time_sec,
             r.fault_removal_pct,
         )

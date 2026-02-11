@@ -9,10 +9,14 @@ artifact_evaluation
 │   reproduce_bugs.sh                - Reproduces the bugs displayed in Table 1
 |   reproduce_tracing_tests.sh       - Reproduce the tracing tests displayed in Table 2
 │   reproduce_heuristics_tests.sh    - Reproduce the heuristics tests displayed in Table 3
-│
+|   kick_the_tires.sh                - Runs a subset of tests to confirm the correct setup of the environment.
+|   requirements.sh                  - Checks if the machine has the necessary requirements to run AE.
+|
 └─── bug_reproduction           - Contains the script and the results of the bug reproduction
 └─── heuristics_effectiveness   - Contains the script and the results of the heuristics tests
-└─── tracing_overhead           - Contains the script and the results of the heuristics tests
+└─── tracing_overhead           - Contains the comparison of different types of tracing
+      └─── throughput           - Contains the scripts and setup for the throughput overhead tests
+      └─── trace_size           - Contains the scripts and setup and the comparison of trace sizes
 └─── scripts                    - Scripts to setup the environment for AE
 ```
 
@@ -42,7 +46,7 @@ Three different machines will be built. One to reproduce the SCF bugs, one for s
 ~/rose/artifact_evaluation/$ ./prepare_vms.sh
 ```
 
-During this step the machines may ask for grub related questions, simply say no when possible or presse enter (when it is the only option) and the installation will go smoothly.
+During this step the machines may ask for grub related questions, simply say yes when possible or press enter (when it is the only option) and the installation will go smoothly.
 
 Breakdown of building time: 1~2 hours
 
@@ -54,7 +58,7 @@ To ensure everything is working properly, without waiting for long experiments, 
 ~/rose/artifact_evaluation/$ ./kick_the_tires.sh
 ```
 
-Breakdown of run time: 2 hours
+Breakdown of run time: 1~2 hours
 
 ### Reproduced Bugs
 
@@ -72,4 +76,4 @@ Breakdown of run time: 2 hours
 ~/rose/artifact_evaluation/$ ./display_overhead_table.sh
 ```
 
-- Now you can proceed to the full evaluation described in the appendiux
+- Now you can proceed to the full evaluation described in the appendix

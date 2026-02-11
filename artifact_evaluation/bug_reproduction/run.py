@@ -85,14 +85,19 @@ def main():
             while sucess_count != t:
                 try:
                     # (replay_rate, runs, elapsed_time, schedule)
-                    replay_rate, runs, elapsed_time, schedule, tfault_removal_pct = (
-                        reproduce_bug(file)
-                    )
+                    (
+                        replay_rate,
+                        runs,
+                        schedules_generated,
+                        elapsed_time,
+                        schedule,
+                        fault_removal_pct,
+                    ) = reproduce_bug(file)
 
                     if replay_rate != 0:
                         sucess_count += 1
                     else:
-                        sucess_count += 1
+                        continue
 
                     source = "/tmp/temp_sched.yaml"
                     file_name = os.path.basename(file)
@@ -104,7 +109,7 @@ def main():
                     schedule = destination
                     move_file(source, destination)
                     out.write(
-                        f"{file}\t{replay_rate}\t{runs}\t{elapsed_time}\t{schedule}\t{tfault_removal_pct}\n"
+                        f"{file}\t{replay_rate}\t{runs}\t{schedules_generated}\t{elapsed_time}\t{schedule}\t{fault_removal_pct}\n"
                     )
 
                     rr = _safe_float(replay_rate)

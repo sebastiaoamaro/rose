@@ -125,9 +125,7 @@ def compare_values():
         )
         return
 
-    grand_normal = 0
-    grand_no_heur = 0
-
+    rows = []
     for key in shared_keys:
         normal_path = os.path.join(results_dir, normal_by_key[key])
         no_heur_path = os.path.join(results_dir, no_heur_by_key[key])
@@ -135,20 +133,46 @@ def compare_values():
         normal_total = _parse_total_calls(normal_path)
         no_heur_total = _parse_total_calls(no_heur_path)
 
-        grand_normal += normal_total
-        grand_no_heur += no_heur_total
+        pct = (
+            ((normal_total - no_heur_total) / no_heur_total * 100.0)
+            if no_heur_total != 0
+            else None
+        )
 
-        diff = normal_total - no_heur_total
-        pct = (diff / no_heur_total * 100.0) if no_heur_total != 0 else None
+        rows.append(
+            {
+                "case": key,
+                "normal": str(normal_total),
+                "no_heuristic": str(no_heur_total),
+                "%diff": "N/A" if pct is None else f"{pct:+.2f}%",
+            }
+        )
 
-        print(f"\nCase: {key}")
-        print(f"  normal:       {normal_total}")
-        print(f"  no_heuristic: {no_heur_total}")
-        print(f"  diff:         {diff}")
-        if pct is None:
-            print("  diff(%):      N/A (no_heuristic total is 0)")
-        else:
-            print(f"  diff(%):      {pct:.2f}%")
+    headers = ["case", "normal", "no_heuristic", "%diff"]
+    widths = {
+        h: max(len(h), *(len(r[h]) for r in rows)) if rows else len(h) for h in headers
+    }
+
+    def sep(char: str = "-") -> str:
+        return "+" + "+".join(char * (widths[h] + 2) for h in headers) + "+"
+
+    def fmt_row(values: dict) -> str:
+        parts = []
+        for h in headers:
+            v = values[h]
+            if h in ("normal", "no_heuristic", "%diff"):
+                parts.append(" " + v.rjust(widths[h]) + " ")
+            else:
+                parts.append(" " + v.ljust(widths[h]) + " ")
+        return "|" + "|".join(parts) + "|"
+
+    print()
+    print(sep("-"))
+    print(fmt_row({h: h for h in headers}))
+    print(sep("="))
+    for r in rows:
+        print(fmt_row(r))
+    print(sep("-"))
 
 
 def main():

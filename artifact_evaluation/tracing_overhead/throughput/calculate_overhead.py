@@ -15,7 +15,6 @@ def process_directory(directory):
 
         try:
             category = filename.split(":", 1)[0]
-            print(category)
         except IndexError:
             continue
 
@@ -36,33 +35,31 @@ def process_directory(directory):
 
 
 def calculate_percentage_differences(averages):
-    # Group categories by their numeric suffix (3 or 6)
-    groups = defaultdict(dict)
+    # Ignore any numeric suffix by normalizing category names (e.g., "vanilla3" -> "vanilla")
+    def normalize(cat: str) -> str:
+        return re.sub(r"\d+$", "", cat)
+
+    normalized_averages = defaultdict(list)
     for cat, avg in averages.items():
-        match = re.search(r"(\d+)$", cat)
-        if match:
-            group = match.group(1)
-            groups[group][cat] = avg
+        normalized_averages[normalize(cat)].append(avg)
+
+    collapsed = {
+        cat: sum(vals) / len(vals) for cat, vals in normalized_averages.items() if vals
+    }
+
+    baseline_name = "vanilla"
+    baseline = collapsed.get(baseline_name)
+
+    if baseline is None or baseline == 0:
+        print("Warning: No valid baseline found for vanilla", file=sys.stderr)
+        return []
 
     results = []
-    for group, group_averages in groups.items():
-        # Find baseline (topology{group})
-        baseline_name = f"vanilla{group}"
-        baseline = group_averages.get(baseline_name)
-
-        if baseline is None or baseline == 0:
-            print(
-                f"Warning: No valid baseline found for group {group}", file=sys.stderr
-            )
+    for category, avg in collapsed.items():
+        if category == baseline_name:
             continue
-
-        for category, avg in group_averages.items():
-            if category == baseline_name:
-                continue  # Skip baseline itself
-            percentage_diff = ((avg - baseline) / baseline) * 100
-            results.append(
-                (group, category, avg, baseline_name, baseline, percentage_diff)
-            )
+        percentage_diff = ((avg - baseline) / baseline) * 100
+        results.append((category, avg, baseline_name, baseline, percentage_diff))
 
     return results
 
@@ -81,9 +78,7 @@ def main():
     results = calculate_percentage_differences(averages)
 
     print("tracer,overhead_%")
-    for group, category, avg, base_name, base_val, pct in sorted(
-        results, key=lambda x: (x[0], x[1])
-    ):
+    for category, avg, base_name, base_val, pct in sorted(results, key=lambda x: x[0]):
         print(f"{category},{pct / 3:+.2f}")
 
 

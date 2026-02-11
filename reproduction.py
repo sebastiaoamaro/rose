@@ -219,6 +219,7 @@ def reproduce_bug(bug_specification: str):
 
     print("Running Level 1: First Guess")
     buggy_run = run_test(bug_reproduction, faults_detected)
+    schedules_generated = 1
     history = collect_and_parse(
         bug_reproduction.trace_location,
         bug_reproduction.result_folder,
@@ -231,7 +232,12 @@ def reproduce_bug(bug_specification: str):
         runs_counter += runs
         if replay_rate >= 75:
             return end_reproduction(
-                replay_rate, runs_counter, schedule_location, start_time
+                replay_rate,
+                runs_counter,
+                schedules_generated,
+                schedule_location,
+                start_time,
+                fault_removal_pct,
             )
 
         schedule = save_schedule(
@@ -275,6 +281,7 @@ def reproduce_bug(bug_specification: str):
                 buggy_run = run_test(
                     bug_reproduction, faults_detected[fault_counter : fault_counter + 1]
                 )
+                schedules_generated += 1
 
                 # Normal Rose behavior
                 # buggy_run = run_test(bug_reproduction,faults_detected)
@@ -314,6 +321,7 @@ def reproduce_bug(bug_specification: str):
                 return end_reproduction(
                     replay_rate,
                     runs_counter,
+                    schedules_generated,
                     schedule_location,
                     start_time,
                     fault_removal_pct,
@@ -433,6 +441,7 @@ def reproduce_bug(bug_specification: str):
                 # Test schedule with new conditions
                 run_name = str(fault_counter) + ":" + str(count)
                 buggy_run = run_test(bug_reproduction, faults_to_inject)
+                schedules_generated += 1
                 runs_counter += 1
                 if buggy_run and first_buggy_schedule_for_fault:
                     (runs, replay_rate) = check_replay_rate(
@@ -541,6 +550,7 @@ def reproduce_bug(bug_specification: str):
             return end_reproduction(
                 replay_rate,
                 runs_counter,
+                schedules_generated,
                 schedule_location,
                 start_time,
                 fault_removal_pct,
@@ -597,6 +607,7 @@ def reproduce_bug(bug_specification: str):
                             return end_reproduction(
                                 replay_rate,
                                 runs_counter,
+                                schedules_generated,
                                 schedule_location,
                                 start_time,
                                 fault_removal_pct,
@@ -647,6 +658,7 @@ def reproduce_bug(bug_specification: str):
                             return end_reproduction(
                                 replay_rate,
                                 runs_counter,
+                                schedules_generated,
                                 schedule_location,
                                 start_time,
                                 fault_removal_pct,
@@ -666,14 +678,24 @@ def reproduce_bug(bug_specification: str):
         replay_rate = check_replay_rate_post_phase(buggy_schedule, bug_reproduction)
         if replay_rate >= 75:
             return end_reproduction(
-                replay_rate, runs_counter, buggy_schedule, start_time, fault_removal_pct
+                replay_rate,
+                runs_counter,
+                schedules_generated,
+                buggy_schedule,
+                start_time,
+                fault_removal_pct,
             )
         if replay_rate > best_rr_rate:
             best_rr_rate = replay_rate
             best_schedule = buggy_schedule
 
     return end_reproduction(
-        replay_rate, runs_counter, best_schedule, start_time, fault_removal_pct
+        replay_rate,
+        runs_counter,
+        schedules_generated,
+        best_schedule,
+        start_time,
+        fault_removal_pct,
     )
 
 
@@ -761,7 +783,9 @@ def save_schedule(schedule_location, result_folder, run_name):
     return location
 
 
-def end_reproduction(replay_rate, runs, schedule, start_time, fault_removal_pct):
+def end_reproduction(
+    replay_rate, runs, schedule, schedules_generated, start_time, fault_removal_pct
+):
     end_time = time.time()
     elapsed_time = end_time - start_time
     if replay_rate > 60:
@@ -786,7 +810,14 @@ def end_reproduction(replay_rate, runs, schedule, start_time, fault_removal_pct)
             "SCHEDULE:",
             schedule,
         )
-    return (replay_rate, runs, elapsed_time, schedule, fault_removal_pct)
+    return (
+        replay_rate,
+        runs,
+        elapsed_time,
+        schedule,
+        schedules_generated,
+        fault_removal_pct,
+    )
 
 
 # Creates the conditions based on faults for a specific fault

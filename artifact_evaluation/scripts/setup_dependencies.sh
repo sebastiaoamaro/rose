@@ -1,4 +1,5 @@
 #!/bin/bash
+mkdir /vagrant/rw/Anduril/
 cd /vagrant/auxiliary_scripts/
 ./install.sh
 cd /vagrant/

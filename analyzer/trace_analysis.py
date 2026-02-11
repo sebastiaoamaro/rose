@@ -763,6 +763,8 @@ def calculate_faults_removed(buggy_run, normal_run):
 
     buggy_keys = set(faults_buggy.keys())
     normal_keys = set(faults_normal.keys())
+    print(buggy_keys)
+    print(normal_keys)
 
     removed_keys = buggy_keys - normal_keys
 
