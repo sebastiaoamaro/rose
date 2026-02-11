@@ -76,9 +76,8 @@ def main():
     out_path = (
         "/vagrant/artifact_evaluation/bug_reproduction/results/results_" + bugs_file
     )
+    write_header = not os.path.exists(out_path)
     with open(out_path, "w", encoding="utf-8") as out:
-        out.write("bug_reproduction\treplay_rate\truns\telapsed_time_sec\tschedule\n")
-
         for file in files:
             t = times_by_file.get(file, 1)
             print(f"Reproducing bug from file: {file} (times={t})")
@@ -86,7 +85,9 @@ def main():
             while sucess_count != t:
                 try:
                     # (replay_rate, runs, elapsed_time, schedule)
-                    replay_rate, runs, elapsed_time, schedule = reproduce_bug(file)
+                    replay_rate, runs, elapsed_time, schedule, tfault_removal_pct = (
+                        reproduce_bug(file)
+                    )
 
                     if replay_rate != 0:
                         sucess_count += 1
@@ -103,7 +104,7 @@ def main():
                     schedule = destination
                     move_file(source, destination)
                     out.write(
-                        f"{file}\t{replay_rate}\t{runs}\t{elapsed_time}\t{schedule}\n"
+                        f"{file}\t{replay_rate}\t{runs}\t{elapsed_time}\t{schedule}\t{tfault_removal_pct}\n"
                     )
 
                     rr = _safe_float(replay_rate)
@@ -119,67 +120,6 @@ def main():
 
                 except Exception as e:
                     out.write(f"{file}\tERROR\tERROR\tERROR\t{type(e).__name__}: {e}\n")
-
-        out.write("\n")
-        out.write(
-            "# per_file_avg (bug\tsuccesses\tavg_replay_rate\tavg_runs\tavg_elapsed_time_sec)\n"
-        )
-
-        # Build rows for pretty-printing + file output
-        rows: list[dict[str, str]] = []
-        for bug, agg in sorted(per_file.items(), key=lambda kv: kv[0]):
-            n = agg["success"]
-            if n == 0:
-                rr_s, runs_s, et_s = "ERROR", "ERROR", "ERROR"
-                out.write(f"# {bug}\t0\tERROR\tERROR\tERROR\n")
-            else:
-                rr = agg["replay_rate"] / n
-                runs = agg["runs"] / n
-                et = agg["elapsed_time_sec"] / n
-                rr_s, runs_s, et_s = f"{rr:.4f}", f"{runs:.2f}", f"{et:.2f}"
-                out.write(f"# {bug}\t{n}\t{rr}\t{runs}\t{et}\n")
-
-            rows.append(
-                {
-                    "bug": bug,
-                    "successes": str(n),
-                    "avg_replay_rate": rr_s,
-                    "avg_runs": runs_s,
-                    "avg_elapsed_time_s": et_s,
-                }
-            )
-
-        # Pretty-print table to terminal
-        headers = [
-            "bug",
-            "successes",
-            "avg_replay_rate",
-            "avg_runs",
-            "avg_elapsed_time_s",
-        ]
-        widths = {h: len(h) for h in headers}
-        for r in rows:
-            for h in headers:
-                widths[h] = max(widths[h], len(r[h]))
-
-        def render_row(r: dict[str, str]) -> str:
-            return " | ".join(
-                [
-                    r["bug"].ljust(widths["bug"]),
-                    r["successes"].rjust(widths["successes"]),
-                    r["avg_replay_rate"].rjust(widths["avg_replay_rate"]),
-                    r["avg_runs"].rjust(widths["avg_runs"]),
-                    r["avg_elapsed_time_s"].rjust(widths["avg_elapsed_time_s"]),
-                ]
-            )
-
-        sep = "-+-".join("-" * widths[h] for h in headers)
-
-        print("\nPer-bug averages (successful runs only):")
-        print(render_row({h: h for h in headers}))
-        print(sep)
-        for r in rows:
-            print(render_row(r))
 
 
 if __name__ == "__main__":

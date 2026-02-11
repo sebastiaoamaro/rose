@@ -1,26 +1,29 @@
-## Rose
+# rose
 
-### Auxiliary Scripts
-Contains auxiliary scripts to setup Rose
+This document describes the content of this repo, the source code for rose, as described in "rose: Reproducing External-Fault-Induced Failures in
+Distributed Systems with Lightweight Instrumentation", accepted to Eurosys 2026.
 
-### Bug Reproductions
-Contains the base files to reproduce the bugs in the paper.
+# Overview
 
-### Executor
-Executes a schedule.
-
-### Profiler
-Profiles a specific execution of a system.
-
-### Schedule Parser
-Parses a schedule, constructs a fault_schedule.c file used by the executor.
-
-### Schedules
-Schedules created in the process of reproducing the bugs, also contains setup for redpanda, redisraft and mongodb.
-Avoid having the scripts send output to stdout/stdin.
-
-### Tests
-Folder with tests for Rose and where schedules and traces during diagnosis are stored.
-
-### Tracer
-Tracer implementation.
+```
+rose
+│   reproduction.py    -
+│   parse.py           - 
+│   profiler.py            - 
+|   run_scheudle.sh
+|   requirements.sh
+└─── analyzer                 - 
+└─── artifact_evaluation             - 
+└─── auxiliary_scripts              - 
+└─── bpftool            - 
+└─── bug_reproductions
+└─── executor
+└─── libbpf
+└─── profiler
+└─── rw
+└─── schedule_parser
+└─── schedules
+└─── tests
+└─── tracer
+└─── vmlinux
+```

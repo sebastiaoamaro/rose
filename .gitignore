@@ -75,3 +75,7 @@ schedules/reproduced_bugs/redpanda/setup/*
 pyrightconfig.json
 rose.egg-info
 __pycache__
+rsync.sh
+lazyfs
+rw/jepsen
+schedules/lazy_fs/

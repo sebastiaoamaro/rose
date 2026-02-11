@@ -1,1 +1,0 @@
-/usr/bin/gcc -O3 -DNDEBUG CMakeFiles/process.dir/process.c.o -o process  libbpf/libbpf.a -lelf -lz 

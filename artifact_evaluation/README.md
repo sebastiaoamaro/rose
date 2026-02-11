@@ -1,0 +1,75 @@
+# rose Artifact Evaluation
+
+This document describes the content of this repo, which contains all materials need to build and execute all experiments in the paper "Rose: Reproducing External-Fault-Induced Failures in Distributed Systems with Lightweight Instrumentation", submitted to Eurosys 2026.
+# Overview
+
+```
+artifact_evaluation
+│   prepare_vms.sh                   - Prepares the necesssary VMs to run the experiments
+│   reproduce_bugs.sh                - Reproduces the bugs displayed in Table 1
+|   reproduce_tracing_tests.sh       - Reproduce the tracing tests displayed in Table 2
+│   reproduce_heuristics_tests.sh    - Reproduce the heuristics tests displayed in Table 3
+│
+└─── bug_reproduction           - Contains the script and the results of the bug reproduction
+└─── heuristics_effectiveness   - Contains the script and the results of the heuristics tests
+└─── tracing_overhead           - Contains the script and the results of the heuristics tests
+└─── scripts                    - Scripts to setup the environment for AE
+```
+
+# Requirements
+
+Rose was built and tested in Ubuntu 24.03.5 LTS and requires vagrant (tested for version 2.4.9, but any modern version should suffice).
+
+The script `requirements.sh` will check for suitability and install the requirements (except for docker which is not easily automated). Check out the official docker documentation for a step by step guide, found here https://docs.docker.com/engine/install/ubuntu/.
+
+# Setup
+
+Before starting the evaluation:
+
+- Clone the repository https://github.com/sebastiaoamro/rose
+
+```
+~/$ git clone https://github.com/sebastiaoamro/rose
+```
+
+# Building the Environment
+
+The following commands builds every necessary artifact required for the evaluation. See below for time estimations.
+Three different machines will be built. One to reproduce the SCF bugs, one for systems using docker, and one for systems using LXC (this one will also be used to run the tracing/heuristics tests).
+
+```
+~/$ cd rose/artifact_evaluation 
+~/rose/artifact_evaluation/$ ./prepare_vms.sh
+```
+
+During this step the machines may ask for grub related questions, simply say no when possible or presse enter (when it is the only option) and the installation will go smoothly.
+
+Breakdown of building time: 1~2 hours
+
+# Kick-the-tires Evaluation - Short Tests.
+
+To ensure everything is working properly, without waiting for long experiments, follow these steps to perform the reproduction of a small subset of bugs, and a fast tracing-overhead test.
+
+```
+~/rose/artifact_evaluation/$ ./kick_the_tires.sh
+```
+
+Breakdown of run time: 2 hours
+
+### Reproduced Bugs
+
+- (Table 1): Bugs reproduced by rose
+ 
+```
+~/rose/artifact_evaluation/$ ./display_bug_table.sh
+```
+
+### Overhead of Tracer
+
+- (Table 2 ): Cost of rose tracer versus other alternatives
+
+```
+~/rose/artifact_evaluation/$ ./display_overhead_table.sh
+```
+
+- Now you can proceed to the full evaluation described in the appendiux

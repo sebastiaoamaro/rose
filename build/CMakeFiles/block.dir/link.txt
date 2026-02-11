@@ -1,1 +1,0 @@
-/usr/bin/gcc -O3 -DNDEBUG CMakeFiles/block.dir/block.c.o -o block  libbpf/libbpf.a -lelf -lz 

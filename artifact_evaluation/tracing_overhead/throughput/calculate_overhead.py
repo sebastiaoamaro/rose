@@ -15,6 +15,7 @@ def process_directory(directory):
 
         try:
             category = filename.split(":", 1)[0]
+            print(category)
         except IndexError:
             continue
 

@@ -1,1 +1,0 @@
-/usr/bin/gcc -O3 -DNDEBUG CMakeFiles/fs.dir/fs.c.o -o fs  libbpf/libbpf.a -lelf -lz 

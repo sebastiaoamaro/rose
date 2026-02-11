@@ -1,0 +1,3 @@
+/vagrant/bug_reproductions/hbase_19608.yaml
+/vagrant/bug_reproductions/hdfs_4233.yaml
+/vagrant/bug_reproductions/kafka_12508.yaml

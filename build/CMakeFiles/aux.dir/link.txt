@@ -1,1 +1,0 @@
-/usr/bin/gcc -O3 -DNDEBUG CMakeFiles/aux.dir/aux.c.o -o aux  libbpf/libbpf.a -lelf -lz 

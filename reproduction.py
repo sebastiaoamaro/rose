@@ -207,7 +207,7 @@ def reproduce_bug(bug_specification: str):
     history_buggy.process_history(bug_reproduction.buggy_trace)
     faults_buggy = history_buggy.discover_faults(history)
     history_buggy.write_to_file("/tmp/parsed_buggy_history.txt")
-    calculate_faults_removed(faults_buggy, faults_normal)
+    fault_removal_pct = calculate_faults_removed(faults_buggy, faults_normal)
     faults_detected = compare_faults(faults_buggy, faults_normal)
 
     runs_counter = 1
@@ -312,7 +312,11 @@ def reproduce_bug(bug_specification: str):
 
             if replay_rate > 75:
                 return end_reproduction(
-                    replay_rate, runs_counter, schedule_location, start_time
+                    replay_rate,
+                    runs_counter,
+                    schedule_location,
+                    start_time,
+                    fault_removal_pct,
                 )
 
         if fault.type in ("process_kill", "process_pause", "block_ips"):
@@ -535,7 +539,11 @@ def reproduce_bug(bug_specification: str):
 
         if replay_rate > 75:
             return end_reproduction(
-                replay_rate, runs_counter, schedule_location, start_time
+                replay_rate,
+                runs_counter,
+                schedule_location,
+                start_time,
+                fault_removal_pct,
             )
 
     schedule_location = write_new_schedule(
@@ -587,7 +595,11 @@ def reproduce_bug(bug_specification: str):
                         if replay_rate > 75:
                             runs_counter += runs
                             return end_reproduction(
-                                replay_rate, runs_counter, schedule_location, start_time
+                                replay_rate,
+                                runs_counter,
+                                schedule_location,
+                                start_time,
+                                fault_removal_pct,
                             )
                             return
                         for buggy_schedule in buggy_schedules_3_1:
@@ -633,7 +645,11 @@ def reproduce_bug(bug_specification: str):
                         if replay_rate > 75:
                             runs_counter += runs
                             return end_reproduction(
-                                replay_rate, runs_counter, schedule_location, start_time
+                                replay_rate,
+                                runs_counter,
+                                schedule_location,
+                                start_time,
+                                fault_removal_pct,
                             )
                         for buggy_schedule in buggy_schedules_3_2:
                             buggy_schedules.append(buggy_schedule)
@@ -650,13 +666,15 @@ def reproduce_bug(bug_specification: str):
         replay_rate = check_replay_rate_post_phase(buggy_schedule, bug_reproduction)
         if replay_rate >= 75:
             return end_reproduction(
-                replay_rate, runs_counter, buggy_schedule, start_time
+                replay_rate, runs_counter, buggy_schedule, start_time, fault_removal_pct
             )
         if replay_rate > best_rr_rate:
             best_rr_rate = replay_rate
             best_schedule = buggy_schedule
 
-    return end_reproduction(replay_rate, runs_counter, best_schedule, start_time)
+    return end_reproduction(
+        replay_rate, runs_counter, best_schedule, start_time, fault_removal_pct
+    )
 
 
 def run_test(bug_reproduction, faults_detected):
@@ -743,7 +761,7 @@ def save_schedule(schedule_location, result_folder, run_name):
     return location
 
 
-def end_reproduction(replay_rate, runs, schedule, start_time):
+def end_reproduction(replay_rate, runs, schedule, start_time, fault_removal_pct):
     end_time = time.time()
     elapsed_time = end_time - start_time
     if replay_rate > 60:
@@ -768,7 +786,7 @@ def end_reproduction(replay_rate, runs, schedule, start_time):
             "SCHEDULE:",
             schedule,
         )
-    return (replay_rate, runs, elapsed_time, schedule)
+    return (replay_rate, runs, elapsed_time, schedule, fault_removal_pct)
 
 
 # Creates the conditions based on faults for a specific fault

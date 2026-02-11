@@ -1,6 +1,7 @@
 #!/bin/bash
 #workload_size=25000000
-workload_size=250000
+#workload_size=250000
+workload_size=$1
 runs=2
 maindirectory=/vagrant/tracer
 main=/vagrant/tracer/target/release/tracer
@@ -29,7 +30,7 @@ do
         sleep 30
 
         echo Starting Workload
-        $HOME_DIR/run_ycsb.sh $workload_size $RESULT_DIR/vanilla$topology:$run
+        $HOME_DIR/run_ycsb.sh $workload_size $RESULT_DIR/vanilla:$run
         docker compose -f  $HOME_DIR/configs/docker-compose$topology.yaml down
         sudo rm -r /redis/*
     done

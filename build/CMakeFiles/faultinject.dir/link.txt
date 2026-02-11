@@ -1,1 +1,0 @@
-/usr/bin/gcc -O3 -DNDEBUG CMakeFiles/faultinject.dir/faultinject.c.o -o faultinject  libbpf/libbpf.a -lelf -lz 
