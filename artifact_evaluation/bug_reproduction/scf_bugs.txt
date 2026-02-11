@@ -5,6 +5,6 @@
 #/vagrant/bug_reproductions/kafka_12508.yaml
 #/vagrant/bug_reproductions/tm_5839.yaml
 #/vagrant/bug_reproductions/zookeeper_2247.yaml
-/vagrant/bug_reproductions/zookeeper_3006.yaml
-/vagrant/bug_reproductions/zookeeper_3157.yaml
+#/vagrant/bug_reproductions/zookeeper_3006.yaml
+#/vagrant/bug_reproductions/zookeeper_3157.yaml
 /vagrant/bug_reproductions/hdfs_16332.yaml

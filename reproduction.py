@@ -235,8 +235,8 @@ def reproduce_bug(bug_specification: str):
                 replay_rate,
                 runs_counter,
                 schedules_generated,
-                schedule_location,
                 start_time,
+                schedule_location,
                 fault_removal_pct,
             )
 
@@ -322,8 +322,8 @@ def reproduce_bug(bug_specification: str):
                     replay_rate,
                     runs_counter,
                     schedules_generated,
-                    schedule_location,
                     start_time,
+                    schedule_location,
                     fault_removal_pct,
                 )
 
@@ -551,8 +551,8 @@ def reproduce_bug(bug_specification: str):
                 replay_rate,
                 runs_counter,
                 schedules_generated,
-                schedule_location,
                 start_time,
+                schedule_location,
                 fault_removal_pct,
             )
 
@@ -608,8 +608,8 @@ def reproduce_bug(bug_specification: str):
                                 replay_rate,
                                 runs_counter,
                                 schedules_generated,
-                                schedule_location,
                                 start_time,
+                                schedule_location,
                                 fault_removal_pct,
                             )
                             return
@@ -659,8 +659,8 @@ def reproduce_bug(bug_specification: str):
                                 replay_rate,
                                 runs_counter,
                                 schedules_generated,
-                                schedule_location,
                                 start_time,
+                                schedule_location,
                                 fault_removal_pct,
                             )
                         for buggy_schedule in buggy_schedules_3_2:
@@ -681,8 +681,8 @@ def reproduce_bug(bug_specification: str):
                 replay_rate,
                 runs_counter,
                 schedules_generated,
-                buggy_schedule,
                 start_time,
+                buggy_schedule,
                 fault_removal_pct,
             )
         if replay_rate > best_rr_rate:
@@ -693,8 +693,8 @@ def reproduce_bug(bug_specification: str):
         replay_rate,
         runs_counter,
         schedules_generated,
-        best_schedule,
         start_time,
+        best_schedule,
         fault_removal_pct,
     )
 
@@ -784,7 +784,7 @@ def save_schedule(schedule_location, result_folder, run_name):
 
 
 def end_reproduction(
-    replay_rate, runs, schedule, schedules_generated, start_time, fault_removal_pct
+    replay_rate, runs, schedules_generated, start_time, schedule, fault_removal_pct
 ):
     end_time = time.time()
     elapsed_time = end_time - start_time
@@ -813,9 +813,9 @@ def end_reproduction(
     return (
         replay_rate,
         runs,
+        schedules_generated,
         elapsed_time,
         schedule,
-        schedules_generated,
         fault_removal_pct,
     )
 

@@ -22,9 +22,9 @@ artifact_evaluation
 
 # Requirements
 
-Rose was built and tested in Ubuntu 24.03.5 LTS and requires vagrant (tested for version 2.4.9, but any modern version should suffice).
+Rose was built and tested in Ubuntu 24.03.5 LTS, requires vagrant (tested for version 2.4.9, but any modern version should suffice) and Python (3.12.3) for scripts.
 
-The script `requirements.sh` will check for suitability and install the requirements (except for docker which is not easily automated). Check out the official docker documentation for a step by step guide, found here https://docs.docker.com/engine/install/ubuntu/.
+The script `requirements.sh` will check for suitability and install the requirements.
 
 # Setup
 
@@ -73,7 +73,7 @@ Breakdown of run time: 1~2 hours
 - (Table 2 ): Cost of rose tracer versus other alternatives
 
 ```
-~/rose/artifact_evaluation/$ ./display_overhead_table.sh
+~/rose/artifact_evaluation/$ ./display_tracing_table.sh
 ```
 
-- Now you can proceed to the full evaluation described in the appendix
+- Now you can proceed to the full evaluation described in the appendix.
