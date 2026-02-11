@@ -130,7 +130,7 @@ def test_full_trace():
     write_header = not os.path.exists(out_path)
     with open(out_path, "a", encoding="utf-8") as f:
         if write_header:
-            f.write("trace,events,lines,size_bytes,elapsed_time_s\n")
+            f.write("tracer,events,lines,size_bytes,elapsed_time_s\n")
         f.write(f"full_trace,{events},{lines},{size},{elapsed_time}\n")
 
 
@@ -171,7 +171,7 @@ def test_io_trace():
     write_header = not os.path.exists(out_path)
     with open(out_path, "a", encoding="utf-8") as f:
         if write_header:
-            f.write("trace,events,lines,size_bytes,elapsed_time_s\n")
+            f.write("tracer,events,lines,size_bytes,elapsed_time_s\n")
         f.write(f"io_trace,{events},{lines},{size},{elapsed_time}\n")
 
 

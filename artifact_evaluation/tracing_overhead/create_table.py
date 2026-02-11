@@ -6,13 +6,16 @@ from pathlib import Path
 
 def sniff_dialect(path: Path):
     sample = path.read_text(errors="replace")[:4096]
-    # Prefer explicit pipes if present in header
-    first_line = sample.splitlines()[0] if sample.splitlines() else ""
-    if "|" in first_line and "," not in first_line:
+    lines = [ln for ln in sample.splitlines() if ln.strip()]
+
+    # Only treat as "pipe table" if we actually see pipe-separated rows
+    # (i.e., at least 2 lines containing a '|').
+    pipe_lines = [ln for ln in lines if "|" in ln]
+    if len(pipe_lines) >= 2:
         return "pipe"
+
     try:
-        d = csv.Sniffer().sniff(sample, delimiters=[",", "\t", ";", "|"])
-        return d
+        return csv.Sniffer().sniff(sample, delimiters=[",", "\t", ";"])
     except Exception:
         return csv.excel  # default comma
 
@@ -22,12 +25,9 @@ def read_table(path: Path):
     rows = []
     with path.open(newline="", errors="replace") as f:
         if dialect == "pipe":
-            # Treat as pretty table: col1 | col2 | ...
-            # We'll split on '|' and strip.
             lines = [ln for ln in f.read().splitlines() if ln.strip()]
 
-            # skip separator lines containing only dashes/plus signs
-            def is_sep(ln):
+            def is_sep(ln: str) -> bool:
                 s = ln.strip()
                 return s and all(c in "-+|" or c.isspace() for c in s)
 
@@ -35,21 +35,17 @@ def read_table(path: Path):
             header = [h.strip() for h in lines[0].split("|")]
             for ln in lines[1:]:
                 vals = [v.strip() for v in ln.split("|")]
-                # pad/truncate
                 vals = (vals + [""] * len(header))[: len(header)]
                 rows.append(dict(zip(header, vals)))
             return rows
 
         reader = csv.DictReader(f, dialect=dialect)
         for r in reader:
-            # strip whitespace from keys and values
             clean = {}
             for k, v in r.items():
                 if k is None:
                     continue
-                kk = k.strip()
-                vv = v.strip() if isinstance(v, str) else v
-                clean[kk] = vv
+                clean[k.strip()] = v.strip() if isinstance(v, str) else v
             rows.append(clean)
         return rows
 
@@ -76,14 +72,15 @@ def fmt_float(x, nd=2):
 
 
 def main():
-
     overhead_path = Path("/shared/throughtput_overhead.txt")
     stats_path = Path("/shared/trace_size_results.csv")
+    out_path = Path("/shared/trace_overhead_table.txt")
 
     overhead_rows = read_table(overhead_path)
     stats_rows = read_table(stats_path)
 
     # normalize overhead map
+    # Build overhead map (keyed by tracer)
     overhead_by_tracer = {}
     for r in overhead_rows:
         tracer = pick(r, "tracer", "Tracer").strip()
@@ -91,22 +88,18 @@ def main():
         if tracer:
             overhead_by_tracer[tracer] = overhead
 
-    # sanity check
-    if stats_rows and not any(pick(r, "tracer", "Tracer").strip() for r in stats_rows):
-        print(
-            "Error: couldn't find non-empty 'tracer' values in stats file.",
-            file=sys.stderr,
-        )
-        print(f"Detected stats headers: {list(stats_rows[0].keys())}", file=sys.stderr)
-        sys.exit(1)
-
     merged = []
+    missing_overhead = []
     for r in stats_rows:
         tracer = pick(r, "tracer", "Tracer").strip()
+        overhead_val = overhead_by_tracer.get(tracer, "")
+        if tracer and overhead_val == "":
+            missing_overhead.append(tracer)
+
         merged.append(
             {
                 "tracer": tracer,
-                "overhead_%": overhead_by_tracer.get(tracer, ""),
+                "overhead_%": overhead_val,
                 "events": pick(r, "events", "Events"),
                 "lines": pick(r, "lines", "Lines"),
                 "size_bytes": pick(r, "size_bytes", "size", "bytes", "SizeBytes"),
@@ -127,7 +120,6 @@ def main():
         "elapsed_time_s",
     ]
 
-    # format and compute widths
     formatted = []
     widths = {h: len(h) for h in headers}
     for row in merged:
@@ -157,10 +149,20 @@ def main():
 
     sep = "-+-".join("-" * widths[h] for h in headers)
 
-    print(render({h: h for h in headers}))
-    print(sep)
+    lines = []
+    lines.append(render({h: h for h in headers}))
+    lines.append(sep)
     for fr in formatted:
-        print(render(fr))
+        lines.append(render(fr))
+
+    table = "\n".join(lines) + "\n"
+
+    # Print to terminal
+    print(table, end="")
+
+    # Write to file
+    out_path.write_text(table)
+    print(f"Wrote table to: {out_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

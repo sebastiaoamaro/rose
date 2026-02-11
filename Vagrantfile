@@ -16,7 +16,7 @@ Vagrant.configure("2") do |config|
 
     config.vm.define "test2" do |test2|
         test2.vm.box = "bento/ubuntu-24.04"
-        test2.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","build","repos","rw/Anduril/*"]
+        test2.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","build","repos"]
         test2.vm.synced_folder "~/shared/test2/", "/shared",type:"virtualbox"
         test2.disksize.size = '60GB'
         test2.vm.provider "virtualbox" do |v|
@@ -27,7 +27,7 @@ Vagrant.configure("2") do |config|
 
     config.vm.define "test3" do |test3|
         test3.vm.box = "bento/ubuntu-24.04"
-        test3.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","build","repos","rw/Anduril/*"]
+        test3.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","build","repos"]
         test3.vm.synced_folder "~/shared/test3/", "/shared",type:"virtualbox"
         test3.disksize.size = '60GB'
         test3.vm.provider "virtualbox" do |v|
@@ -49,7 +49,7 @@ Vagrant.configure("2") do |config|
 
     config.vm.define "test5" do |test5|
         test5.vm.box = "bento/ubuntu-24.04"
-        test5.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","build","repos","rw/Anduril/*"]
+        test5.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","build","repos"]
         test5.vm.synced_folder "~/shared/test5/", "/shared",type:"virtualbox"
         test5.vm.provider "virtualbox" do |v|
             v.cpus = 4       # Set number of CPUs

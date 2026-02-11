@@ -17,6 +17,7 @@ from analyzer.binary_parser import (
 )
 from analyzer.trace_analysis import (
     History,
+    calculate_faults_removed,
     choose_faults,
     compare_faults,
     get_fault_by_name,
@@ -206,6 +207,7 @@ def reproduce_bug(bug_specification: str):
     history_buggy.process_history(bug_reproduction.buggy_trace)
     faults_buggy = history_buggy.discover_faults(history)
     history_buggy.write_to_file("/tmp/parsed_buggy_history.txt")
+    calculate_faults_removed(faults_buggy, faults_normal)
     faults_detected = compare_faults(faults_buggy, faults_normal)
 
     runs_counter = 1
@@ -638,76 +640,6 @@ def reproduce_bug(bug_specification: str):
                         # Reset offsets back to 0
                         reset_offset_for_fault(faults_detected, fault, cond)
                         break
-
-    # print("Running Level 4.1: Combining Faults in different plt offsets")
-
-    # combinations = generate_combinations(fault_to_offsets_plt)
-
-    # for combination in combinations:
-    #     print("Checking combination:", combination)
-    #     for fault_to_test in fault_to_condition_map_plt.keys():
-    #         for fault in faults_detected:
-    #             if fault_to_test in fault.name:
-    #                 i, symbol = fault_to_condition_map_plt[fault_to_test]
-    #                 for cond in fault.begin_conditions:
-    #                     if isinstance(cond, user_function_condition):
-    #                         if cond.symbol == symbol:
-    #                             print(combination)
-    #                             print("POS:", i, "Symbol:", symbol)
-    #                             cond.offset = combination[i]
-
-    #     print("Checking combination:", combination)
-    #     buggy_run = run_test(bug_reproduction, faults_detected)
-    #     if buggy_run:
-    #         run_name = "Level 4.1" + str(combination) + ".yaml"
-    #         history = collect_and_parse(
-    #             bug_reproduction.trace_location,
-    #             bug_reproduction.result_folder,
-    #             schedule_location,
-    #             run_name,
-    #         )
-    #         (runs, replay_rate) = check_replay_rate(schedule_location, bug_reproduction)
-    #         runs_counter += runs
-    #         schedule = save_schedule(
-    #             schedule_location, bug_reproduction.result_folder, run_name
-    #         )
-    #         if replay_rate >= 75:
-    #             break
-
-    # print("Running Level 4.2: Combining Faults in different call offsets")
-
-    # combinations = generate_combinations(fault_to_offsets_call)
-
-    # for combination in combinations:
-    #     print("Checking combination:", combination)
-    #     for fault_to_test in fault_to_condition_map_call.keys():
-    #         for fault in faults_detected:
-    #             if fault_to_test in fault.name:
-    #                 i, symbol = fault_to_condition_map_call[fault_to_test]
-    #                 for cond in fault.begin_conditions:
-    #                     if isinstance(cond, user_function_condition):
-    #                         if cond.symbol == symbol:
-    #                             print(combination)
-    #                             print("POS:", i, "Symbol:", symbol)
-    #                             cond.offset = combination[i]
-
-    #     print("Checking combination:", combination)
-    #     buggy_run = run_test(bug_reproduction, faults_detected)
-    #     if buggy_run:
-    #         run_name = "Level 4.2" + str(combination) + ".yaml"
-    #         history = collect_and_parse(
-    #             bug_reproduction.trace_location,
-    #             bug_reproduction.result_folder,
-    #             schedule_location,
-    #             run_name,
-    #         )
-    #         (runs, replay_rate) = check_replay_rate(schedule_location, bug_reproduction)
-    #         runs_counter += runs
-    #         schedule = save_schedule(
-    #             schedule_location, bug_reproduction.result_folder, run_name
-    #         )
-    #         if replay_rate >= 75:
-    #             break
 
     print("All levels ran, testing all schedules which showed the bug")
     # Final test of all schedules which showed the bug

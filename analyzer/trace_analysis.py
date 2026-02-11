@@ -749,19 +749,30 @@ def compare_faults(buggy_run, normal_run):
 
 
 def calculate_faults_removed(buggy_run, normal_run):
+    """
+    Calculate the percentage of faults "removed" when going from buggy_run to normal_run.
+
+    A fault is considered "removed" if its grouped key (see group_faults()) appears in
+    buggy_run but not in normal_run.
+
+    Returns:
+        removed_pct (float): percent of buggy fault keys removed in normal_run, in [0,100].
+    """
     faults_buggy = group_faults(buggy_run)
     faults_normal = group_faults(normal_run)
-    unique_faults = set(faults_buggy.keys()) - set(faults_normal.keys())
-    unique_faults = set(faults_buggy.keys())
-    unique_faults_normal = set(faults_normal.keys()) - set(faults_buggy.keys())
-    print("Faults normal unique:", len(faults_normal), "Total:", len(normal_run))
-    print("Faults buggy unique:", len(faults_buggy), "Total:", len(buggy_run))
-    print("Unique faults in Buggy:", len(unique_faults))
-    print(unique_faults)
-    print("Unique faults in Normal:", len(unique_faults_normal))
-    print(unique_faults_normal)
 
-    return (len(faults_normal), len(normal_run), len(faults_buggy), len(buggy_run))
+    buggy_keys = set(faults_buggy.keys())
+    normal_keys = set(faults_normal.keys())
+
+    removed_keys = buggy_keys - normal_keys
+
+    if not buggy_keys:
+        return 0.0
+
+    removed_pct = (len(removed_keys) / len(buggy_keys)) * 100.0
+
+    print("Removed PCT is", removed_pct)
+    return removed_pct
 
 
 def group_faults(fault_list):

@@ -1,11 +1,11 @@
 #/vagrant/bug_reproductions/hbase_19608.yaml
 #/vagrant/bug_reproductions/hdfs_12070.yaml
-/vagrant/bug_reproductions/hdfs_15032.yaml
+#/vagrant/bug_reproductions/hdfs_15032.yaml
 #/vagrant/bug_reproductions/hdfs_4233.yaml
-/vagrant/bug_reproductions/kafka_12508.yaml
-/vagrant/bug_reproductions/tm_5839.yaml
-/vagrant/bug_reproductions/zookeeper_2247.yaml
+#/vagrant/bug_reproductions/kafka_12508.yaml
+#/vagrant/bug_reproductions/tm_5839.yaml
+#/vagrant/bug_reproductions/zookeeper_2247.yaml
 /vagrant/bug_reproductions/zookeeper_3006.yaml
 /vagrant/bug_reproductions/zookeeper_3157.yaml
 #/vagrant/bug_reproductions/zookeeper_4203.yaml 3
-#/vagrant/bug_reproductions/hdfs_16332.yaml
+/vagrant/bug_reproductions/hdfs_16332.yaml
