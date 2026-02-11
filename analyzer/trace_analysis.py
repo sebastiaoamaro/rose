@@ -763,15 +763,15 @@ def calculate_faults_removed(buggy_run, normal_run):
 
     buggy_keys = set(faults_buggy.keys())
     normal_keys = set(faults_normal.keys())
-    print(buggy_keys)
-    print(normal_keys)
+    print("Normal:", normal_keys)
+    print("Buggy:", buggy_keys)
 
     removed_keys = buggy_keys - normal_keys
 
     if not buggy_keys:
         return 0.0
 
-    removed_pct = (len(removed_keys) / len(buggy_keys)) * 100.0
+    removed_pct = (abs(len(buggy_keys) - len(removed_keys)) / len(buggy_keys)) * 100.0
 
     print("Removed PCT is", removed_pct)
     return removed_pct

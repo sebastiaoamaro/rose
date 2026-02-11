@@ -1,2 +1,2 @@
 /vagrant/bug_reproductions/redisraft_nr2.yaml
-/vagrant/bug_reproductions/redpanda_3003.yaml 3
+/vagrant/bug_reproductions/redpanda_3003.yaml

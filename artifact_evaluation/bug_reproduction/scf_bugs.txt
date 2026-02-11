@@ -7,5 +7,4 @@
 #/vagrant/bug_reproductions/zookeeper_2247.yaml
 /vagrant/bug_reproductions/zookeeper_3006.yaml
 /vagrant/bug_reproductions/zookeeper_3157.yaml
-#/vagrant/bug_reproductions/zookeeper_4203.yaml 3
 /vagrant/bug_reproductions/hdfs_16332.yaml

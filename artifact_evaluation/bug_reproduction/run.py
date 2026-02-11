@@ -73,9 +73,7 @@ def main():
         lambda: {"success": 0, "replay_rate": 0.0, "runs": 0.0, "elapsed_time_sec": 0.0}
     )
 
-    out_path = (
-        "/vagrant/artifact_evaluation/bug_reproduction/results/results_" + bugs_file
-    )
+    out_path = "/shared/results_" + bugs_file
     write_header = not os.path.exists(out_path)
     with open(out_path, "w", encoding="utf-8") as out:
         for file in files:

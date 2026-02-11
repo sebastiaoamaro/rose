@@ -3,4 +3,4 @@
 /vagrant/bug_reproductions/redisraft_42.yaml
 #/vagrant/bug_reproductions/redisraft_43.yaml
 #/vagrant/bug_reproductions/redisraft_nr.yaml
-#/vagrant/bug_reproductions/redisraft_51.yaml 3
+#/vagrant/bug_reproductions/redisraft_51.yaml

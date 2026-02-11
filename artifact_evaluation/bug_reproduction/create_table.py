@@ -13,9 +13,10 @@ EXPECTED_COLS = [
 ]
 
 FIXED_INPUTS = [
-    "/shared/",
-    "/shared/",
-    "/shared/",
+    "~/shared/test1/results_scf_bugs.txt",
+    # "~/shared/test1/results_zk_4203.txt",
+    # "/shared/test2/results_docker_bugs.txt",
+    # "/shared/test3/results_lxc_bugs.txt",
 ]
 
 

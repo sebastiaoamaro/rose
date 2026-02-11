@@ -788,7 +788,7 @@ def end_reproduction(
 ):
     end_time = time.time()
     elapsed_time = end_time - start_time
-    if replay_rate > 60:
+    if replay_rate >= 60:
         print(
             "SUCCESS! RR:",
             replay_rate,
