@@ -1,9 +1,4 @@
 #!/bin/bash
-# Script to switch Java version based on argument
-# Usage: ./set-java.sh 8    -> switch to Java 8
-#        ./set-java.sh 11   -> switch to Java 11
-#        ./set-java.sh 17   -> switch to Java 17
-
 if [ -z "$1" ]; then
   echo "Usage: $0 <java-version>"
   exit 1

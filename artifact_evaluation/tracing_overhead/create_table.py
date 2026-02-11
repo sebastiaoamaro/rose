@@ -86,6 +86,7 @@ def main():
         tracer = pick(r, "tracer", "Tracer").strip()
         overhead = pick(r, "overhead_%", "overhead", "Overhead", "overhead%").strip()
         if tracer:
+            print(overhead)
             overhead_by_tracer[tracer] = overhead
 
     merged = []

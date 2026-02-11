@@ -18,7 +18,7 @@ cd /vagrant/rw/Anduril/systems/hbase-19608
 cd /vagrant/rw/Anduril/systems/kafka-9374
 ./compile.sh
 
-# cd /vagrant/auxiliary/scripts/
-# ./change_java.sh 17
-# cd /vagrant/rw/Anduril/systems/hdfs-16332
-# ./compile.sh
+cd /vagrant/auxiliary_scripts/
+./change_java.sh 17
+cd /vagrant/rw/Anduril/systems/hdfs-16332
+./compile.sh

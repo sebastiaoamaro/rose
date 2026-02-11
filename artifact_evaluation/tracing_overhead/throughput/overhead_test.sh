@@ -63,13 +63,13 @@ do
         done
 
         echo Starting Workload
-        $HOME_DIR/run_ycsb.sh $workload_size $RESULT_DIR/full_trace$topology:$run
+        $HOME_DIR/run_ycsb.sh $workload_size $RESULT_DIR/full_trace:$run
 
         sudo kill -2 $ebpf_PID
 
         wait $ebpf_PID
         sudo docker compose -f  $HOME_DIR/configs/docker-compose$topology.yaml down
-        sudo mv /tmp/history.txt results/history_full_tracer_$topology:$run.txt
+        sudo mv /tmp/history.txt results/history_full_trace:$run.txt
         sudo rm -r /redis/*
     done
     ############################################################################################################
@@ -95,13 +95,13 @@ do
         done
 
         echo Starting Workload
-        $HOME_DIR/run_ycsb.sh $workload_size $RESULT_DIR/rw_trace$topology:$run
+        $HOME_DIR/run_ycsb.sh $workload_size $RESULT_DIR/io_trace:$run
 
         sudo kill -2 $ebpf_PID
 
         wait $ebpf_PID
         sudo docker compose -f  $HOME_DIR/configs/docker-compose$topology.yaml down
-        sudo mv /tmp/history.txt results/history_rw_tracer_$topology:$run.txt
+        sudo mv /tmp/history.txt results/history_io_trace:$run.txt
         sudo rm -r /redis/*
     done
 
@@ -129,13 +129,13 @@ do
         done
 
         echo Starting Workload
-        $HOME_DIR/run_ycsb.sh $workload_size $RESULT_DIR/prod_trace$topology:$run
+        $HOME_DIR/run_ycsb.sh $workload_size $RESULT_DIR/production_trace:$run
 
         sudo kill -2 $ebpf_PID
 
         wait $ebpf_PID
         sudo docker compose -f  $HOME_DIR/configs/docker-compose$topology.yaml down
-        sudo mv /tmp/history.txt results/history_prod_tracer_$topology:$run.txt
+        sudo mv /tmp/history.txt results/history_production_trace:$run.txt
         sudo rm -r /redis/*
     done
 
