@@ -1,7 +1,6 @@
 # rose
 
-This document describes the content of this repo, the source code for rose, as described in "rose: Reproducing External-Fault-Induced Failures in
-Distributed Systems with Lightweight Instrumentation", accepted to Eurosys 2026.
+This document describes the content of this repo, the source code for rose, as described in "rose: Reproducing External-Fault-Induced Failures in Distributed Systems with Lightweight Instrumentation", accepted to EuroSys 2026.
 
 # Overview
 
