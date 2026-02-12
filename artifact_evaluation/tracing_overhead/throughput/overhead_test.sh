@@ -7,7 +7,7 @@ date=$(date +"%H:%M")
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 HOME_DIR=/vagrant/artifact_evaluation/tracing_overhead/throughput
 RESULT_DIR=/vagrant/artifact_evaluation/tracing_overhead/throughput/results
-
+mkdir $RESULT_DIR
 cd $maindirectory
 bpftool btf dump file /sys/kernel/btf/vmlinux format c > src/bpf/vmlinux.h
 cargo build --release
