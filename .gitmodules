@@ -21,8 +21,8 @@
 	url = https://github.com/sebastiaoamaro/Anduril
 	branch = main
 [submodule "RedisRaft"]
-	path = schedules/reproducedbugs/redisraft/lxc/redisraft_jepsen
+	path = schedules/reproduced_bugs/redisraft/lxc/redisraft_jepsen
 	url = https://github.com/sebastiaoamaro/redis
 [submodule "Redpanda"]
-	path = schedules/reproducedbugs/redpanda/lxc/redpanda_jepsen
+	path = schedules/reproduced_bugs/redpanda/lxc/redpanda_jepsen
 	url = https://github.com/sebastiaoamaro/redpanda
