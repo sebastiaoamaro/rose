@@ -34,6 +34,7 @@ Before starting the evaluation:
 
 ```
 ~/$ git clone https://github.com/sebastiaoamaro/rose
+~/$ git submodule update --init --recursive
 ```
 
 # Building the Environment
