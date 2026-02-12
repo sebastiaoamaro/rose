@@ -44,7 +44,7 @@ fi
 # --- Git submodules ---
 log "Updating git submodules..."
 cd /vagrant/
-git submodule update --init --recursive
+git submodule update --init --recursive >/dev/null
 
 # --- Base packages ---
 log "Updating package list..."
@@ -53,7 +53,7 @@ apt_update
 log "Installing base dependencies..."
 apt_install \
   clang libelf1 libelf-dev zlib1g-dev libc6-dev-i386 autoconf make \
-  python3 python3-pip \
+  python3 python3-pip libssl-dev\
   pcp gnuplot gcc pkg-config gcc-14 cmake llvm jq \
   linux-headers-$(uname -r) >/dev/null
 
