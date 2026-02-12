@@ -27,16 +27,30 @@ COL_LABELS: dict[str, str] = {
 
 # Default inputs if none are provided via CLI.
 FIXED_INPUTS = [
-    "~/shared/test1/results_scf_bugs.txt",
+    # "~/shared/test1/results_scf_bugs.txt",
     # "~/shared/test1/results_zk_4203.txt",
-    # "/shared/test2/results_docker_bugs.txt",
-    # "/shared/test3/results_lxc_bugs.txt",
+    "~/shared/test2/results_docker_bugs.txt",
+    # "~/shared/test3/results_lxc_bugs.txt",
 ]
 
 
 def _base(p: str) -> str:
     p = (p or "").strip()
     return os.path.basename(p) if p else ""
+
+
+def _sec_to_min_str(s: str) -> str:
+    """
+    Convert a seconds string to a minutes string.
+    If it isn't a number (e.g. ERROR message), return it unchanged.
+    """
+    try:
+        sec = float((s or "").strip())
+    except Exception:
+        return s
+    minutes = sec / 60.0
+    # Keep it readable; adjust precision if you want.
+    return f"{minutes:.2f}"
 
 
 def _norm_path(p: str) -> str:
@@ -60,7 +74,7 @@ class Row:
             "replay_rate": self.replay_rate,
             "runs": self.runs,
             "schedules_generated": self.schedules_generated,
-            "elapsed_time_sec": self.elapsed_time_sec,
+            "elapsed_time_sec": _sec_to_min_str(self.elapsed_time_sec),
             "schedule": _base(self.schedule),
             "fault_removal_pct": self.fault_removal_pct,
         }

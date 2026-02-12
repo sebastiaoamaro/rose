@@ -99,10 +99,7 @@ def main():
 
                     source = "/tmp/temp_sched.yaml"
                     file_name = os.path.basename(file)
-                    destination = (
-                        "/vagrant/artifact_evaluation/bug_reproduction/results/reproduced_schedule_"
-                        + file_name
-                    )
+                    destination = "/shared/reproduced_schedule_" + file_name
                     print("Moving schedule from", source, "to", destination)
                     schedule = destination
                     move_file(source, destination)
