@@ -4,3 +4,4 @@ cd /vagrant/rw/Anduril/
 cd /vagrant/auxiliary_scripts/
 ./change_java 8
 ./build_anduril_systems.sh
+./change_java 8

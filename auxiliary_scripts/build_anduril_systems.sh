@@ -38,5 +38,3 @@ cd /vagrant/auxiliary_scripts/
 cd /vagrant/rw/Anduril/systems/hdfs-16332
 ./compile.sh
 /vagrant/rw/Anduril/experiment/hdfs-16332/run-original-test.sh
-
-./change_java.sh 8
