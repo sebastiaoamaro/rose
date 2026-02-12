@@ -57,8 +57,8 @@ apt_install \
   pcp gnuplot gcc pkg-config gcc-14 cmake llvm jq \
   linux-headers-$(uname -r) >/dev/null
 
-log "dist-upgrade..."
-apt_dist_upgrade
+#log "dist-upgrade..."
+#apt_dist_upgrade
 
 # --- Docker repo + install ---
 log "Installing Docker prerequisites..."
