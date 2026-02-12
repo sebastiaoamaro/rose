@@ -7,16 +7,16 @@ This document describes the content of this repo, which contains all materials n
 artifact_evaluation
 │   prepare_vms.sh                   - Prepares the necesssary VMs to run the experiments
 │   reproduce_bugs.sh                - Reproduces the bugs displayed in Table 1
-|   reproduce_tracing_tests.sh       - Reproduce the tracing tests displayed in Table 2
-│   reproduce_heuristics_tests.sh    - Reproduce the heuristics tests displayed in Table 3
+|   reproduce_tracing_tests.sh       - Reproduces the tracing tests displayed in Table 2
+│   reproduce_heuristics_tests.sh    - Reproduces the heuristics tests displayed in Table 3
 |   kick_the_tires.sh                - Runs a subset of tests to confirm the correct setup of the environment.
 |   requirements.sh                  - Checks if the machine has the necessary requirements to run AE.
 |
-└─── bug_reproduction           - Contains the script and the results of the bug reproduction
-└─── heuristics_effectiveness   - Contains the script and the results of the heuristics tests
+└─── bug_reproduction           - Contains the script and the setup of bug reproduction tests
+└─── heuristics_effectiveness   - Contains the script and the setup  of the heuristics tests
 └─── tracing_overhead           - Contains the comparison of different types of tracing
       └─── throughput           - Contains the scripts and setup for the throughput overhead tests
-      └─── trace_size           - Contains the scripts and setup and the comparison of trace sizes
+      └─── trace_size           - Contains the scripts and setup for the comparison of trace sizes
 └─── scripts                    - Scripts to setup the environment for AE
 ```
 
@@ -30,10 +30,10 @@ The script `requirements.sh` will check for suitability and install the requirem
 
 Before starting the evaluation:
 
-- Clone the repository https://github.com/sebastiaoamro/rose
+- Clone the repository https://github.com/sebastiaoamaro/rose
 
 ```
-~/$ git clone https://github.com/sebastiaoamro/rose
+~/$ git clone https://github.com/sebastiaoamaro/rose
 ```
 
 # Building the Environment

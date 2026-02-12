@@ -49,7 +49,6 @@ def _sec_to_min_str(s: str) -> str:
     except Exception:
         return s
     minutes = sec / 60.0
-    # Keep it readable; adjust precision if you want.
     return f"{minutes:.2f}"
 
 
