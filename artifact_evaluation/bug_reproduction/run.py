@@ -77,6 +77,7 @@ def main():
             sucess_count = 0
             while sucess_count != t:
                 try:
+                    print("Running new reproduction")
                     (
                         replay_rate,
                         runs,
