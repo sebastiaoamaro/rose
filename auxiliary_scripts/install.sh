@@ -174,3 +174,13 @@ sudo groupadd docker 2>/dev/null || true
 sudo usermod -aG docker "$USER"
 
 log "Done. Reboot recommended."
+
+
+mkdir tests/bugdetection/hbase
+mkdir tests/bugdetection/hdfs
+mkdir tests/bugdetection/kafka
+mkdir tests/bugdetection/mongo
+mkdir tests/bugdetection/redis
+mkdir tests/bugdetection/redisraft
+mkdir tests/bugdetection/tendermint
+mkdir tests/bugdetection/zookeeper
