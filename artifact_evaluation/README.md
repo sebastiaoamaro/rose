@@ -51,7 +51,7 @@ During this step the machines may ask for grub related questions, simply say yes
 
 Breakdown of building time: 1~2 hours
 
-# Kick-the-tires Evaluation - Short Tests.
+# Kick-the-tires Evaluation - Short Tests
 
 To ensure everything is working properly, without waiting for long experiments, follow these steps to perform the reproduction of a small subset of bugs, and a fast tracing-overhead test.
 
