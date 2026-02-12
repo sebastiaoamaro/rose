@@ -32,9 +32,9 @@ FIXED_INPUTS = [
 ]
 
 FIXED_INPUTS_KICK = [
-    # "~/shared/test1/results_kick_the_tires_scf.txt",
-    # "~/shared/test2/kick_the_tires_docker.txt",
-    # "~/shared/test3/kick_the_tires_lxc.txt",
+    "~/shared/test1/results_kick_the_tires_scf.txt",
+    "~/shared/test2/results_kick_the_tires_docker.txt",
+    "~/shared/test3/results_kick_the_tires_lxc.txt",
 ]
 
 

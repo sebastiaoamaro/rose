@@ -72,9 +72,9 @@ def fmt_float(x, nd=2):
 
 
 def main():
-    overhead_path = Path("/shared/throughtput_overhead.txt")
-    stats_path = Path("/shared/trace_size_results.csv")
-    out_path = Path("/shared/trace_overhead_table.txt")
+    overhead_path = Path("~/shared/test3/throughtput_overhead.txt")
+    stats_path = Path("~/shared/test3/trace_size_results.csv")
+    out_path = Path("~/shared/test3/trace_overhead_table.txt")
 
     overhead_rows = read_table(overhead_path)
     stats_rows = read_table(stats_path)
