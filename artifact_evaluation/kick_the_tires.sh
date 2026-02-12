@@ -2,6 +2,7 @@
 rm ~/shared/test1/*
 rm ~/shared/test2/*
 rm ~/shared/test3/*
+
 vagrant up test1
 vagrant ssh test1 -c "cd /vagrant/artifact_evaluation/bug_reproduction/ && python3 run.py kick_the_tires_scf.txt"
 vagrant halt test1 > /dev/null

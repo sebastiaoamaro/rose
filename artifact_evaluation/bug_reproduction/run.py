@@ -62,11 +62,6 @@ def main():
         times_by_file[bug_file] = times
 
     total_runs = sum(times_by_file[f] for f in files)
-    print(
-        f"Read {len(files)} bugs from {bugs_file}, "
-        f"will run {total_runs} total reproductions "
-        f"(per-bug times specified in file)"
-    )
 
     # Per-file aggregates across successful runs only
     per_file = defaultdict(
