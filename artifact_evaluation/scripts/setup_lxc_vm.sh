@@ -9,6 +9,6 @@ vagrant ssh test3 -c "cd /vagrant/artifact_evaluation/scripts/ && ./setup_depend
 vagrant ssh test3 -c "cd /vagrant/artifact_evaluation/scripts/ && ./setup_lxc.sh"
 vagrant reload test3
 vagrant ssh test3 -c "cd /vagrant/artifact_evaluation/scripts/ && ./setup_lxc_systems.sh"
-vagrant ssh test3 -c "cd /vagrant/artifact_evaluation/tracing_overhead && ./setup_redis.sh"
+vagrant ssh test3 -c "cd /vagrant/artifact_evaluation/tracing_overhead/ && ./setup_redis.sh"
 vagrant ssh test3 -c "cd /vagrant/artifact_evaluation/scripts/ && ./setup_redisraft.sh"
 vagrant halt test3
