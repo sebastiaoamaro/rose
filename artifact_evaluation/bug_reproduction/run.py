@@ -86,7 +86,7 @@ def main():
                         fault_removal_pct,
                     ) = reproduce_bug(file)
 
-                    if replay_rate != 0:
+                    if replay_rate >= 60:
                         sucess_count += 1
                     else:
                         continue

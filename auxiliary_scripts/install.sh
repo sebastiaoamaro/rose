@@ -16,16 +16,16 @@ DPKG_NONINTERACTIVE=(
 )
 
 apt_update() {
-  sudo -E apt-get update
+  sudo -E apt-get update >/dev/null
 }
 
 apt_install() {
   # Usage: apt_install pkg1 pkg2 ...
-  sudo -E apt-get install "${APT_YES[@]}" "${DPKG_NONINTERACTIVE[@]}" "$@"
+  sudo -E apt-get install "${APT_YES[@]}" "${DPKG_NONINTERACTIVE[@]}" "$@" >/dev/null
 }
 
 apt_dist_upgrade() {
-  sudo -E apt-get dist-upgrade "${APT_YES[@]}" "${DPKG_NONINTERACTIVE[@]}"
+  sudo -E apt-get dist-upgrade "${APT_YES[@]}" "${DPKG_NONINTERACTIVE[@]}" >/dev/null
 }
 
 ###############################################################
@@ -55,7 +55,7 @@ apt_install \
   clang libelf1 libelf-dev zlib1g-dev libc6-dev-i386 autoconf make \
   python3 python3-pip \
   pcp gnuplot gcc pkg-config gcc-14 cmake llvm jq \
-  linux-headers-$(uname -r)
+  linux-headers-$(uname -r) >/dev/null
 
 log "dist-upgrade..."
 apt_dist_upgrade
@@ -79,7 +79,7 @@ echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.gpg] https://download
 apt_update
 
 log "Installing Docker..."
-apt_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+apt_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >/dev/null
 
 log "Sanity-check Docker install (hello-world)..."
 sudo docker run hello-world || true
@@ -91,7 +91,7 @@ sudo -E apt-get install "${APT_YES[@]}" "${DPKG_NONINTERACTIVE[@]}" --allow-down
   docker-ce-rootless-extras="5:28.5.2-1~ubuntu.24.04~noble" \
   containerd.io \
   docker-buildx-plugin \
-  docker-compose-plugin
+  docker-compose-plugin >/dev/null
 
 # --- Rust toolchain ---
 log "Installing Rust (rustup)..."

@@ -35,38 +35,4 @@ Vagrant.configure("2") do |config|
             v.memory = "30000"
         end
     end
-
-    config.vm.define "test4" do |test4|
-        test4.vm.box = "bento/ubuntu-24.04"
-        test4.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","build","repos"]
-        test4.vm.synced_folder "~/shared/test4/", "/shared",type:"virtualbox"
-        test4.vm.provider "virtualbox" do |v|
-            v.cpus = 16      # Set number of CPUs
-            v.memory = "8192"
-        end
-    end
-
-
-    config.vm.define "test5" do |test5|
-        test5.vm.box = "bento/ubuntu-24.04"
-        test5.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","build","repos"]
-        test5.vm.synced_folder "~/shared/test5/", "/shared",type:"virtualbox"
-        test5.vm.provider "virtualbox" do |v|
-            v.cpus = 4       # Set number of CPUs
-            v.memory = "8192"
-        end
-    end
-
-
-    config.vm.define "remote1" do |remote1|
-        remote1.vm.box = "bento/ubuntu-24.04"
-        remote1.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","repos","build","Anduril",
-        "schedules/tracing_tests/redis/traces","tests/bugdetection/redisraft/*","temp_sched.yaml"]
-        remote1.vm.synced_folder "~/shared/remote1/", "/shared",type:"virtualbox"
-        remote1.vm.provider "virtualbox" do |v|
-            v.cpus = 16      # Set number of CPUs
-            v.memory = "30000"
-        end
-    end
-
 end
