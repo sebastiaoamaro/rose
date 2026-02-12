@@ -1,2 +1,2 @@
 #!/bin/bash
-cat ~/test3/shared/heuristic_table.txt
+cat ~/test3/shared/heuristics_table.txt

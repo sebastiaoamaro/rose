@@ -95,7 +95,7 @@ def _parse_total_calls(stats_file: str) -> int:
 def compare_values():
     print("Comparing function statistics (total call counts)")
 
-    results_dir = os.path.join(os.path.dirname(__file__), "results")
+    results_dir = os.path.join(os.path.dirname(__file__), "/shared/")
     if not os.path.isdir(results_dir):
         print(f"Results directory not found: {results_dir}")
         return
@@ -166,13 +166,16 @@ def compare_values():
                 parts.append(" " + v.ljust(widths[h]) + " ")
         return "|" + "|".join(parts) + "|"
 
-    print()
-    print(sep("-"))
-    print(fmt_row({h: h for h in headers}))
-    print(sep("="))
-    for r in rows:
-        print(fmt_row(r))
-    print(sep("-"))
+    out_path = os.path.join(results_dir, "heuristics_table.txt")
+    with open(out_path, "w", encoding="utf-8") as out:
+        out.write(sep("-") + "\n")
+        out.write(fmt_row({h: h for h in headers}) + "\n")
+        out.write(sep("=") + "\n")
+        for r in rows:
+            out.write(fmt_row(r) + "\n")
+        out.write(sep("-") + "\n")
+
+    print(f"Wrote final table to: {out_path}")
 
 
 def main():
