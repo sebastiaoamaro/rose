@@ -176,11 +176,11 @@ sudo usermod -aG docker "$USER"
 log "Done. Reboot recommended."
 
 
-mkdir tests/bugdetection/hbase
-mkdir tests/bugdetection/hdfs
-mkdir tests/bugdetection/kafka
-mkdir tests/bugdetection/mongo
-mkdir tests/bugdetection/redis
-mkdir tests/bugdetection/redisraft
-mkdir tests/bugdetection/tendermint
-mkdir tests/bugdetection/zookeeper
+mkdir /vagrant/tests/bugdetection/hbase
+mkdir /vagrant/tests/bugdetection/hdfs
+mkdir /vagrant/tests/bugdetection/kafka
+mkdir /vagrant/tests/bugdetection/mongo
+mkdir /vagrant/tests/bugdetection/redis
+mkdir /vagrant/tests/bugdetection/redisraft
+mkdir /vagrant/tests/bugdetection/tendermint
+mkdir /vagrant/tests/bugdetection/zookeeper
