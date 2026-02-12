@@ -123,7 +123,7 @@ class History:
                 event_data[key] = value
             except Exception:
                 print("Failed to parse part: ", part, " in line: ", line)
-                continue
+                return None
         # First event we see
         if self.start_time == 0 and not self.start_time_event:
             self.start_time = int(event_data["time"])
@@ -163,6 +163,8 @@ class History:
         with open(file_path, "r") as file:
             for line in file:
                 event = self.parse_event_line(line)
+                if event is None:
+                    continue
                 node_id = event.node
 
                 # If the node doesn't exist in the dictionary, initialize a list
