@@ -27,8 +27,14 @@ COL_LABELS: dict[str, str] = {
 FIXED_INPUTS = [
     # "~/shared/test1/results_scf_bugs.txt",
     # "~/shared/test1/results_zk_4203.txt",
-    "~/shared/test2/results_docker_bugs.txt",
+    # "~/shared/test2/results_docker_bugs.txt",
     # "~/shared/test3/results_lxc_bugs.txt",
+]
+
+FIXED_INPUTS_KICK = [
+    # "~/shared/test1/results_kick_the_tires_scf.txt",
+    # "~/shared/test2/kick_the_tires_docker.txt",
+    # "~/shared/test3/kick_the_tires_lxc.txt",
 ]
 
 
@@ -158,8 +164,9 @@ def _render_table(rows: list[Row]) -> str:
 
 
 def main(argv: list[str]) -> int:
-    raw_inputs = argv[1:] if len(argv) > 1 else FIXED_INPUTS
-    input_paths = [_norm_path(p) for p in raw_inputs]
+    input_paths = FIXED_INPUTS
+    if len(argv) > 1 and argv[1] == "kick":
+        input_paths = FIXED_INPUTS_KICK
 
     missing = [p for p in input_paths if not os.path.exists(p)]
     if missing:

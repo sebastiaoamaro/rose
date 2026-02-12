@@ -66,7 +66,7 @@ Breakdown of run time: 1~2 hours
 - (Table 1): Bugs reproduced by rose
  
 ```
-~/rose/artifact_evaluation/$ ./display_bug_table.sh
+~/rose/artifact_evaluation/$ ./display_bug_table.sh kick
 ```
 
 ### Overhead of Tracer
