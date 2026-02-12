@@ -1,6 +1,4 @@
 #!/bin/bash
-#workload_size=25000000
-#workload_size=250000
 workload_size=$1
 runs=2
 maindirectory=/vagrant/tracer

@@ -3,7 +3,6 @@ import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-# Internal column keys (must match Row.as_dict()) in the order they should be displayed.
 COLS = [
     "bug_reproduction",
     "replay_rate",
@@ -14,7 +13,6 @@ COLS = [
     "fault_removal_pct",
 ]
 
-# Display names (change these to rename columns in the output table).
 COL_LABELS: dict[str, str] = {
     "bug_reproduction": "bug",
     "replay_rate": "RR%",
@@ -91,13 +89,6 @@ def _iter_data_lines(path: str) -> Iterable[str]:
 
 
 def _parse_row(line: str) -> Row | None:
-    """
-    Supports:
-      - success lines from run.py (7 tab-separated columns)
-      - error lines from run.py (5 tab-separated columns):
-          <file>  ERROR  ERROR  ERROR  <message>
-        These will be kept and padded with placeholders so they show up in the table.
-    """
     parts = [p.strip() for p in line.split("\t")]
 
     # Success line (expected)

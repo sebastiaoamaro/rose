@@ -82,7 +82,6 @@ def main():
             sucess_count = 0
             while sucess_count != t:
                 try:
-                    # (replay_rate, runs, elapsed_time, schedule)
                     (
                         replay_rate,
                         runs,

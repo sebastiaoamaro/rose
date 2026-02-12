@@ -35,7 +35,6 @@ def run_collect_bpf_logs_script(
         check=False,
     )
 
-    # Try to read what the script wrote.
     try:
         with open(output_path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
