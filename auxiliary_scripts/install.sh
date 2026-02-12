@@ -174,13 +174,3 @@ sudo groupadd docker 2>/dev/null || true
 sudo usermod -aG docker "$USER"
 
 log "Done. Reboot recommended."
-
-
-mkdir /vagrant/tests/bugdetection/hbase
-mkdir /vagrant/tests/bugdetection/hdfs
-mkdir /vagrant/tests/bugdetection/kafka
-mkdir /vagrant/tests/bugdetection/mongo
-mkdir /vagrant/tests/bugdetection/redis
-mkdir /vagrant/tests/bugdetection/redisraft
-mkdir /vagrant/tests/bugdetection/tendermint
-mkdir /vagrant/tests/bugdetection/zookeeper
