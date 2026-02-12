@@ -50,17 +50,12 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
-ycsb-0.17.0/
-tests/cometbft/cometbftconfig/*
 tracer/target/
 rose/c/.cache/
 .vscode/
-tests/bugdetection/*
 parser/__pycache__/*
-tests/uprobetest/target/
 schedules/generatedschedules/*
 */__pycache__/*
-bug_reproductions/traces/*
 .vagrant/*
 build
 schedules/reproduced_bugs/redpanda/lxc/binaries
@@ -80,3 +75,5 @@ lazyfs
 rw/jepsen
 schedules/lazy_fs/
 schedules/reproduced_bugs/tendermint/setup/repository
+!schedules/reproduced_bugs/schedules/redisraft/setup/redisraft_binaries/*.so
+!schedules/reproduced_bugs/redpanda/lxc/binaries/redpanda
