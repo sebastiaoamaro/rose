@@ -79,3 +79,4 @@ rsync.sh
 lazyfs
 rw/jepsen
 schedules/lazy_fs/
+schedules/reproduced_bugs/tendermint/setup/repository
