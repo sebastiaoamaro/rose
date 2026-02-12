@@ -120,7 +120,7 @@ sudo make install
 # --- bpftool ---
 log "Setting up bpftool..."
 cd /vagrant/bpftool
-git reset --hard HEAD >/dev/null 2>&1 || true
+git reset --hard HEAD
 git submodule update --init --recursive >/dev/null
 
 cd libbpf
