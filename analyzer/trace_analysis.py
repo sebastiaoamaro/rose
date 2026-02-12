@@ -496,16 +496,16 @@ class History:
                     start_time_fault = event[2]
                     end_time = event[3]
                     if start_time_fault < self.start_time:
-                        print("Network event before start time")
+                        # print("Network event before start time")
                         continue
                     if frequency / self.experiment_time < 0.5:
-                        print(
-                            "Skipped network delay, frequency too low"
-                            + " time: "
-                            + str(self.experiment_time)
-                            + " count: "
-                            + str(event[0])
-                        )
+                        # print(
+                        #     "Skipped network delay, frequency too low"
+                        #     + " time: "
+                        #     + str(self.experiment_time)
+                        #     + " count: "
+                        #     + str(event[0])
+                        # )
                         continue
                     fault = Fault()
                     fault.name = "networkfault" + str(fault_nr)
