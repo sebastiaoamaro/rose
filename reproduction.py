@@ -147,14 +147,15 @@ def check_oracle(oracle: str, run: str, result_folder: str):
 
 def collect_history(trace_location: str, result_folder: str, run: str):
     location = result_folder + run + ".txt"
+    print("Collecting history:", trace_location, "to", location)
     command = ["sudo", "mv", trace_location, location]
     try:
         # Start the process
         result = subprocess.run(command, capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
-        print("An error occurred:")
+        print("An error occurred while collecting history:")
         print(e.stderr)
-
+        exit()
     return location
 
 
@@ -176,11 +177,18 @@ def move_file(source_path, destination_path):
         shutil.copy(source_path, destination_path)
         print(f"File moved successfully from {source_path} to {destination_path}")
     except FileNotFoundError:
-        print("Error: File not found.")
+        print(
+            "Error while moving", source_path, "to", destination_path, "file not found."
+        )
+        exit()
     except PermissionError:
-        print("Error: Permission denied.")
+        print(
+            "Error while moving", source_path, "to", destination_path, "no permissions."
+        )
+        exit()
     except Exception as e:
-        print(f"Error: {e}")
+        print("Error while moving", source_path, "to", destination_path, e)
+        exit()
 
 
 def reproduce_bug(bug_specification: str):
@@ -778,8 +786,9 @@ def save_schedule(schedule_location, result_folder, run_name):
         # print("Output from collect_history:")
         # print(result.stdout)  # Standard output
     except subprocess.CalledProcessError as e:
-        print("An error occurred:")
+        print("An error occurred while saving the schedule:")
         print(e.stderr)  # Standard error
+        exit()
 
     return location
 
