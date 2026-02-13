@@ -7,6 +7,7 @@ cargo build --release
 cd ..
 
 cd executor/kernelmodule/
+make clean
 make
 cd ../../
 
