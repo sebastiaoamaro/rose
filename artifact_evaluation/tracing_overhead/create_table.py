@@ -120,7 +120,7 @@ def main():
                 "overhead_%": overhead_val,
                 "events": pick(r, "events", "Events"),
                 "lines": pick(r, "lines", "Lines"),
-                "size_bytes": pick(r, "size_bytes", "size", "bytes", "SizeBytes"),
+                "size_mb": pick(r, "size_bytes", "size", "bytes", "SizeBytes"),
                 "elapsed_time_s": pick(
                     r, "elapsed_time_s", "elapsed", "time_s", "ElapsedTimeS"
                 ),
@@ -134,7 +134,7 @@ def main():
         "overhead_%",
         "events",
         "lines",
-        "size_bytes",
+        "size_mb",
         "elapsed_time_s",
     ]
 
@@ -146,7 +146,7 @@ def main():
             "overhead_%": row["overhead_%"],
             "events": fmt_int(row["events"]),
             "lines": fmt_int(row["lines"]),
-            "size_bytes": fmt_int(row["size_bytes"]),
+            "size_mb": fmt_mb_from_bytes(row["size_mb"], 2),
             "elapsed_time_s": fmt_float(row["elapsed_time_s"], 2),
         }
         formatted.append(fr)
@@ -160,7 +160,7 @@ def main():
                 fr["overhead_%"].rjust(widths["overhead_%"]),
                 fr["events"].rjust(widths["events"]),
                 fr["lines"].rjust(widths["lines"]),
-                fr["size_bytes"].rjust(widths["size_bytes"]),
+                fr["size_mb"].rjust(widths["size_mb"]),
                 fr["elapsed_time_s"].rjust(widths["elapsed_time_s"]),
             ]
         )
