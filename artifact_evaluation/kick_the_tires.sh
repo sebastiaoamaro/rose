@@ -1,8 +1,8 @@
 #!/bin/bash
 set -xe
-rm ~/shared/test1/*
-rm ~/shared/test2/*
-rm ~/shared/test3/*
+rm -f ~/shared/test1/*
+rm -f ~/shared/test2/*
+rm -f ~/shared/test3/*
 
 vagrant up test1
 vagrant ssh test1 -c "cd /vagrant/artifact_evaluation/bug_reproduction/ && python3 run.py kick_the_tires_scf.txt"
