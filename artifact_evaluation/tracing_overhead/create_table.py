@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 import csv
+import os
 import sys
 from pathlib import Path
+
+
+def _norm_path(p: str) -> str:
+    # Expand "~" (shell-style home) and environment variables.
+    return os.path.expandvars(os.path.expanduser(p))
 
 
 def sniff_dialect(path: Path):
@@ -72,9 +78,10 @@ def fmt_float(x, nd=2):
 
 
 def main():
-    overhead_path = Path("~/shared/test3/throughtput_overhead.txt")
-    stats_path = Path("~/shared/test3/trace_size_results.csv")
-    out_path = Path("~/shared/test3/trace_overhead_table.txt")
+    base_dir = Path("~/shared/test3").expanduser()
+    overhead_path = base_dir / "throughtput_overhead.txt"
+    stats_path = base_dir / "trace_size_results.csv"
+    out_path = base_dir / "trace_overhead_table.txt"
 
     overhead_rows = read_table(overhead_path)
     stats_rows = read_table(stats_path)
