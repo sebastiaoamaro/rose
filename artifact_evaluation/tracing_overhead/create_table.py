@@ -5,9 +5,19 @@ import sys
 from pathlib import Path
 
 
-def _norm_path(p: str) -> str:
-    # Expand "~" (shell-style home) and environment variables.
-    return os.path.expandvars(os.path.expanduser(p))
+def fmt_int(x):
+    try:
+        return f"{int(float(x))}"
+    except Exception:
+        return str(x) if x is not None else ""
+
+
+def fmt_mb_from_bytes(x, nd=2):
+    try:
+        b = float(x)
+        return f"{b / (1024 * 1024):.{nd}f}"
+    except Exception:
+        return str(x) if x is not None else ""
 
 
 def sniff_dialect(path: Path):
