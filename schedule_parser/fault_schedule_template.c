@@ -12,7 +12,6 @@
 #include <linux/in.h>
 #include <net/if.h>
 #include <ifaddrs.h>
-#include "uprobes.skel.h"
 #include "fault_schedule.h"
 #include "aux.h"
 
