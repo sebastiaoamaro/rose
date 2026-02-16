@@ -1,3 +1,3 @@
 #!/bin/bash
 set -xe
-cat ~/test3/shared/heuristics_table.txt
+cat ~/shared/test3/heuristics_table.txt

@@ -5,13 +5,8 @@ import time
 
 from reproduction import (
     History,
-    collect_history,
     move_file,
-    parse_bug_reproduction,
-    run_cleanup,
     run_reproduction,
-    save_schedule,
-    write_new_schedule,
 )
 
 
