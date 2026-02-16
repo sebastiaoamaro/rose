@@ -57,8 +57,7 @@ def run_schedules_no_heuristic():
 def collect_statistics(schedule_name):
     move_file(
         "/tmp/function_stats.txt",
-        "/vagrant/artifact_evaluation/heuristics_effectiveness/frequency_heuristic/results/"
-        + schedule_name,
+        "/shared/" + schedule_name,
     )
 
 
@@ -180,10 +179,6 @@ def compare_values():
 
 def main():
     print("Running Tests for Section 6.4 Heuristic Effectiveness - Frequent Functions")
-    os.makedirs(
-        "/vagrant/artifact_evaluation/heuristics_effectiveness/frequency_heuristic/results/",
-        exist_ok=True,
-    )
     run_schedules_normal()
     run_schedules_no_heuristic()
     compare_values()
