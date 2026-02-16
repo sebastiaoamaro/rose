@@ -22,7 +22,7 @@ artifact_evaluation
 
 # Requirements
 
-Rose was built and tested in Ubuntu 24.03.5 LTS, requires vagrant (tested for version 2.4.9, but any modern version should suffice) and Python (3.12.3) for scripts.
+Rose was built and tested in Ubuntu 24.03.5 LTS, requires vagrant (tested for version 2.4.9, but any modern version should suffice), VirtualBox (tested for 7.1.7, but any modern version should suffice) as a vagrant provider and Python (3.12.3) for scripts.
 
 The script `requirements.sh` will check for suitability and install the requirements.
 
