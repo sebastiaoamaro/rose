@@ -1,5 +1,5 @@
 #!/bin/bash
-mkdir ~/shared/test2/
+mkdir -p ~/shared/test2/
 cd ../
 vagrant up test2
 vagrant ssh test2 -c "cd /vagrant/auxiliary_scripts && ./change_kernel.sh"

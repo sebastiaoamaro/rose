@@ -1,6 +1,6 @@
 #!/bin/bash
 cd ../
-mkdir ~/shared/test3/
+mkdir -p ~/shared/test3/
 vagrant up test3
 vagrant ssh test3 -c "cd /vagrant/auxiliary_scripts && ./change_kernel.sh"
 vagrant ssh test3 -c "cd /vagrant/auxiliary_scripts && ./resize.sh"
