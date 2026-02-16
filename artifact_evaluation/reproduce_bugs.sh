@@ -1,4 +1,5 @@
 #!/bin/bash
+set -xe
 cd ..
 vagrant up test1
 vagrant ssh test1 -c "cd /vagrant/artifact_evaluation/bug_reproduction/ && python3 run.py scf_bugs.txt"

@@ -1,4 +1,5 @@
 #!/bin/bash
+set -xe
 rm ~/shared/test1/*
 rm ~/shared/test2/*
 rm ~/shared/test3/*
