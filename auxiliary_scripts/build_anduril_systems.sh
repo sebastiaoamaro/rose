@@ -17,6 +17,8 @@ cd /vagrant/rw/Anduril/systems/zookeeper-4203
 
 cd /vagrant/rw/Anduril/systems/hdfs-4233
 ./compile.sh
+/vagrant/rw/Anduril/experiment/hdfs-4233/run-original-test.sh
+
 cd /vagrant/rw/Anduril/systems/hdfs-12070
 ./compile.sh
 /vagrant/rw/Anduril/experiment/hdfs-12070/run-original-test.sh

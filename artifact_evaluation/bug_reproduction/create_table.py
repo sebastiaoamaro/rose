@@ -168,20 +168,23 @@ def main(argv: list[str]) -> int:
     if len(argv) > 1 and argv[1] == "kick":
         input_paths = FIXED_INPUTS_KICK
 
+    # Expand "~" and env vars.
+    input_paths = [_norm_path(p) for p in input_paths]
+
+    existing = [p for p in input_paths if os.path.exists(p)]
     missing = [p for p in input_paths if not os.path.exists(p)]
+
     if missing:
         print("Missing expected input file(s):", file=sys.stderr)
         for p in missing:
             print(f"  - {p}", file=sys.stderr)
-        print(
-            "\nGenerate them by running `run.py` to produce results files under "
-            "`/shared/results_<bugs_file>` (inside the VM), then point this script at that file.",
-            file=sys.stderr,
-        )
+
+    if not existing:
+        print("No input files found; nothing to render.", file=sys.stderr)
         return 2
 
     all_rows: list[Row] = []
-    for p in input_paths:
+    for p in existing:
         all_rows.extend(_read_rows(p))
 
     # Sort by bug_reproduction, then schedule, then other fields (string sort).
