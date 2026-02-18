@@ -5,15 +5,14 @@ set -euo pipefail
 #
 # Default behavior:
 #   - Copies (rsync) from VM -> host without deletions on host
-#   - Then deletes the collected files from the VM (so it's effectively a "move")
 #
 # Requirements:
 #   - run from the directory that contains the Vagrant environment (same dir as Vagrantfile)
 #   - VMs must be running and SSH-reachable via `vagrant ssh`
 #
 # Usage:
-#   ./collect_shared.sh              # collect from test1..test3
-#   ./collect_shared.sh test2        # collect only test2
+#   ./collect_results.sh              # collect from test1..test3
+#   ./collect_results.sh test2        # collect only test2
 #
 # Notes:
 #   - Uses `vagrant ssh-config` to discover host/port/key.
@@ -47,14 +46,14 @@ collect_one() {
   local machine="$1"
 
   local host port user identity_file
-  host="$(vagrant_ssh_value "$machine" "HostName")"
-  port="$(vagrant_ssh_value "$machine" "Port")"
-  user="$(vagrant_ssh_value "$machine" "User")"
-  identity_file="$(vagrant_ssh_value "$machine" "IdentityFile")"
+  host="$(vagrant_ssh_value "$machine" "HostName" || true)"
+  port="$(vagrant_ssh_value "$machine" "Port" || true)"
+  user="$(vagrant_ssh_value "$machine" "User" || true)"
+  identity_file="$(vagrant_ssh_value "$machine" "IdentityFile" || true)"
 
   if [[ -z "${host}" || -z "${port}" || -z "${user}" || -z "${identity_file}" ]]; then
-    echo "[${machine}] Unable to read ssh-config (is the machine created?)" >&2
-    return 1
+    echo "[${machine}] Skipping (machine not created/up or ssh-config unavailable)" >&2
+    return 0
   fi
 
   local dest_dir="${host_base_dir}/${machine}"

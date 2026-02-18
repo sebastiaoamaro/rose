@@ -53,10 +53,10 @@ After run, to set up the vmware vagrant plugin/utility:
 ~/$ export VAGRANT_VAGRANTFILE=/*fill accordingly*/rose/Vagrantfile.vmware
 ```
 
-**Due to VMware not supporting shared folders, please run this script after the experiments:**
+**Due to VMware not supporting shared folders, please run this script after the experiments, run it from the rose directory:**
 
 ```
-~/$ ./rose/artifact_evaluation/collect_results.sh
+~/rose/$ ./artifact_evaluation/collect_results.sh
 ```
 
 # Building the Environment
