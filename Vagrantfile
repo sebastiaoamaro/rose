@@ -4,7 +4,7 @@
 Vagrant.configure("2") do |config|
     config.vm.define "test1" do |test1|
         test1.vm.box = "bento/ubuntu-24.04"
-        test1.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","checkouts","build","repos","tests/bugdetection/redisraft/*","lazyfs/tmp","rw/Anduril/"]
+        test1.vm.synced_folder "./", "/vagrant", type: "rsync",rsync__exclude: ["tracer/target","checkouts","build","repos","lazyfs/tmp","rw/Anduril/"]
         test1.vm.synced_folder "~/shared/test1/", "/shared",type:"virtualbox"
         test1.disksize.size = '60GB'
         test1.vm.provider "virtualbox" do |v|
@@ -30,7 +30,7 @@ Vagrant.configure("2") do |config|
         test3.vm.synced_folder "~/shared/test3/", "/shared",type:"virtualbox"
         test3.disksize.size = '60GB'
         test3.vm.provider "virtualbox" do |v|
-            v.cpus = 16       # Set number of CPUs
+            v.cpus = 8       # Set number of CPUs
             v.memory = "30000"
         end
     end
