@@ -14,14 +14,11 @@ set -euo pipefail
 # Usage:
 #   ./collect_shared.sh              # collect from test1..test3
 #   ./collect_shared.sh test2        # collect only test2
-#   MOVE=0 ./collect_shared.sh       # copy only (don't delete from VM)
 #
 # Notes:
 #   - Uses `vagrant ssh-config` to discover host/port/key.
 #   - Uses rsync with --ignore-existing to avoid overwriting host files.
 #   - Does not use --delete (so nothing is deleted on host side).
-
-MOVE="${MOVE:-1}"  # 1 = delete from VM after successful rsync, 0 = keep in VM
 
 machines=("$@")
 if [[ ${#machines[@]} -eq 0 ]]; then
@@ -73,14 +70,6 @@ collect_one() {
     -e "ssh -p ${port} -i ${identity_file} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
     "${user}@${host}:/shared/" \
     "${dest_dir}/"
-
-  if [[ "${MOVE}" == "1" ]]; then
-    echo "[${machine}] Removing collected files from VM /shared/"
-    # Delete files/dirs in /shared but keep the /shared directory itself.
-    vagrant ssh "${machine}" -c 'sudo mkdir -p /shared && sudo find /shared -mindepth 1 -maxdepth 1 -exec rm -rf {} +' >/dev/null
-  else
-    echo "[${machine}] MOVE=0 set; leaving files in VM /shared/"
-  fi
 
   echo "[${machine}] Done"
 }

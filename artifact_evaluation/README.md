@@ -83,6 +83,8 @@ To ensure everything is working properly, without waiting for long experiments, 
 
 Breakdown of run time: 1~2 hours
 
+**If using VMware run the collect_results.sh script**
+
 ### Reproduced Bugs
 
 - (Table 1): Bugs reproduced by rose
