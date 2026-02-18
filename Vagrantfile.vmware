@@ -1,0 +1,52 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+    config.vm.define "test1" do |test1|
+        test1.vm.box = "bento/ubuntu-24.04"
+        test1.vm.synced_folder "./", "/vagrant", type: "rsync", rsync__exclude: ["tracer/target","checkouts","build","repos","tests/bugdetection/redisraft/*","lazyfs/tmp","rw/Anduril/"]
+        test1.disksize.size = '60GB'
+
+        test1.vm.provision "shell", inline: <<-SHELL
+          sudo mkdir -p /shared
+          sudo chmod 1777 /shared
+        SHELL
+
+        test1.vm.provider "vmware_desktop" do |v|
+            v.cpus = 8
+            v.memory = "8192"
+        end
+    end
+
+    config.vm.define "test2" do |test2|
+        test2.vm.box = "bento/ubuntu-24.04"
+        test2.vm.synced_folder "./", "/vagrant", type: "rsync", rsync__exclude: ["tracer/target","build","repos"]
+        test2.disksize.size = '60GB'
+
+        test2.vm.provision "shell", inline: <<-SHELL
+          sudo mkdir -p /shared
+          sudo chmod 1777 /shared
+        SHELL
+
+        test2.vm.provider "vmware_desktop" do |v|
+            v.cpus = 4
+            v.memory = "8192"
+        end
+    end
+
+    config.vm.define "test3" do |test3|
+        test3.vm.box = "bento/ubuntu-24.04"
+        test3.vm.synced_folder "./", "/vagrant", type: "rsync", rsync__exclude: ["tracer/target","build","repos"]
+        test3.disksize.size = '60GB'
+
+        test3.vm.provision "shell", inline: <<-SHELL
+          sudo mkdir -p /shared
+          sudo chmod 1777 /shared
+        SHELL
+
+        test3.vm.provider "vmware_desktop" do |v|
+            v.cpus = 16
+            v.memory = "30000"
+        end
+    end
+end

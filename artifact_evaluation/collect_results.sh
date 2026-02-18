@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Collect files from /shared inside each VM (test1..test3) to ~/shared/<machine>/ on the host.
+#
+# Default behavior:
+#   - Copies (rsync) from VM -> host without deletions on host
+#   - Then deletes the collected files from the VM (so it's effectively a "move")
+#
+# Requirements:
+#   - run from the directory that contains the Vagrant environment (same dir as Vagrantfile)
+#   - VMs must be running and SSH-reachable via `vagrant ssh`
+#
+# Usage:
+#   ./collect_shared.sh              # collect from test1..test3
+#   ./collect_shared.sh test2        # collect only test2
+#   MOVE=0 ./collect_shared.sh       # copy only (don't delete from VM)
+#
+# Notes:
+#   - Uses `vagrant ssh-config` to discover host/port/key.
+#   - Uses rsync with --ignore-existing to avoid overwriting host files.
+#   - Does not use --delete (so nothing is deleted on host side).
+
+MOVE="${MOVE:-1}"  # 1 = delete from VM after successful rsync, 0 = keep in VM
+
+machines=("$@")
+if [[ ${#machines[@]} -eq 0 ]]; then
+  machines=("test1" "test2" "test3")
+fi
+
+host_base_dir="${HOME}/shared"
+
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || { echo "Missing required command: $1" >&2; exit 1; }
+}
+
+require_cmd vagrant
+require_cmd rsync
+require_cmd awk
+require_cmd mkdir
+
+vagrant_ssh_value() {
+  local machine="$1"
+  local key="$2"
+  # Prints value for a key from `vagrant ssh-config`, e.g., "HostName", "Port", "User", "IdentityFile"
+  vagrant ssh-config "$machine" 2>/dev/null | awk -v k="$key" '$1 == k {print $2; exit}'
+}
+
+collect_one() {
+  local machine="$1"
+
+  local host port user identity_file
+  host="$(vagrant_ssh_value "$machine" "HostName")"
+  port="$(vagrant_ssh_value "$machine" "Port")"
+  user="$(vagrant_ssh_value "$machine" "User")"
+  identity_file="$(vagrant_ssh_value "$machine" "IdentityFile")"
+
+  if [[ -z "${host}" || -z "${port}" || -z "${user}" || -z "${identity_file}" ]]; then
+    echo "[${machine}] Unable to read ssh-config (is the machine created?)" >&2
+    return 1
+  fi
+
+  local dest_dir="${host_base_dir}/${machine}"
+  mkdir -p "${dest_dir}"
+
+  echo "[${machine}] Collecting from ${user}@${host}:${port}:/shared/ -> ${dest_dir}/"
+
+  # Pull from VM to host. No deletions, don’t overwrite existing host files.
+  rsync -azv \
+    --ignore-existing \
+    --partial \
+    --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
+    -e "ssh -p ${port} -i ${identity_file} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+    "${user}@${host}:/shared/" \
+    "${dest_dir}/"
+
+  if [[ "${MOVE}" == "1" ]]; then
+    echo "[${machine}] Removing collected files from VM /shared/"
+    # Delete files/dirs in /shared but keep the /shared directory itself.
+    vagrant ssh "${machine}" -c 'sudo mkdir -p /shared && sudo find /shared -mindepth 1 -maxdepth 1 -exec rm -rf {} +' >/dev/null
+  else
+    echo "[${machine}] MOVE=0 set; leaving files in VM /shared/"
+  fi
+
+  echo "[${machine}] Done"
+}
+
+for m in "${machines[@]}"; do
+  collect_one "${m}"
+done
