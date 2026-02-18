@@ -30,7 +30,7 @@ Vagrant.configure("2") do |config|
         test3.vm.synced_folder "~/shared/test3/", "/shared",type:"virtualbox"
         test3.disksize.size = '60GB'
         test3.vm.provider "virtualbox" do |v|
-            v.cpus = 8       # Set number of CPUs
+            v.cpus = 16       # Set number of CPUs
             v.memory = "30000"
         end
     end
