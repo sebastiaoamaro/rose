@@ -41,7 +41,7 @@ Before starting the evaluation:
 # MacOS
 
 If you are using MacOS your CPU architecture might not be x86_64, Intel/AMD 64-bit, this can cause problems in vagrant leveraging VirtualBox as a provider. Thus, VMware is required. Install VMware workstation by following the steps in: [VMware](https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion).
-After run, to set up the vmware vagrant plugin/utility:
+After, run this script to set up the vmware vagrant plugin/utility:
 
 ```
 ~/$ ./rose/artifact_evaluation/prepare_vmware.sh
@@ -50,7 +50,7 @@ After run, to set up the vmware vagrant plugin/utility:
 **Now set a environment variable to point to the appropriate Vagrantfile, rerun on every new shell:**
 
 ```
-~/$ export VAGRANT_VAGRANTFILE=/*fill accordingly*/rose/Vagrantfile.vmware
+~/rose $ export VAGRANT_VAGRANTFILE=/*fill accordingly*/rose/Vagrantfile.vmware
 ```
 
 **Due to VMware not supporting shared folders, please run this script after the experiments, run it from the rose directory:**
