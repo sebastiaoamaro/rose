@@ -44,20 +44,20 @@ If you are using MacOS your CPU architecture might not be x86_64, Intel/AMD 64-b
 After run:
 
 ```
-~/ ./rose/artifact_evaluation/prepare_vmware.sh
+~/$ ./rose/artifact_evaluation/prepare_vmware.sh
 ```
 
 This sets up the vmware vagrant plugin/utility, and changes the base Vagrantfile location to use the apropriate one.
 **If you change shell you need to run the command again which is:**
 
 ```
-~/ export VAGRANT_VAGRANTFILE=/*fill accordignly*/rose/Vagrantfile.vmware
+~/$ export VAGRANT_VAGRANTFILE=/*fill accordignly*/rose/Vagrantfile.vmware
 ```
 
 **Due to VMware not supporting shared folders, please run:**
 
 ```
-~/ ./rose/artifact_evaluation/collect_results.sh
+~/$ ./rose/artifact_evaluation/collect_results.sh
 ```
 
 **After any experiment**
@@ -68,7 +68,7 @@ The following commands builds every necessary artifact required for the evaluati
 Three different virtual machines will be built. One to reproduce the SCF bugs, one for systems using docker, and one for systems using LXC (this one will also be used to run the tracing/heuristics tests).
 
 ```
-~/ cd rose/artifact_evaluation 
+~/$ cd rose/artifact_evaluation 
 ~/rose/artifact_evaluation/$ ./prepare_vms.sh
 ```
 
