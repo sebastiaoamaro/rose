@@ -50,7 +50,7 @@ After, run this script to set up the vmware vagrant plugin/utility:
 **Now set a environment variable to point to the appropriate Vagrantfile, rerun on every new shell:**
 
 ```
-~/rose $ export VAGRANT_VAGRANTFILE=/*fill accordingly*/rose/Vagrantfile.vmware
+~/rose $ export VAGRANT_VAGRANTFILE=/*fill accordingly with the absolute path*/rose/Vagrantfile.vmware
 ```
 
 **Due to VMware not supporting shared folders, please run this script after the experiments, run it from the rose directory:**
