@@ -29,20 +29,20 @@ __bpf_kfunc int bpf_strstr(const char *str1, const char *str2, int str_len)
     if (!str1 || !str2 || str_len <= 0)
         return 0;
 
-    pr_info("Comparing %s and %s\n", str1, str2);
+    //pr_info("Comparing %s and %s\n", str1, str2);
 
     /* Compute needle length up to MAX_NEEDLE */
     for (needle_len = 0; needle_len < MAX_NEEDLE && str1[needle_len] != '\0'; needle_len++)
         ;
 
-    pr_info("Needle len is %d, str_len is %d \n",needle_len,str_len);
+    //pr_info("Needle len is %d, str_len is %d \n",needle_len,str_len);
 
     if (needle_len == 0 && str1[0] == '\0')
         return 1;
 
     /* If needle wasn't NUL-terminated within MAX_NEEDLE, treat as no match (safer) */
     if (needle_len == MAX_NEEDLE && str1[needle_len - 1] != '\0'){
-        pr_info("Needle not nul-terminated %d \n",needle_len);
+        //pr_info("Needle not nul-terminated %d \n",needle_len);
         return 0;
     }
     /* If needle is longer than the provided hay length, no match is possible */
@@ -56,14 +56,13 @@ __bpf_kfunc int bpf_strstr(const char *str1, const char *str2, int str_len)
         int j;
 
         for (j = 0; j < needle_len; j++) {
-            pr_info("Comparing char: %c and %c \n", str2[i + j], str1[j]);
+            //pr_info("Comparing char: %c and %c \n", str2[i + j], str1[j]);
             if (str2[i + j] != str1[j])
                 break;
         }
 
         if (j == needle_len) {
-            pr_info("bpf_strstr(): match found: needle=%s hay=%s str_len=%d\n",
-                    str1, str2, str_len);
+            //pr_info("bpf_strstr(): match found: needle=%s hay=%s str_len=%d\n",str1, str2, str_len);
             return 1;
         }
     }
