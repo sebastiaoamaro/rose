@@ -5,5 +5,3 @@ sudo apt -y update
 sudo apt -y install ./vagrant-vmware-utility_*.deb
 sudo systemctl enable --now vagrant-vmware-utility
 sudo systemctl status vagrant-vmware-utility --no-pager
-
-export VAGRANT_VAGRANTFILE=/home/sebastiaoamaro/phd/rose/Vagrantfile.vmware
