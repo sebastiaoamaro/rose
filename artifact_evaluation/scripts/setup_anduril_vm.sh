@@ -1,5 +1,5 @@
 #!/bin/bash
-set -x
+set -xe
 cd ../
 mkdir -p ~/shared/test1/
 vagrant up test1

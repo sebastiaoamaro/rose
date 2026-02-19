@@ -1,4 +1,5 @@
 #!/bin/bash
+set -xe
 cd /vagrant/rw/Anduril/systems/zookeeper-2247
 ./compile.sh
 /vagrant/rw/Anduril/ground_truth/zookeeper-2247/run-original-test.sh
