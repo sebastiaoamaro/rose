@@ -8,4 +8,6 @@ vagrant ssh test1 -c "cd /vagrant/auxiliary_scripts && ./resize.sh"
 vagrant reload test1
 vagrant ssh test1 -c "cd /vagrant/artifact_evaluation/scripts/ && ./setup_dependencies.sh"
 vagrant ssh test1 -c "cd /vagrant/artifact_evaluation/scripts && ./setup_anduril.sh"
+vagrant reload test1
+vagrant ssh test1 -c "cd /vagrant/artifact_evaluation/scripts && ./setup_anduril_systems.sh"
 vagrant halt test1
