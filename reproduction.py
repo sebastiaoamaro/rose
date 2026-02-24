@@ -133,9 +133,7 @@ def check_oracle(oracle: str, run: str, result_folder: str):
             text=True,  # Decode output as text
             check=True,  # Raise exception on non-zero exit code
         )
-        print("Output from oracle:")
-        print(result.stdout)  # Standard output
-
+        print("Output from oracle:", result.stdout)
         if result.stdout != "\n":
             buggy_run = True
     except subprocess.CalledProcessError as e:

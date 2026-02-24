@@ -3,6 +3,8 @@ execution_plan:
     tracer_location: /vagrant/tracer/target/release/tracer
     pipe_location: /tmp/containerpid
     tracing_type: production_trace,process_controlled
+  setup:
+    script: /vagrant/schedules/reproduced_bugs/hdfs/scripts/setup_hdfs_16332.sh
   cleanup:
     duration: 60
 nodes:
