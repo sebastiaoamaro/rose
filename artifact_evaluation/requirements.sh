@@ -63,4 +63,8 @@ if ! command -v VBoxManage >/dev/null 2>&1; then
   sudo apt install -y virtualbox
 fi
 
+
+vagrant plugin install vagrant-disksize
+vagrant plugin install vagrant-vbguest
+
 echo "All requirements satisfied."
