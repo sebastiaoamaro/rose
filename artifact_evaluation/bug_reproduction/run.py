@@ -75,7 +75,8 @@ def main():
             t = times_by_file.get(file, 1)
             print(f"Reproducing bug from file: {file} (times={t})")
             sucess_count = 0
-            while sucess_count != t:
+            tries = 0
+            while sucess_count != t and tries < 3:
                 try:
                     print("Running new reproduction")
                     (
@@ -86,7 +87,7 @@ def main():
                         schedule,
                         fault_removal_pct,
                     ) = reproduce_bug(file)
-
+                    tries += 1
                     if replay_rate >= 60:
                         sucess_count += 1
                     else:
