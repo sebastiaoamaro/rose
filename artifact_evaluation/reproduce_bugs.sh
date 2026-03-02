@@ -17,7 +17,7 @@ vagrant up test3
 vagrant ssh test3 -c "cd /vagrant/artifact_evaluation/bug_reproduction/ && python3 run.py lxc_bugs.txt"
 vagrant halt test3
 
-ZK 4203 only shows in scenarios where the cpu is overloaded, we emulate this by reducing the number of change_cores
+#ZK 4203 only shows in scenarios where the cpu is overloaded, we emulate this by reducing the number of change_cores
 cd auxiliary_scripts/ && ./change_cores.sh 2 && cd ..
 vagrant up test1
 vagrant ssh test1 -c "/vagrant/auxiliary_scripts/change_java.sh 8"
