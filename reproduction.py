@@ -683,7 +683,7 @@ def reproduce_bug(bug_specification: str):
     for buggy_schedule in reversed(buggy_schedules):
         runs_counter += 10
         replay_rate = check_replay_rate_post_phase(buggy_schedule, bug_reproduction)
-        if replay_rate >= 75:
+        if replay_rate >= 60:
             return end_reproduction(
                 replay_rate,
                 runs_counter,
