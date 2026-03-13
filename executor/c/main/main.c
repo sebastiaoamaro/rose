@@ -35,6 +35,7 @@
 #include <fault_schedule.h>
 #include <aux.h>
 #include <sys/wait.h>
+
 void process_counter(const struct event *event,int stateinfo);
 int process_tc(const struct event*);
 void process_fs(const struct event*);
@@ -184,11 +185,11 @@ int main()
 	struct ring_buffer *rb = NULL;
 	rb = ring_buffer__new(bpf_map__fd(aux_bpf->maps.rb), handle_event, NULL, NULL);
 
+
+	start_lazyfs();
 	//If they are containers we start before the workload
 	write_start_event();
 	start_container_nodes_scripts();
-	start_lazyfs();
-	start_pre_workload();
 
 	//Start eBPF FI program
 	choose_leader();
@@ -203,6 +204,8 @@ int main()
 		printf("Error in creating fault injection bpf\n");
 		goto cleanup;
 	}
+
+	start_pre_workload();
 
 	//These are nodes which are not containers thus we know their pid beforehand and we can start them after the setup, catching all events
 	start_nodes_scripts();
@@ -1121,6 +1124,8 @@ void setup_uprobes(){
 				user_function user_function = faults[i].fault_conditions_begin[j].condition.user_function;
 				faults[i].fault_conditions_begin[j].condition.user_function.cond_nr = user_func_cond_nr+STATE_PROPERTIES_COUNT;
 
+				insert_relevant_condition_in_ebpf(i,pid,faults[i].fault_conditions_begin[j].condition.user_function.cond_nr,user_function.call_count);
+
 				if(nodes[traced].container){
 					//Find the directory in hostnamespace
 					char* dir;
@@ -1132,13 +1137,12 @@ void setup_uprobes(){
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
 
-					printf("Added uprobe %s in location %s\n",user_function.symbol,combined_path);
+					printf("ADDED UPROBE:[%s], IN [%s]\n",user_function.symbol,combined_path);
 
 					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset,user_function.absolute_offset);
 				}else{
 					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset,user_function.absolute_offset);
 				}
-				insert_relevant_condition_in_ebpf(i,pid,faults[i].fault_conditions_begin[j].condition.user_function.cond_nr,user_function.call_count);
 				user_func_cond_nr++;
 			}
 		}
@@ -1204,7 +1208,7 @@ void insert_relevant_condition_in_ebpf(int fault_nr,int pid,int cond_nr,int call
 
 	new_information_state->repeat = faults[fault_nr].repeat;
 
-	printf("FAULT %d state info pos[%d] is %d conditions match is [%d] with pid %d \n",fault_nr,cond_nr,new_information_state->relevant_states[fault_nr],faults[fault_nr].initial.conditions_match[fault_nr],pid);
+	printf("FAULT: [%d], STATE_KEY:[%d], VALUE:[%d], COND_MATCH:[%d], PID:[%d] \n",fault_nr,cond_nr,new_information_state->relevant_states[fault_nr],faults[fault_nr].initial.conditions_match[fault_nr],pid);
 	struct info_state *old_information_state = (struct info_state*)malloc(sizeof(struct info_state));
 
 	old_information_state->current_value = 0;
@@ -1802,10 +1806,6 @@ void restart_process(void* args){
         send_signal(node->current_pid,SIGSTOP,node->name);
     	update_node_pid_ebpf(node_to_restart,node->current_pid,node->pid,current_pid_pre_restart);
         send_signal(node->current_pid,SIGCONT,node->name);
-        //reinject_uprobes(node_to_restart);
-        //if (node->container_type == CONTAINER_TYPE_DOCKER){
-		//     send_signal(node->current_pid,SIGCONT,node->name);
-		// }
     }
 	else{
 	    sleep_for_ms(10);

@@ -1,0 +1,94 @@
+add_newline = false
+command_timeout = 1000
+
+# Overall prompt layout
+format = """
+$directory\
+$git_branch$git_status\
+$python\
+$nodejs\
+$golang\
+$rust\
+$cmd_duration\
+$line_break\
+$character"""
+
+palette = "nord"
+
+[palettes.nord]
+nord0  = "#2E3440"
+nord1  = "#3B4252"
+nord2  = "#434C5E"
+nord3  = "#4C566A"
+nord4  = "#D8DEE9"
+nord5  = "#E5E9F0"
+nord6  = "#ECEFF4"
+nord7  = "#8FBCBB"
+nord8  = "#88C0D0"
+nord9  = "#81A1C1"
+nord10 = "#5E81AC"
+nord11 = "#BF616A"
+nord12 = "#D08770"
+nord13 = "#EBCB8B"
+nord14 = "#A3BE8C"
+nord15 = "#B48EAD"
+
+[directory]
+style = "bold nord9"
+read_only_style = "nord11"
+truncation_length = 3
+truncate_to_repo = true
+read_only = " "
+
+[character]
+success_symbol = "[\\$](bold nord14) "
+error_symbol = "[\\$](bold nord11) "
+vimcmd_symbol = "[❮](bold nord8) "
+
+[git_branch]
+symbol = " "
+style = "bold nord15"
+format = "[$symbol$branch]($style) "
+
+[git_status]
+style = "nord13"
+format = "([$all_status$ahead_behind]($style) )"
+stashed = "≡"
+modified = "!"
+staged = "✘"
+untracked = "?"
+renamed = "»"
+deleted = "✖"
+conflicted = "="
+ahead = "⇡"
+behind = "⇣"
+diverged = "⇕"
+
+[python]
+symbol = "🐍 "
+style = "nord8"
+format = "via [$symbol$version]($style) "
+detect_extensions = ["py"]
+detect_files = ["pyproject.toml", "requirements.txt", "Pipfile", "poetry.lock"]
+
+[nodejs]
+symbol = " "
+style = "nord14"
+format = "via [$symbol$version]($style) "
+
+[golang]
+symbol = " "
+style = "nord8"
+format = "via [$symbol$version]($style) "
+
+[rust]
+symbol = " "
+style = "nord12"
+format = "via [$symbol$version]($style) "
+
+[cmd_duration]
+style = "nord3"
+format = "took [$duration]($style) "
+
+[time]
+disabled = true

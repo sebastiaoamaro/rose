@@ -14,6 +14,6 @@ fi
 # Cycle function names and find its offset
 while IFS= read -r function_name; do
     echo "Finding offset of: $function_name"
-    offset=$(sudo ./find_function $1 $function_name)
+    offset=$(sudo /vagrant/profiler/find_function $1 $function_name)
     echo $function_name,$offset >> $3
 done < $2

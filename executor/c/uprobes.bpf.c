@@ -93,8 +93,8 @@ struct {
 } nodes_pid_translator SEC(".maps");
 
 
-
 __u32 hist[MAX_SLOTS] = {};
+
 const volatile int fault_count = 0;
 const volatile int time_only = 0;
 const volatile int cond_pos = 0;
@@ -107,7 +107,7 @@ static void entry(struct pt_regs *ctx)
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
-	bpf_printk("Uprobe HIT for pid %d\n",pid);
+	bpf_printk("UPROBE HIT:[%d], PID:[%d]\n",cond_pos,pid);
 	int result = process_current_state(cond_pos,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 
 }

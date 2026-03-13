@@ -42,6 +42,8 @@ class BugReproduction:
         self.binary: str = ""
         self.functions_file: str = ""
         self.profile: str = ""
+        self.profile_functions: str = ""
+        self.profile_files: str = ""
 
 
 def parse_bug_reproduction(filename: str):
@@ -87,9 +89,12 @@ def parse_bug_reproduction(filename: str):
     if "functions_file" in bug_reproduction_text:
         bug_reproduction.functions_file = bug_reproduction_text["functions_file"]
 
-    # TODO
     if "profile" in bug_reproduction_text:
         bug_reproduction.profile = bug_reproduction_text["profile"]
+    if "profile_functions" in bug_reproduction_text:
+        bug_reproduction.profile_functions = bug_reproduction_text["profile_functions"]
+    if "profile_files" in bug_reproduction_text:
+        bug_reproduction.profile_files = bug_reproduction_text["profile_files"]
 
     return bug_reproduction
 

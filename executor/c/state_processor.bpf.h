@@ -74,17 +74,18 @@ static inline int process_current_state(int state_key,int current_pid,int fault_
 		pid_to_use,
 		state_key
 	};
-
 	struct info_state *current_state;
 
 	//Checks the schedule info for a specific state_key (e.g. write invocations), and checks if we a condition for a fault triggered
 	current_state = bpf_map_lookup_elem(relevant_state_info,&information_pid);
 	if (current_state){
+	    bpf_printk("THIS CHANGE MIGHT BE RELEVANT \n");
 		current_state->current_value++;
 		int value = current_state->current_value;
 		if(current_state->relevant_states){
 			for (int i=0;i<fault_count;i++){
 				if (current_state->relevant_states[i]){
+				    bpf_printk("FOUND RELEVANT STATE CHANGE \n");
 					u64 relevant_value = current_state->relevant_states[i];
 					if ((value % relevant_value == 0) && relevant_value != 0){
 					   //bpf_printk("COND[%d]=TRUE, UPDATING STATE \n",state_key);

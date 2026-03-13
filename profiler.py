@@ -1,34 +1,14 @@
-import math
 import os
-import random
-import shutil
-import signal
 import subprocess
 import sys
 import time
-from copy import deepcopy
 from pathlib import Path
 
-import yaml
-from analyzer.binary_parser import calculate_offsets
-from analyzer.trace_analysis import (
-    History,
-    choose_faults,
-    compare_faults,
-    write_new_schedule,
-)
 from reproduction import (
     BugReproduction,
-    collect_history,
     parse_bug_reproduction,
     run_cleanup,
     run_reproduction,
-)
-from schedule_parser.conditions import (
-    file_syscall_condition,
-    syscall_condition,
-    time_cond,
-    user_function_condition,
 )
 
 
@@ -60,7 +40,7 @@ def delete_function_from_file(filename: str, target: str) -> None:
 
 def get_symbols(relevant_files, binary, output_file):
     command = [
-        "profiler/get_symbols_by_keyword.sh",
+        "/vagrant/profiler/get_symbols_by_keyword.sh",
         relevant_files,
         binary,
         output_file,
@@ -87,7 +67,7 @@ def get_symbols(relevant_files, binary, output_file):
                 if process.returncode != 0:
                     raise subprocess.CalledProcessError(process.returncode, command)
     except subprocess.CalledProcessError as e:
-        print(f"\nrun_reproduction finished with: exit code {e.returncode}")
+        print(f"\nget_symbols finished with: exit code {e.returncode}")
     except Exception as e:
         print(f"\nUnexpected error: {str(e)}")
 
@@ -149,11 +129,11 @@ def main():
     except PermissionError:
         print("Failed to remove files no perms")
 
-    if bug_reproduction.binary != "" and bug_reproduction.functions_file == "":
+    if bug_reproduction.binary != "":
         get_symbols(
-            bug_reproduction.profile + "relevant_files.txt",
+            bug_reproduction.profile_files,
             bug_reproduction.binary,
-            bug_reproduction.profile + "functions.txt",
+            bug_reproduction.profile_functions,
         )
 
         bug_reproduction = parse_bug_reproduction(filename)

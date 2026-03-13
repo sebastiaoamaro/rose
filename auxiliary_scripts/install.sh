@@ -32,11 +32,6 @@ apt_dist_upgrade() {
 #### AFTER RUNNING THIS SCRIPT, PLEASE REBOOT YOUR MACHINE ####
 ###############################################################
 
-# --- Shell environment quality-of-life ---
-log "Installing tmux config and WORKDIR default..."
-cp /vagrant/auxiliary_scripts/tmux.conf "$HOME/.tmux.conf"
-cp /vagrant/auxiliary_scripts/tmux.conf /home/vagrant/.tmux.conf
-
 if ! grep -q 'export WORKDIR="/vagrant"' "$HOME/.bashrc"; then
   echo -e '\n# Set default working directory\nexport WORKDIR="/vagrant" && [ -d "$WORKDIR" ] && cd "$WORKDIR" || echo "Directory $WORKDIR not found"' >> "$HOME/.bashrc"
 fi

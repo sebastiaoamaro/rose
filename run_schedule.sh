@@ -1,17 +1,12 @@
 #!/bin/bash
+
+# --- Build Kernel Module ---
+cd /vagrant/executor/kernelmodule/
+make
+sudo rmmod rose
+sudo insmod /vagrant/executor/kernelmodule/rose.ko
 #Move to rose directory
 cd /vagrant/
-#Build tracer
-cd tracer
-cargo build --release
-cd ..
-
-cd executor/kernelmodule/
-make
-cd ../../
-
-sudo rmmod rose
-sudo insmod executor/kernelmodule/rose.ko
 
 XDP_BIN=/vagrant/tracer/bin/xdp
 
