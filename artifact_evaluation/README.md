@@ -1,4 +1,4 @@
-# rose Artifact Evaluation
+# Rose Artifact Evaluation
 
 This document describes the content of this repo, which contains all materials need to build and execute all experiments in the paper "Rose: Reproducing External-Fault-Induced Failures in Distributed Systems with Lightweight Instrumentation", accepted at Eurosys 2026.
 # Overview

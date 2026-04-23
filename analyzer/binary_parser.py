@@ -1,8 +1,5 @@
 import re
 import subprocess
-import sys
-
-import yaml
 
 
 def hex_subtract(hex1, hex2):
@@ -102,6 +99,7 @@ def run_objdump(binary_path):
 
 
 def extract_instructions(disassembly, function_name):
+    """Extract instructions for a specific function from the disassembly output."""
     start_pattern = re.compile(rf"^\s*[0-9a-fA-F]+ <{re.escape(function_name)}>:")
 
     # Split disassembly into lines
@@ -129,6 +127,7 @@ def extract_instructions(disassembly, function_name):
 
 
 def calculate_offsets(binary_path, function_name):
+    """Calculate the offsets of instructions within a function by extracting their addresses and computing the difference from the base address."""
     # Open the binary file
     disassembly = run_objdump(binary_path)
     instructions = extract_instructions(disassembly, function_name)
@@ -149,7 +148,7 @@ def calculate_offsets(binary_path, function_name):
 
 
 def calculate_call_offsets(binary_path, function_name):
-    # Open the binary file
+    """Calculate the offsets of call instructions within a function by extracting their addresses and computing the difference from the base address."""
     disassembly = run_objdump(binary_path)
     instructions = extract_instructions(disassembly, function_name)
 
@@ -172,7 +171,7 @@ def calculate_call_offsets(binary_path, function_name):
 
 
 def calculate_plt_offsets(binary_path, function_name):
-    # Open the binary file
+    """Calculate the offsets of plt instructions within a function by extracting their addresses and computing the difference from the base address."""
     disassembly = run_objdump(binary_path)
     instructions = extract_instructions(disassembly, function_name)
 

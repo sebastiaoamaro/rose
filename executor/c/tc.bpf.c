@@ -183,7 +183,7 @@ int monitor(struct __sk_buff *ctx)
 						if(network_direction == 1){
 							if(ips[i] == pair.src_addr){
 								//bpf_printk("e->src_addr is %d and e->dst_addr is %d ip is %d and network dir is %d \n",pair.src_addr,pair.dst_addr,ips[i],network_direction);
-								//bpf_printk("Blocked packet by src \n");
+								bpf_printk("Blocked packet by src \n");
 								return TC_ACT_SHOT;
 							}
 						}
@@ -191,7 +191,7 @@ int monitor(struct __sk_buff *ctx)
 						if(network_direction == 2){
 							if(ips[i] == pair.dst_addr){
 								//bpf_printk("e->src_addr is %d and e->dst_addr is %d ip is %d and network dir is %d \n",pair.src_addr,pair.dst_addr,ips[i],network_direction);
-								//bpf_printk("Blocked packet by dest\n");
+								bpf_printk("Blocked packet by dest\n");
 								return TC_ACT_SHOT;
 							}
 						}

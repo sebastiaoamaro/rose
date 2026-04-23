@@ -26,3 +26,6 @@
 [submodule "Redpanda"]
 	path = schedules/reproduced_bugs/redpanda/lxc/redpanda_jepsen
 	url = https://github.com/sebastiaoamaro/redpanda
+[submodule "YCSB"]
+	path = artifact_evaluation/tracing_overhead/throughput/ycsb-0.17.0
+	url = https://github.com/brianfrankcooper/YCSB

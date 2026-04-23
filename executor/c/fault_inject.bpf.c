@@ -1072,14 +1072,14 @@ int handle_fork(struct trace_event_raw_sched_process_fork *ctx)
             int *start_pid = bpf_map_lookup_elem(&nodes_pid_translator,&original_pid);
 
             if (start_pid){
-                //bpf_printk("EXECUTOR FORK: ADDED PID:%d, PARENT:%d \n",child_pid,start_pid);
+                bpf_printk("EXECUTOR FORK: ADDED PID:%d, PARENT:%d \n",child_pid,start_pid);
                 bpf_map_update_elem(&nodes_pid_translator, &child_pid, &start_pid, BPF_ANY);
             }
             else{
                 //Temporary fix for all my tests that used exec -a
                 if (original_pid != 0){
                     //bpf_printk("Translated pid, current_pid is %d, old_pid is %d \n",pid,original_pid);
-                    //bpf_printk("EXECUTOR FORK: ADDED PID:%d, PARENT:%d \n",child_pid,original_pid);
+                    bpf_printk("EXECUTOR FORK: ADDED PID:%d, PARENT:%d \n",child_pid,original_pid);
                     bpf_map_update_elem(&nodes_pid_translator, &child_pid, &original_pid, BPF_ANY);
                 }
             }

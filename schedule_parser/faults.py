@@ -22,7 +22,7 @@ class Fault:
     traced_nr = 0
     repeatable = 0
     duration = 0
-    occurrences = 0
+    occurrences = 1
     begin_conditions = []
     end_conditions = []
     trigger_statement_begin = ""
@@ -39,6 +39,8 @@ class Fault:
         fault["traced"] = self.traced
         fault["duration"] = self.duration
         fault["begin_conditions"] = []
+        if self.occurrences > 0:
+            fault["occurrences"] = self.occurrences
         cond_count = 0
         for condition in self.begin_conditions:
             condition_nr = "condition_nr" + str(cond_count)
@@ -568,32 +570,14 @@ def get_fault_type_nr(type, fault_specifics):
                         return "FUTEX_FAULT"
                     case "connect":
                         return "CONNECT_FAULT"
+                    case "fsync":
+                        return "FSYNC"
                     case _:
                         return "TEMP_EMPTY"
             if fault_specifics.success == 1:
                 match fault_specifics.syscall_name:
                     case "fdatasync":
                         return "FDATASYNC_RET_FAULT"
-        # DEPRECATED
-        case "file_system_operation":
-            if fault_specifics.success == 0:
-                match fault_specifics.syscall_name:
-                    case "write":
-                        return 8
-                    case "read":
-                        return 9
-                    case "mkdir":
-                        return 23
-                    case "newfstatat":
-                        return 24
-                    case "openat":
-                        return "OPENAT_FILE"
-                    case "open":
-                        return 20
-                    case "fdatasync":
-                        return "FDATASYNCFILE_FAULT"
-                    case "fsync":
-                        return "FSYNC"
         case "lazyfs":
             if fault_specifics.operation == "torn_seq":
                 return "TORN_SEQ"

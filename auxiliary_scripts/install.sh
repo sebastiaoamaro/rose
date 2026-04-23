@@ -49,7 +49,7 @@ log "Installing base dependencies..."
 apt_install \
   clang libelf1 libelf-dev zlib1g-dev libc6-dev-i386 autoconf make \
   python3 python3-pip libssl-dev\
-  pcp gnuplot gcc pkg-config gcc-14 cmake llvm jq \
+  pcp gnuplot gcc pkg-config gcc-14 g++-14 cmake llvm jq \
   linux-headers-$(uname -r) >/dev/null
 
 #log "dist-upgrade..."
@@ -169,3 +169,15 @@ sudo groupadd docker 2>/dev/null || true
 sudo usermod -aG docker "$USER"
 
 log "Done. Reboot recommended."
+
+# --- Create test directories ---
+mkdir -p /vagrant/tests/bug_detection/hbase
+mkdir -p /vagrant/tests/bug_detection/hdfs
+mkdir -p /vagrant/tests/bug_detection/kafka
+mkdir -p /vagrant/tests/bug_detection/mongo
+mkdir -p /vagrant/tests/bug_detection/redis
+mkdir -p /vagrant/tests/bug_detection/redisraft
+mkdir -p /vagrant/tests/bug_detection/redpanda
+mkdir -p /vagrant/tests/bug_detection/tendermint
+mkdir -p /vagrant/tests/bug_detection/zookeeper
+mkdir -p /vagrant/tests/tracing/redis

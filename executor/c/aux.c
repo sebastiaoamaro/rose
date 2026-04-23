@@ -775,7 +775,7 @@ cleanup:
 }
 
 char **build_nsenter_args(const char *pid_str,int container_type) {
-    size_t size = 64;
+    size_t size = 16;
     char **nsenter_args = malloc(size * sizeof(char *));
     if (nsenter_args == NULL) {
         perror("malloc failed");
@@ -800,7 +800,7 @@ char **build_nsenter_args(const char *pid_str,int container_type) {
         nsenter_args[2] = (char *)pid_str;
         nsenter_args[3] = "--user";
         nsenter_args[4] = "--mount";
-        nsenter_args[5] = "--ipc";
+        nsenter_args[5] = "--ipc ";
         nsenter_args[6] = "--net";
         nsenter_args[7] = "--pid";
         nsenter_args[8] = "--uts";

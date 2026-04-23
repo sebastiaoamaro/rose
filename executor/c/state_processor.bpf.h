@@ -256,7 +256,7 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
                                 __u64 pid_tgid = bpf_get_current_pid_tgid();
                                 __u32 pid = pid_tgid >> 32;
                                 __u32 tid = (__u32)pid_tgid;
-								bpf_printk("PID: %d, TID: %d, FAULT: %d, COND: %d, CURRENT_VALUE: %d, NEEDED: %d\n",pid,tid,*pos,state_condition,condition_value,state_condition_value);
+								//bpf_printk("PID: %d, TID: %d, FAULT: %d, COND: %d, CURRENT_VALUE: %d, NEEDED: %d\n",pid,tid,*pos,state_condition,condition_value,state_condition_value);
 								__sync_fetch_and_add(&(fault->initial.conditions_match[state_condition]),1);
 								run+=1;
 								fault->run = run;
