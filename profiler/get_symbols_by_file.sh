@@ -44,7 +44,7 @@ done < "$relevant_files"
 
 grep -v "ERROR" $output_file > "temp_functions.txt"
 
-python3 remove_duplicates.py "temp_functions.txt" $output_file
+python3 /vagrant/profiler/remove_duplicates.py "temp_functions.txt" $output_file
 
 rm "temp_functions.txt"
 

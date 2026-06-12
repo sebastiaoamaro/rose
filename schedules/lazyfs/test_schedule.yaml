@@ -1,0 +1,75 @@
+execution_plan:
+  maximum_time: 60
+  setup:
+    script: /toexfi/bug_exploration/redis/setup/start_cluster.sh
+    duration: 10
+  workload:
+    script: /toexfi/bug_exploration/redis/setup/start_workload_standard.sh
+  cleanup:
+    script: /toexfi/bug_exploration/redis/setup/cleanup.sh
+  lazyfs:
+    enabled: true
+    lazyfs_script: /vagrant/lazyfs/lazyfs/scripts/mount-lazyfs.sh
+    root_dir: /lazyfs.root
+    mount_dir: /lazyfs.mnt
+    pipe_location: /faults.fifo
+
+  tracer:
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: sys_all_trace,container_controlled
+nodes:
+  node1:
+    container: true
+    script: /scripts/start_redis.sh
+    binary: /usr/local/bin/redis-server
+    ip: 172.38.0.11
+  node2:
+    container: true
+    script: /scripts/start_redis.sh
+    binary: /usr/local/bin/redis-server
+    ip: 172.38.0.12
+  node3:
+    container: true
+    script: /scripts/start_redis.sh
+    binary: /usr/local/bin/redis-server
+    ip: 172.38.0.13
+
+faults:
+  torn_seq:
+    type: lazyfs
+    target: node1
+    details:
+      operation: torn_seq
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 10000
+  torn_op:
+    type: lazyfs
+    target: node1
+    details:
+      operation: torn_op
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 11000
+  clear_cache:
+    type: lazyfs
+    target: node1
+    details:
+      operation: clear_cache
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 12000
+  crash_fs:
+    type: lazyfs
+    target: node1
+    details:
+      operation: crash_fs
+    begin_conditions:
+      - condition1:
+          type: time
+          time: 13000

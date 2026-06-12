@@ -1,6 +1,6 @@
 #!/bin/bash
 # This script is used to convert a file of function names to their offset
-gcc -o find_function find_function_offset.c -lelf
+gcc -o /vagrant/profiler/find_function /vagrant/profiler/find_function_offset.c -lelf
 if [ $# -ne 3 ]; then
     echo "Usage: $0 <binary_file> <function_file> <output_file>"
     exit 1

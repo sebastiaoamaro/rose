@@ -1,83 +1,68 @@
 #!/bin/bash
+ROSE_DIR=/vagrant
+EXECUTOR_DIR=$ROSE_DIR/executor/c
+KERNEL_DIR=$ROSE_DIR/executor/kernelmodule
+TMP_FILES=(/tmp/containerpid_read /tmp/containerpid_write /tmp/history.txt /tmp/pid_tree.txt)
 
-# --- Build Kernel Module ---
-cd /vagrant/executor/kernelmodule/
-make
-sudo rmmod rose
-sudo insmod /vagrant/executor/kernelmodule/rose.ko
-#Move to rose directory
-cd /vagrant/
+silent() { "$@" > /dev/null 2>&1; }
 
-XDP_BIN=/vagrant/tracer/bin/xdp
+build_module() {
+    (cd "$KERNEL_DIR" && silent make)
+    silent sudo rmmod rose || true
+    silent sudo insmod "$KERNEL_DIR/rose.ko"
+}
 
-#Runs a schedule one time
-if [ "$#" -eq 1 ]; then
-    if [ -n "$1" ]; then
-        echo "Arguments provided: $1"
-        schedule=$1
-        sudo rm /tmp/containerpid_read
-        sudo rm /tmp/containerpid_write
-        sudo rm /tmp/history.txt
-        sudo rm /tmp/pid_tree.txt
-        python3 parser.py $schedule
-        mv fault_schedule.c executor/c/
-        cd executor/c/
-        make -j$(nproc)
-        sudo -E ./main/main
-    fi
+clean_tmp() {
+    for f in "${TMP_FILES[@]}"; do silent sudo rm -f "$f"; done
+}
+
+build_schedule() {
+    local schedule=$1
+    silent python3 "$ROSE_DIR/parser.py" "$schedule"
+    silent mv fault_schedule.c "$EXECUTOR_DIR/"
+    silent make -j"$(nproc)" -C "$EXECUTOR_DIR"
+}
+
+run_main() {
+    sudo -E "$EXECUTOR_DIR/main/main"
+}
+
+# --- Build kernel module once ---
+build_module
+
+cd "$ROSE_DIR"
+
+# --- Single run ---
+if [[ $# -eq 1 ]]; then
+    clean_tmp
+    build_schedule "$1"
+    run_main
 fi
 
-if [ "$#" -gt 4 ]; then
-    mode=$1
-    #Runs all schedules in folder
-    if [ "$1" = "folder" ]; then
-        dir=$2
-        output_folder=$3
-        oracle=$4
-        cleanup=$5
-        echo "Arguments provided: $1,$2,$3,$4"
-        for file in "$dir"/*; do
-            if [ -f "$file" ]; then
-                schedule=$file
-                sudo rm /tmp/containerpid_read
-                sudo rm /tmp/containerpid_write
-                sudo rm /tmp/history.txt
-                sudo rm /tmp/pid_tree.txt
-                python3 parser.py $schedule
-                mv fault_schedule.c executor/c/
-                cd executor/c/
-                make -j$(nproc)
-                sudo -E ./main/main
-                cd ../../
-                filename=$(basename $file)
-                sudo mv /tmp/history.txt $output_folder/$filename.txt
-                sh $oracle $filename $output_folder
-                sh $cleanup
-            fi
-        done
-    fi
-    #Runs schedule a set amount of times
-    if [ "$1" = "runs" ]; then
-        runs=$2
-        schedule=$3
-        output_folder=$4
-        oracle=$5
-        cleanup=$6
-        echo "Arguments provided: $1,$2,$3,$4,$5"
-        for ((i = 1; i <= $runs; i++)); do
-            sudo rm /tmp/containerpid_read
-            sudo rm /tmp/containerpid_write
-            sudo rm /tmp/history.txt
-            sudo rm /tmp/pid_tree.txt
-            python3 parser.py $schedule
-            mv faultschedule.c executor/c/
-            cd executor/c/
-            make -j$(nproc)
-            sudo -E ./main/main
-            cd ../../
-            sudo mv /tmp/history.txt $output_folder/$i.txt
-            sh $oracle $i $output_folder
-            sh $cleanup
-        done
-    fi
+# --- Folder mode: run all schedules in a directory ---
+if [[ $# -ge 5 && $1 == folder ]]; then
+    dir=$2 output_folder=$3 oracle=$4 cleanup=$5
+    for file in "$dir"/*; do
+        [[ -f $file ]] || continue
+        clean_tmp
+        build_schedule "$file"
+        run_main
+        filename=$(basename "$file")
+        silent sudo mv /tmp/history.txt "$output_folder/$filename.txt"
+        silent sh "$oracle" "$filename" "$output_folder"
+        silent sh "$cleanup"
+    done
+fi
+
+# --- Runs mode: repeat a single schedule N times ---
+if [[ $# -ge 5 && $1 == runs ]]; then
+    runs=$2 schedule=$3 output_folder=$4 oracle=$5 cleanup=${6:-}
+    for ((i = 1; i <= runs; i++)); do
+        clean_tmp
+        build_schedule "$schedule"
+        run_main
+        silent sudo mv /tmp/history.txt "$output_folder/$i.txt"
+        silent sh "$oracle" "$i" "$output_folder"
+        [[ -n $cleanup ]] && silent sh "$cleanup"
+    done
 fi

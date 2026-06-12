@@ -1,6 +1,6 @@
-# rose
+# Rose
 
-This document describes the content of this repo, the source code for rose, as described in "rose: Reproducing External-Fault-Induced Failures in Distributed Systems with Lightweight Instrumentation", accepted to EuroSys 2026.
+This document describes the content of this repo, the source code for Rose, as described in "rose: Reproducing External-Fault-Induced Failures in Distributed Systems with Lightweight Instrumentation", accepted to EuroSys 2026.
 
 # Overview
 
@@ -15,7 +15,7 @@ rose
 └─── analyzer               - Implements the Analyzer componenet as detailed in the paper (Section 4.4 and 5.3)
 └─── executor               - Implements the Executor componenet as detailed in the paper (Section 4.5 and 5.4)
 └─── schedule_parser        - Implementation of the parsing
-└─── bug_reproductions      - Bugs reproduced by rose
+└─── bug_reproductions      - Bugs reproduced by Rose
 └─── schedules              - Schedules which reproduce the bugs
 └─── artifact_evaluation    - The artifact evaluation for EuroSys 26'
 └─── auxiliary_scripts      - Auxiliary scripts to set up an environemnt where rose can run

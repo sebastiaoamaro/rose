@@ -571,7 +571,9 @@ def get_fault_type_nr(type, fault_specifics):
                     case "connect":
                         return "CONNECT_FAULT"
                     case "fsync":
-                        return "FSYNC"
+                        return "FSYNC_FAULT"
+                    case "stat":
+                        return "STAT_FAULT"
                     case _:
                         return "TEMP_EMPTY"
             if fault_specifics.success == 1:
@@ -604,6 +606,8 @@ def check_if_syscall_supported(syscall_name):
             return "NEWFSTATAT_FAULT"
         case "openat":
             return "OPENAT_FAULT"
+        case "fsync":
+            return "FSYNC_FAULT"
         case "fdatasync":
             return "FDATASYNC_FAULT"
         case "pwrite64":
@@ -616,5 +620,7 @@ def check_if_syscall_supported(syscall_name):
             return "FUTEX_FAULT"
         case "connect":
             return "CONNECT_FAULT"
+        case "stat":
+            return "STAT_FAULT"
         case _:
             return "TEMP_EMPTY"

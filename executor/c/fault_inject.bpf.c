@@ -582,6 +582,23 @@ int BPF_KPROBE(__x64_sys_mkdir)
 	return 0;
 }
 
+SEC("kprobe/__x64_sys_stat")
+int BPF_KPROBE(__x64_sys_stat)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(STAT_STATE,pid,fault_count,time_only,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
+
+	inject_override(origin_pid,STAT_FAULT,(struct pt_regs *) ctx,0,&faults_specification);
+
+	return 0;
+}
+
 SEC("ksyscall/newfstatat")
 int BPF_KPROBE(__x64_sys_newfstatat,struct pt_regs *regs)
 
@@ -728,7 +745,7 @@ int BPF_KPROBE(__x64_sys_fsync,struct pt_regs *regs)
 		fd,
 		FSYNC_STATE,
 		FSYNCFILE_STATE,
-		FSYNC,
+		FSYNC_FAULT,
 		FSYNC_FILE,
 		fault_count,
 		time_only
@@ -1072,14 +1089,14 @@ int handle_fork(struct trace_event_raw_sched_process_fork *ctx)
             int *start_pid = bpf_map_lookup_elem(&nodes_pid_translator,&original_pid);
 
             if (start_pid){
-                bpf_printk("EXECUTOR FORK: ADDED PID:%d, PARENT:%d \n",child_pid,start_pid);
+                //bpf_printk("EXECUTOR FORK: ADDED PID:%d, PARENT:%d \n",child_pid,start_pid);
                 bpf_map_update_elem(&nodes_pid_translator, &child_pid, &start_pid, BPF_ANY);
             }
             else{
                 //Temporary fix for all my tests that used exec -a
                 if (original_pid != 0){
                     //bpf_printk("Translated pid, current_pid is %d, old_pid is %d \n",pid,original_pid);
-                    bpf_printk("EXECUTOR FORK: ADDED PID:%d, PARENT:%d \n",child_pid,original_pid);
+                    //bpf_printk("EXECUTOR FORK: ADDED PID:%d, PARENT:%d \n",child_pid,original_pid);
                     bpf_map_update_elem(&nodes_pid_translator, &child_pid, &original_pid, BPF_ANY);
                 }
             }

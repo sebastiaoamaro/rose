@@ -14,6 +14,8 @@
 #include <errno.h>
 #include <stdlib.h>
 #include "aux.h"
+#include <sys/wait.h>
+
 
 static int ready = 0;
 void sig_handler(int signum){

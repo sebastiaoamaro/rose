@@ -43,8 +43,6 @@ for i in $(seq 1 $n); do echo -e "n${i}.lxd" >>/root/nodes; done
 
 echo "Created /root/nodes"
 
-#./get-lxcs-info.sh info.txt
-
 # Push the configuration file to each container and run redpanda
 for i in $(seq 1 $n); do
     lxc exec n${i} -n -- rm /var/lib/redpanda/data/pid.lock

@@ -50,7 +50,7 @@ FILE* start_target_process_in_container(int node_number,int *pid);
 void insert_relevant_condition_in_ebpf(int fault_nr,int pid,int cond_nr,int call_count);
 void count_time();
 void get_fd_of_maps (struct aux_bpf *bpf);
-static void handle_event(void *ctx,void *data,size_t data_sz);
+static int handle_event(void *ctx,void *data,long unsigned int data_sz);
 void run_setup();
 void collect_container_pids();
 void print_output(void* args);
@@ -376,8 +376,9 @@ int main()
     }
 
 	if(plan->lazyfs.script){
+	    printf("KILLING LAZYFS(PID:%d)\n",plan->setup.pid);
 	    kill(plan->lazyfs.pid,SIGTERM);
-		kill_child_processes(plan->lazyfs.pid);
+		//kill_child_processes(plan->lazyfs.pid);
 	}
 	printf("FINISHED CLEANUP\n");
 	return 0;
@@ -550,7 +551,7 @@ void run_setup(){
 
 	if(strlen(plan->lazyfs.script)){
 
-		char *lazyfs_args_script[8];
+		char *lazyfs_args_script[9];
 
         lazyfs_args_script[0] = plan->lazyfs.script;
         lazyfs_args_script[1] = "-c";
@@ -559,7 +560,8 @@ void run_setup(){
         lazyfs_args_script[4] = plan->lazyfs.mount_dir;
         lazyfs_args_script[5] = "-r";
         lazyfs_args_script[6] = plan->lazyfs.root_dir;
-        lazyfs_args_script[7] = NULL;
+        lazyfs_args_script[7] = "-f";
+        lazyfs_args_script[8] = NULL;
 
     	print_block("Creating LazyFS process");
     	FILE *fp = custom_popen(plan->lazyfs.script,lazyfs_args_script,env_script,'r',&(plan->lazyfs.pid),0);
@@ -589,7 +591,7 @@ void start_workload(){
 			return;
 		if(plan->workload.pid == 0)
 			return;
-		printf("STARTED WORKLOAD, PID:%d \n",plan->workload.pid);
+		printf("STARTED WORKLOAD:%s, PID:%d \n",plan->workload.script,plan->workload.pid);
 		kill(plan->workload.pid,SIGUSR1);
 }
 
@@ -1556,7 +1558,7 @@ void count_time(){
 }
 
 //Handles events received from ringbuffer (eBPF)
-void handle_event(void *ctx,void *data,size_t data_sz)
+int handle_event(void *ctx,void *data,long unsigned int data_sz)
 {
 	(void)ctx;
 	(void)data_sz;
@@ -1572,7 +1574,7 @@ void handle_event(void *ctx,void *data,size_t data_sz)
 			struct fault *fault = &faults[fault_nr];
 
 			if (fault->target == -2 && fault->done == QUORUM){
-				return;
+				return 1;
 			}
 
 			if (fault->target == -1){
@@ -1600,7 +1602,7 @@ void handle_event(void *ctx,void *data,size_t data_sz)
 			struct fault *fault = &faults[fault_nr];
 
 			if (fault->target == -2 && fault->done == QUORUM){
-				return;
+				return 1;
 			}
 
 			if (fault->target == -1){
@@ -1671,8 +1673,8 @@ void handle_event(void *ctx,void *data,size_t data_sz)
                 perror("Error opening file");
                 break;
             }
-            const char *msg = "lazyfs::clear-cache";
-            size_t msg_len = sizeof("lazyfs::clear-cache");
+            const char *msg = "lazyfs::torn-op";
+            size_t msg_len = sizeof("lazyfs::torn-op");
             ssize_t _written = write(fileno(file), msg, msg_len);
             if (_written == -1) {
                 perror("write failed");
@@ -1695,8 +1697,8 @@ void handle_event(void *ctx,void *data,size_t data_sz)
                 perror("Error opening file");
                 break;
             }
-            const char *msg = "lazyfs::clear-cache";
-            size_t msg_len = sizeof("lazyfs::clear-cache");
+            const char *msg = "lazyfs::torn-seq";
+            size_t msg_len = sizeof("lazyfs::torn-seq");
             ssize_t _written = write(fileno(file), msg, msg_len);
             if (_written == -1) {
                 perror("write failed");
@@ -1720,7 +1722,7 @@ void handle_event(void *ctx,void *data,size_t data_sz)
                 break;
             }
             const char *msg = "lazyfs::crash";
-            size_t msg_len = sizeof("lazyfs::clear-cache");
+            size_t msg_len = sizeof("lazyfs::crash");
             ssize_t _written = write(fileno(file), msg, msg_len);
             if (_written == -1) {
                 perror("write failed");
@@ -1738,6 +1740,7 @@ void handle_event(void *ctx,void *data,size_t data_sz)
 	if(faults[fault_nr].exit){
 		kill(getpid(),SIGINT);
 	}
+	return 1;
 }
 
 void choose_leader(){
@@ -1946,7 +1949,7 @@ int get_node_nr_from_pid(int pid){
 void print_output(void* args){
 	char inLine[1024];
 	FILE *fp = ((struct process_args*)args)->fp;
-	int pid = ((struct process_args*)args)->pid;
+	int pid = *(((struct process_args*)args)->pid);
     while (fgets(inLine, sizeof(inLine), fp) != NULL)
     {
 			printf("%s", inLine);
