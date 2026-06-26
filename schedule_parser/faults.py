@@ -484,7 +484,7 @@ def build_fault_details(
             lazyfs_fault = lazyfs_fault.replace("#fault_type_nr", str(fault_type_nr))
             lazyfs_fault = lazyfs_fault.replace("#nr", str(fault_nr))
             return lazyfs_fault
-        # DEPRECATE
+        # DEPRECATED
         case "file_system_operation":
             file_sys_op = """    file_system_operation file_syscall#nr;\n"""
             file_sys_op += """    file_syscall#nr.syscall = #fault_type_nr;\n"""
@@ -574,6 +574,8 @@ def get_fault_type_nr(type, fault_specifics):
                         return "FSYNC_FAULT"
                     case "stat":
                         return "STAT_FAULT"
+                    case "unlink":
+                        return "UNLINK_FAULT"
                     case _:
                         return "TEMP_EMPTY"
             if fault_specifics.success == 1:
@@ -622,5 +624,9 @@ def check_if_syscall_supported(syscall_name):
             return "CONNECT_FAULT"
         case "stat":
             return "STAT_FAULT"
+        case "lseek":
+            return "LSEEK_FAULT"
+        case "unlink":
+            return "UNLINK_FAULT"
         case _:
             return "TEMP_EMPTY"

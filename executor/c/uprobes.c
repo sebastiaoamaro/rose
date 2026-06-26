@@ -49,85 +49,6 @@ static struct prog_env {
 	.iterations = 99999999,
 };
 
-
-
-static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
-{
-	if (level == LIBBPF_DEBUG && !env.verbose)
-		return 0;
-	return vfprintf(stderr, format, args);
-}
-
-static const char *unit_str(void)
-{
-	switch (env.units) {
-	case NSEC:
-		return "nsec";
-	case USEC:
-		return "usec";
-	case MSEC:
-		return "msec";
-	};
-
-	return "bad units";
-}
-
-// static bool try_fentry(struct uprobes_bpf *obj)
-// {
-// 	long err;
-
-// 	if (env.kprobes || !env.is_kernel_func ||
-// 	    !fentry_can_attach(env.funcname, NULL)) {
-// 		goto out_no_fentry;
-// 	}
-
-// 	err = bpf_program__set_attach_target(obj->progs.dummy_fentry, 0,
-// 					     env.funcname);
-// 	if (err) {
-// 		warn("failed to set attach fentry: %s\n", strerror(-err));
-// 		goto out_no_fentry;
-// 	}
-
-// 	err = bpf_program__set_attach_target(obj->progs.dummy_fexit, 0,
-// 					     env.funcname);
-// 	if (err) {
-// 		warn("failed to set attach fexit: %s\n", strerror(-err));
-// 		goto out_no_fentry;
-// 	}
-
-// 	bpf_program__set_autoload(obj->progs.dummy_kprobe, false);
-// 	bpf_program__set_autoload(obj->progs.dummy_kretprobe, false);
-
-// 	return true;
-
-// out_no_fentry:
-// 	bpf_program__set_autoload(obj->progs.dummy_fentry, false);
-// 	bpf_program__set_autoload(obj->progs.dummy_fexit, false);
-
-// 	return false;
-// }
-
-// static int attach_kprobes(struct uprobes_bpf *obj)
-// {
-// 	obj->links.dummy_kprobe =
-// 		bpf_program__attach_kprobe(obj->progs.dummy_kprobe, false,
-// 					   env.funcname);
-// 	if (!obj->links.dummy_kprobe) {
-// 		warn("failed to attach kprobe: %d\n", -errno);
-// 		return -1;
-// 	}
-
-// 	obj->links.dummy_kretprobe =
-// 		bpf_program__attach_kprobe(obj->progs.dummy_kretprobe, true,
-// 					   env.funcname);
-// 	if (!obj->links.dummy_kretprobe) {
-// 		warn("failed to attach kretprobe: %d\n", -errno);
-// 		return -1;
-// 	}
-
-// 	return 0;
-// }
-
 static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *function,int offset, int absolute_offset)
 {
 	char bin_path[PATH_MAX];
@@ -140,7 +61,34 @@ static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *f
 		goto out_binary;
 
 	if (absolute_offset){
-	    func_off = 0;
+		/* vaddr->file-offset fix: bpf_program__attach_uprobe needs a file offset,
+		 * but `offset` is a virtual address from DWARF. Convert via PT_LOAD.
+*          This is relevant for non-pie binaries, there might be cases where we can not rebuild. */
+		int efd = -1;
+		Elf *e = open_elf(bin_path, &efd);
+		func_off = -1;
+		if (e) {
+			size_t nhdrs;
+			GElf_Phdr phdr;
+			if (elf_getphdrnum(e, &nhdrs) == 0) {
+				for (int k = 0; k < (int)nhdrs; k++) {
+					if (!gelf_getphdr(e, k, &phdr)) continue;
+					if (phdr.p_type != PT_LOAD || !(phdr.p_flags & PF_X)) continue;
+					if (phdr.p_vaddr <= (GElf_Addr)offset &&
+					    (GElf_Addr)offset < phdr.p_vaddr + phdr.p_memsz) {
+						func_off = offset - phdr.p_vaddr + phdr.p_offset;
+						break;
+					}
+				}
+			}
+			close_elf(e, efd);
+		}
+		if (func_off < 0) {
+			warn("vaddr 0x%x not found in executable PT_LOAD of %s\n", offset, bin_path);
+			goto out_binary;
+		}
+		offset = 0;
+		/* end fix */
 	}else{
     	func_off = get_elf_func_offset(bin_path, function);
     	if (func_off < 0) {
@@ -150,7 +98,6 @@ static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *f
 	}
 
 	obj->links.dummy_kprobe = bpf_program__attach_uprobe(obj->progs.dummy_kprobe, false, env.pid, bin_path, func_off+offset);
-	//printf("Injected probe for function %s at offset %d\n",function,func_off+offset);
 	if (!obj->links.dummy_kprobe) {
 		err = -errno;
 		printf("Failed to attach uprobe: %ld\n", err);
@@ -170,13 +117,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
 
 	struct uprobes_bpf *obj;
-	int i, err;
-	struct tm *tm;
-	char ts[32];
-	time_t t;
-	int idx, cg_map_fd;
-	int cgfd = -1;
-	bool used_fentry = false;
+	int err;
 
 	err = ensure_core_btf(&open_opts);
 	if (err) {

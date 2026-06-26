@@ -43,29 +43,6 @@ struct {
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } rb SEC(".maps");
 
-struct {
-	__uint(type, BPF_MAP_TYPE_CGROUP_ARRAY);
-	__type(key, u32);
-	__type(value, u32);
-	__uint(max_entries, 1);
-} cgroup_map SEC(".maps");
-
-struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 16384);
-	__type(key, int);
-	__type(value,int);
-	__uint(pinning, LIBBPF_PIN_BY_NAME);
-} pids SEC(".maps");
-
-
-/* key: pid.  value: start time */
-struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, MAX_PIDS);
-	__type(key, u32);
-	__type(value, u64);
-} starts SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
@@ -86,7 +63,7 @@ struct {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 16384);
+	__uint(max_entries, 4096);
 	__type(key, int);
 	__type(value,int);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);

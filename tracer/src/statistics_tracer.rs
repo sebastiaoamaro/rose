@@ -1,4 +1,5 @@
 use crate::manager::{self, pin_maps, start_tracing};
+use crate::tracer_println;
 use crate::skel_types::{statistics_tracer, SkelEnum};
 use anyhow::Result;
 use manager::pin_maps::PinMapsSkelBuilder;
@@ -15,10 +16,7 @@ pub fn run_tracing(
     nodes_info: String,
     network_device: String,
 ) -> Result<()> {
-    println!(
-        "Starting STATS_TRACER, collecting counter for {} functions",
-        functions.len(),
-    );
+    tracer_println!("  [tracer]  starting stats_tracer  functions={}", functions.len());
     manager::bump_memlock_rlimit()?;
     //Init maps
     let skel_builder_maps = PinMapsSkelBuilder::default();

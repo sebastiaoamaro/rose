@@ -15,11 +15,6 @@ struct {
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } rb SEC(".maps");
 
-struct {
-	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, 256 * 1024);
-	__uint(pinning, LIBBPF_PIN_BY_NAME);
-} lazyfs_rb SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
@@ -80,7 +75,7 @@ struct {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 16384);
+	__uint(max_entries, 4096);
 	__type(key, int);
 	__type(value,int);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -88,7 +83,7 @@ struct {
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 16384);
+	__uint(max_entries, 4096);
 	__type(key, int);
 	__type(value,int);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
@@ -470,100 +465,6 @@ int BPF_KPROBE(__x64_sys_openat,struct pt_regs *regs)
 	return 0;
 }
 
-//TODO: REIMPLEMENT
-// SEC("kretsyscall/openat")
-// int BPF_KRETPROBE(__x64_sys_openat_ret)
-// {
-// 	long fd = PT_REGS_RC((struct pt_regs *) ctx);
-
-// 	__u64 pid_tgid = bpf_get_current_pid_tgid();
-// 	__u32 pid = pid_tgid >> 32;
-// 	__u32 tid = (__u32)pid_tgid;
-
-
-// 	FileFDKey fdkey = {};
-// 	int process_fd = 0;
-
-// 	struct relevant_fds *fdrelevant = bpf_map_lookup_elem(&relevant_fd,&pid);
-
-// 	// if(fdrelevant){
-// 	// 	if(fdrelevant->size){
-// 	// 		for (int i=0;i<fdrelevant->size;i++){
-// 	// 			if(i>MAX_RELEVANT_FILES)
-// 	// 				break;
-// 	// 			u64 relevant_fd = fdrelevant->fds[i];
-// 	// 			if (relevant_fd == fd){
-// 	// 				//bpf_printk("This fd is important but we already processed it \n");
-// 	// 				inject_override(origin_pid,OPENAT_RET,(struct pt_regs *) ctx,0,&faults_specification);
-// 	// 			}
-// 	// 		}
-// 	// 		process_fd = 1;
-
-// 	// 	}
-// 	// 	else{
-// 	// 		process_fd = 1;
-// 	// 	}
-// 	// }
-
-// 	if (fd > 0 && process_fd){
-
-//         struct file *file = get_file_from_fd(fd);
-
-//         if(!file){
-//             //bpf_printk("File not found \n");
-//             return 1;
-//         }
-
-//         struct path path = get_path_from_file(file);
-
-//         struct inode *inode = get_inode_from_path(&path);
-
-//         if (!inode) return 2;
-//         if (get_file_tag(&fdkey, inode)) return 2;
-
-//         EventPath event_path = {};
-//         event_path.etype = 0;
-//         event_path.n_ref = 0;
-//         event_path.index = 0;
-//         event_path.cpu = bpf_get_smp_processor_id();
-
-//         FileInfo fi = {};
-
-//         bpf_probe_read(&fi.file_type, sizeof(fi.file_type), &inode->i_mode);
-
-//         if (get_file_path(&path, &event_path, &fi) != 0) return 2;
-
-// 			struct info_key info_key = {
-// 				pid,
-// 				OPENAT_SPECIFIC
-// 			};
-
-//         struct file_info_simple *file_info = bpf_map_lookup_elem(&files,&pid);
-
-//     //     if(file_info){
-//     //         if(string_contains(file_info->filename,&(fi.filename[fi.offset]),fi.offset)){
-// 				// struct relevant_fds *fds = bpf_map_lookup_elem(&relevant_fd,&pid);
-// 				// if(fds){
-// 				// 	u64 position = fds->size;
-// 				// 	if(position < MAX_RELEVANT_FILES){
-// 				// 		fds->fds[position] = fd;
-// 				// 		fds->size = fds->size + 1;
-// 				// 	}
-// 				// }else{
-// 				// 	bpf_printk("This should not happen, main should init the structures \n");
-// 				// }
-
-// 				// inject_override(origin_pid,OPENAT_RET,(struct pt_regs *) ctx,0,&faults_specification);
-
-//     //         }
-//     //     }
-//     }
-
-// 	//int result = process_current_state(OPENAT_COUNT,OPENNAT_HOOK,pid);
-// 	inject_override(origin_pid,OPENAT_RET,(struct pt_regs *) ctx,0,&faults_specification);
-// 	return 0;
-
-// }
 
 SEC("kprobe/__x64_sys_mkdir")
 int BPF_KPROBE(__x64_sys_mkdir)
@@ -595,6 +496,40 @@ int BPF_KPROBE(__x64_sys_stat)
 		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
 
 	inject_override(origin_pid,STAT_FAULT,(struct pt_regs *) ctx,0,&faults_specification);
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_lseek")
+int BPF_KPROBE(__x64_sys_lseek)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(LSEEK_STATE,pid,fault_count,time_only,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
+
+	inject_override(origin_pid,LSEEK_FAULT,(struct pt_regs *) ctx,0,&faults_specification);
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_unlink")
+int BPF_KPROBE(__x64_sys_unlink)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(UNLINK_STATE,pid,fault_count,time_only,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
+
+	inject_override(origin_pid,UNLINK_FAULT,(struct pt_regs *) ctx,0,&faults_specification);
 
 	return 0;
 }

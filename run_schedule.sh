@@ -7,7 +7,7 @@ TMP_FILES=(/tmp/containerpid_read /tmp/containerpid_write /tmp/history.txt /tmp/
 silent() { "$@" > /dev/null 2>&1; }
 
 build_module() {
-    (cd "$KERNEL_DIR" && silent make)
+    (cd "$KERNEL_DIR" && make)
     silent sudo rmmod rose || true
     silent sudo insmod "$KERNEL_DIR/rose.ko"
 }
@@ -20,7 +20,7 @@ build_schedule() {
     local schedule=$1
     silent python3 "$ROSE_DIR/parser.py" "$schedule"
     silent mv fault_schedule.c "$EXECUTOR_DIR/"
-    silent make -j"$(nproc)" -C "$EXECUTOR_DIR"
+    make -j"$(nproc)" -C "$EXECUTOR_DIR"
 }
 
 run_main() {

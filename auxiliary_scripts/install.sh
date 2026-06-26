@@ -39,7 +39,7 @@ fi
 # --- Git submodules ---
 log "Updating git submodules..."
 cd /vagrant/
-git submodule update --init --recursive >/dev/null
+git submodule update --init --recursive
 
 # --- Base packages ---
 log "Updating package list..."
@@ -49,7 +49,7 @@ log "Installing base dependencies..."
 apt_install \
   clang libelf1 libelf-dev zlib1g-dev libc6-dev-i386 autoconf make \
   python3 python3-pip libssl-dev\
-  pcp gnuplot gcc pkg-config gcc-14 g++-14 cmake llvm jq \
+  pcp gnuplot pkg-config gcc-14 g++-14 cmake llvm jq \
   linux-headers-$(uname -r) >/dev/null
 
 #log "dist-upgrade..."
@@ -169,6 +169,10 @@ sudo groupadd docker 2>/dev/null || true
 sudo usermod -aG docker "$USER"
 
 log "Done. Reboot recommended."
+
+
+# --- Install lein ---
+sudo mv /vagrant/auxiliary_scripts/lein /usr/local/bin
 
 # --- Create test directories ---
 mkdir -p /vagrant/tests/bug_detection/hbase

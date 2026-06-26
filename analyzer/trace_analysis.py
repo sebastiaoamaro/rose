@@ -1,13 +1,12 @@
 import ipaddress
 import math
-import os
 import re
 import struct
-import sys
 from pathlib import Path
 
-import schedule_parser.nodes
 import yaml
+
+import schedule_parser.nodes
 from schedule_parser.conditions import (
     file_syscall_condition,
     syscall_condition,
@@ -25,6 +24,8 @@ class Event:
     def __init__(
         self, type, node, pid, tid, name, time, ret, arg1, arg2, arg3, arg4, arg5
     ):
+        """Stores all event fields; for connect/network events arg1/arg2 are decoded
+        from little-endian integers to IPv4Address objects."""
         self.type = type
         self.id = 0
         self.node = node
@@ -63,25 +64,15 @@ class Event:
             self.arg5 = arg5
 
     def __repr__(self):
+        """Returns a full string representation of the event including all fields."""
         return f"Event(Node={self.node},Pid={self.pid},Tid={self.tid},Type={self.type},name={self.name}),Id={self.id},Relative_Time={self.format_time_ns()},Ret={self.ret},Arg1={self.arg1},Arg2={self.arg2},Arg3={self.arg3},Arg4={self.arg4},Arg5={self.arg5}\n"
 
     def format_time_ns(self):
+        """Converts relative_time (nanoseconds) into a human-readable seconds / milliseconds / nanoseconds string."""
         seconds = self.relative_time // 1_000_000_000
         milliseconds = (self.relative_time % 1_000_000_000) // 1_000_000
         remaining_nanoseconds = self.relative_time % 1_000_000
         return f"{seconds} seconds, {milliseconds} milliseconds, {remaining_nanoseconds} nanoseconds"
-
-    def check_if_fault(self):
-        if "Fault" in self.name:
-            return True
-        if self.name == "network_delay":
-            return True
-        if self.name == "process_change":
-            return True
-        if self.name == "Start":
-            return True
-        if self.name == "End":
-            return True
 
 
 class History:
@@ -90,6 +81,8 @@ class History:
     """
 
     def __init__(self):
+        """Initializes all data structures: event lists, per-node mappings,
+        network history, fault lists, and timing bookmarks."""
         self.nodes = {}
         self.events = []
         self.events_by_node = {}
@@ -108,11 +101,11 @@ class History:
         self.experiment_time = 0
         self.faults_injected = []
         self.function_calls_by_node = {}
-        self.total_functions = {}
         self.first_event_id = 0
 
     def parse_event_line(self, line):
-        # Strip any extra whitespace and newlines
+        """Parses a single comma-separated log line into an Event; tracks the global
+        start/end timestamps and marks the start event if present. Returns None on error."""
         line = line.strip()
         # Split the line into its components based on the format
         event_data = {}
@@ -154,12 +147,8 @@ class History:
         )
 
     def read_and_parse_events(self, file_path):
-        """
-        Reads the event file and creates a dictionary of events per node.
-
-        :param file_path: Path to the file to read.
-        :return: Dictionary with node IDs as keys and a list of Event objects as values.
-        """
+        """Reads the trace file line by line, populating self.events, self.faults_injected,
+        self.function_calls_by_node, and self.event_counter."""
         with open(file_path, "r") as file:
             for line in file:
                 event = self.parse_event_line(line)
@@ -184,16 +173,16 @@ class History:
                     else:
                         self.function_calls_by_node[node_id][event.name].append(event)
 
-                    if event.name not in self.total_functions:
-                        self.total_functions[event.name] = 0
-                    else:
-                        self.total_functions[event.name] += 1
                 if event.name in self.event_counter:
                     self.event_counter[event.name].append(event)
                 else:
                     self.event_counter[event.name] = [event]
 
     def get_events_by_node(self):
+        """Groups events into self.events_by_node keyed by node ID, assigns a
+        per-node monotonic event.id, tracks observed PIDs per node
+        (self.pids / self.new_pid_events), and re-assigns the node of "any"
+        events by matching their PID or source IP against known nodes."""
         for event in self.events:
             node_id = event.node
             self.events_by_node[node_id].append(event)
@@ -203,13 +192,11 @@ class History:
                     for node_name, pid_list in self.pids.items():
                         if event.pid in pid_list:
                             event.node = node_name
-                            # print("Assigned to {} node {}".format(event.type,node_name))
                 else:
                     for node_name, node in self.nodes.items():
                         ip_src = event.arg1
                         if str(node.ip) == str(ip_src):
                             event.node = node.name
-                            # print("Assigned to {} node {}".format(event.type,node_name))
 
             if node_id not in self.ids:
                 self.ids[node_id] = 0
@@ -231,16 +218,9 @@ class History:
                 self.pids[node_id].append(event.pid)
                 self.new_pid_events[node_id].append(event)
 
-    def count_sys_exit_errors(self):
-        self.sys_exit_errors = {}
-        for event in self.events:
-            if event.type == "sys_exit":
-                if event.name in self.sys_exit_errors:
-                    self.sys_exit_errors[event.name] += 1
-                else:
-                    self.sys_exit_errors[event.name] = 1
-
     def order_all_events(self):
+        """Sorts all events and injected faults by timestamp, then sets each event's
+        relative_time as an offset from self.start_time."""
         self.events.sort(key=lambda x: x.time)
         self.faults_injected.sort(key=lambda x: x.time)
         for event in self.events:
@@ -249,9 +229,9 @@ class History:
             fault.relative_time = fault.time - self.start_time
 
     def process_history(self, history_file):
+        """Full pipeline: reads and parses the trace file, orders events by time,
+        groups them by node, and computes self.experiment_time."""
         self.read_and_parse_events(history_file)
-        # self.collect_origin_pids()
-        self.count_sys_exit_errors()
         self.order_all_events()
         self.get_events_by_node()
         # Order events_by_node
@@ -260,6 +240,8 @@ class History:
         self.experiment_time = (self.end_time - self.start_time) / 1000000000
 
     def parse_schedule(self, schedule_file):
+        """Loads the YAML schedule to populate self.nodes, initializes per-node
+        network history buckets, and builds an IP-to-node-name mapping."""
         file = open(schedule_file, "r")
         schedule = yaml.safe_load(file)
         self.nodes = schedule_parser.nodes.parse_nodes(schedule["nodes"])
@@ -270,15 +252,13 @@ class History:
                 self.network_history[node_name][node_dest] = []
             self.ip_to_node[str(node.ip)] = node_name
 
-    def collect_network_trace(self):
-        return self.network_trace
-
     def discover_faults(self, normal_history):
+        """Scans all events to detect syscall errors, process kills, process pauses,
+        and network isolations; builds a Fault object for each and appends to
+        self.faults. Returns the completed fault list."""
         fault_nr = 0
         for event in self.events:
-            # Process sycall Fault
             if event.type == "sys_exit":
-                # TEMPORARY SOLUTION IN THEORY WE SHOULD SUPPORT ALL
                 support = self.check_syscall_support(event.name)
                 if not support:
                     continue
@@ -309,10 +289,6 @@ class History:
                     fault.state_score = 1.5
                 # If it does not try to leverage the counter only
                 elif len(self.event_counter[event.name]) < 150:
-                    # if not normal_history is None:
-                    #     if len(normal_history.event_counter[event.name]) > 200:
-                    #         continue
-                    # print(f"Syscall is not frequent event.name is {event.name} count is {len(self.event_counter[event.name])}")
                     cond = syscall_condition()
                     cond.syscall_name = syscall_name
                     cond.call_count = 1
@@ -322,13 +298,8 @@ class History:
                     time = int((event.time - self.start_time) / 1000000)
                     time_rounded = math.floor(time / 10) * 10
                     fault.start_time = time_rounded
-
-                    # cond = time_cond()
-                    # cond.time = time_rounded
-                    # fault.begin_conditions.append(cond)
                 # If we can not leverage information from the syscall itself, look for previous ones, this can not be done here takes to much time
                 else:
-                    # print("System call is common and does not have a filename")
                     continue
 
                 fault_nr += 1
@@ -496,16 +467,8 @@ class History:
                     start_time_fault = event[2]
                     end_time = event[3]
                     if start_time_fault < self.start_time:
-                        # print("Network event before start time")
                         continue
                     if frequency / self.experiment_time < 0.5:
-                        # print(
-                        #     "Skipped network delay, frequency too low"
-                        #     + " time: "
-                        #     + str(self.experiment_time)
-                        #     + " count: "
-                        #     + str(event[0])
-                        # )
                         continue
                     fault = Fault()
                     fault.name = "networkfault" + str(fault_nr)
@@ -538,40 +501,11 @@ class History:
                     fault_nr += 1
                     self.faults.append(fault)
 
-        # Find process crashes
-        # for node,pids in self.pids.items():
-        #     if node == "any":
-        #         continue
-        #     print(f"Pids is {pids}")
-        #     if len(pids) > 1:
-        #         for i in range(1,len(pids)):
-        #             fault = Fault()
-        #             fault.name = "process_kill" + str(fault_nr)
-        #             fault.fault_category = 1
-        #             fault.type = "process_kill"
-        #             fault.target = node
-        #             fault.traced = node
-        #             fault.state_score = 3
-        #             fault.duration = 0
-        #             #check conditions
-        #             fault.begin_conditions = []
-
-        #             last_event_before_crash = self.find_event_before_id(node,self.new_pid_events[node][i].id)
-        #             fault.event_id = last_event_before_crash.id
-
-        #             time = int((last_event_before_crash.time - self.start_time)/1000000)
-        #             time_rounded = math.floor(time/10) * 10
-        #             fault.start_time = time_rounded
-        #             if len(fault.begin_conditions) == 0:
-        #                 cond = time_cond()
-        #                 cond.time = time_rounded
-        #                 fault.begin_conditions.append(cond)
-
-        #             fault_nr += 1
-        #             self.faults.append(fault)
         return self.faults
 
     def get_functions_before(self, node_name, event_id, window):
+        """Returns the last `window` function_call events before event_id on node_name,
+        plus a count map of calls that appear only once (used to build fault conditions)."""
         function_calls = []
         # This will serve as the conditions for the fault
         function_calls_counter = {}
@@ -603,58 +537,15 @@ class History:
         # Returns number of events found: int, important events: dict and the events:list
         return (event_counter, function_calls_counter, function_calls)
 
-    # TODO: Needs to look in the normal trace if the event is common
-    def get_context_syscall_before(self, node_name, event_id):
-        event_list = self.events_by_node[node_name]
-
-        for event in reversed(event_list):
-            if event.type == "sys_exit" and event.id < event_id and len(event.arg5) > 0:
-                return event
-
     def find_event_before_id(self, node_name, event_id):
+        """Returns the most recent event on node_name whose id is strictly less than event_id."""
         for event in reversed(self.events_by_node[node_name]):
             if event.id < event_id:
                 return event
 
-    def count_syscall_on_filename(self, node_name, syscall_name, filename):
-        count = 0
-        for event in self.events_by_node[node_name]:
-            if (
-                event.type == "sys_enter"
-                and event.name == syscall_name
-                and event.arg5 == filename
-            ):
-                count += 1
-        return count
-
-    # def check_fault_order(self, faults_detected, fault_name):
-    #     correct_order_index = next(
-    #         (i for i, f in enumerate(faults_detected) if f.name == fault_name), None
-    #     )
-    #     schedule_index = next(
-    #         (i for i, f in enumerate(self.faults_injected) if f.name == fault_name),
-    #         None,
-    #     )
-
-    #     if correct_order_index is None or schedule_index is None:
-    #         return False
-    #     elif correct_order_index == 0 and schedule_index == 0:
-    #         return True
-    #     elif correct_order_index == 0 or schedule_index == 0:
-    #         return False
-
-    #     fault_before_correct = faults_detected[correct_order_index - 1]
-    #     fault_before_injected = self.faults_injected[schedule_index - 1]
-
-    #     print(
-    #         "Fault before correct:{} and fault before injected: {}".format(
-    #             fault_before_correct.name, fault_before_injected.name
-    #         )
-    #     )
-    #     return fault_before_correct.name == fault_before_injected.name
-
     def check_order(self, fault_injected_event, window, origin_order):
-        print("WINDOW:", window, "ORIGIN_ORDER:", origin_order)
+        """Checks whether the function call sequence preceding a fault matches origin_order;
+        returns False if any position differs or the fault was never injected (id == 0)."""
         if fault_injected_event.id == 0:
             print("Fault not injected")
             return False
@@ -671,23 +562,12 @@ class History:
         return True
 
     def check_syscall_support(self, syscall_name):
+        """Returns True if syscall_name is in the set of supported/injectable syscalls."""
         return check_if_syscall_supported(syscall_name) != "TEMP_EMPTY"
 
-    def find_previous_fault(self, fault_name):
-        for idx, fault in enumerate(self.faults_injected):
-            if fault.name == fault_name:
-                if idx > 0:
-                    return self.faults_injected[idx - 1]
-                else:
-                    return self.faults_injected[idx]
-        print(
-            "Failed to find previous fault ",
-            fault_name,
-            "faults_injected is ",
-            self.faults_injected,
-        )
-
     def find_event_by_id_by_time(self, time, node):
+        """Returns the id of the last event on node whose timestamp is <= time;
+        returns 0 if the node has no recorded events."""
         event_id = 0
         # Sometimes there are no events in a node which suffered a fault
         if node in self.events_by_node:
@@ -701,45 +581,23 @@ class History:
             return event_id
 
     def write_to_file(self, filename):
+        """Writes all events to filename, one per line, using their __repr__."""
         with open(filename, "w") as file:
             for event in self.events:
                 file.write(str(event))
 
 
 def get_fault_by_name(faults, fault_name):
+    """Searches faults for the first entry whose name matches fault_name; prints a warning if not found."""
     for fault in faults:
         if fault.name == fault_name:
             return fault
     print("Failed to find previous fault ", fault_name, "faults is ", faults)
 
 
-def write_new_schedule(base_schedule, faults, output_schedule):
-    # Put faults by time order to facilitate readability
-    faults = sorted(faults, key=lambda x: x.start_time)
-    file = open(base_schedule, "r")
-    base_schedule = yaml.safe_load(file)
-
-    exe_plan = {"execution_plan": base_schedule["execution_plan"]}
-    nodes = {"nodes": base_schedule["nodes"]}
-
-    schedule_location = output_schedule
-    with open(schedule_location, "w") as file:
-        yaml.dump(exe_plan, file, default_flow_style=False)
-        yaml.dump(nodes, file, default_flow_style=False)
-
-        # faults_sorted = sorted(faults, key=lambda x: x.start_time)
-        faults_dict = {"faults": {}}
-
-        for fault in faults:
-            fault_dict = fault.to_yaml()
-            faults_dict["faults"][fault.name] = fault_dict
-
-        yaml.dump(faults_dict, file, default_flow_style=False, sort_keys=False)
-
-    return schedule_location
-
-
 def compare_faults(buggy_run, normal_run):
+    """Returns faults present in buggy_run whose group key is absent from normal_run;
+    these are the faults unique to the buggy execution."""
     faults_buggy = group_faults(buggy_run)
     faults_normal = group_faults(normal_run)
     unique_faults = set(faults_buggy.keys()) - set(faults_normal.keys())
@@ -751,15 +609,8 @@ def compare_faults(buggy_run, normal_run):
 
 
 def calculate_faults_removed(buggy_run, normal_run):
-    """
-    Calculate the percentage of faults "removed" when going from buggy_run to normal_run.
-
-    A fault is considered "removed" if its grouped key (see group_faults()) appears in
-    buggy_run but not in normal_run.
-
-    Returns:
-        removed_pct (float): percent of buggy fault keys removed in normal_run, in [0,100].
-    """
+    """Computes the percentage of buggy fault group keys that are absent from normal_run;
+    a higher value means more of the buggy faults "disappeared" in the normal execution."""
     faults_buggy = group_faults(buggy_run)
     faults_normal = group_faults(normal_run)
 
@@ -780,6 +631,8 @@ def calculate_faults_removed(buggy_run, normal_run):
 
 
 def group_faults(fault_list):
+    """Buckets faults into a dict keyed by type/syscall/target/timing; used to compare
+    fault sets across runs without being sensitive to exact fault names."""
     faults = {}
     for fault in fault_list:
         if fault.type == "syscall":
@@ -832,10 +685,13 @@ def group_faults(fault_list):
 
 
 def get_name_from_path(path):
+    """Extracts the filename component from a full filesystem path."""
     return Path(path).name
 
 
-def choose_faults(faults, history_buggy, history):
+def choose_faults(faults):
+    """Deduplicates block_ips faults, removes network partitions caused by process pauses,
+    ranks all remaining faults by state_score, and returns the top 10."""
     faults_choosen = []
     partitions = {}
     for fault in faults:
@@ -853,20 +709,6 @@ def choose_faults(faults, history_buggy, history):
         if fault.type == "process_kill":
             faults_choosen.append(fault)
         if fault.type == "syscall":
-            # if fault.state_score == 0:
-            #     cond = file_syscall_condition()
-            #     last_syscall_event = history_buggy.get_context_syscall_before(
-            #         fault.target, fault.event_id
-            #     )
-            #     if last_syscall_event is None:
-            #         continue
-            #     count = history.count_syscall_on_filename(
-            #         fault.target, last_syscall_event.name, last_syscall_event.arg5
-            #     )
-            #     cond.syscall_name = last_syscall_event.name
-            #     cond.file_name = get_name_from_path(last_syscall_event.arg5)
-            #     cond.call_count = 1
-            #     fault.begin_conditions.append(cond)
             faults_choosen.append(fault)
         if fault.type == "process_pause":
             faults_choosen.append(fault)
@@ -881,7 +723,6 @@ def choose_faults(faults, history_buggy, history):
                 if fault_ahead.type == "process_pause":
                     start_pause = fault_ahead.start_time
                     end_pause = fault_ahead.start_time + fault_ahead.duration
-                    partition_start = fault.start_time
                     partition_end = fault.start_time + fault.duration
                     target_match = (
                         fault.target == fault_ahead.target
@@ -913,7 +754,8 @@ def choose_faults(faults, history_buggy, history):
 
 
 def remove_numbers(input_string):
-    # Find all numbers in the string
+    """If input_string contains more than 10 digits, truncates everything from the
+    first digit onward; otherwise returns it unchanged (normalizes path-based filenames)."""
     numbers = re.findall(r"\d", input_string)
 
     # Check if there are more than 10 numbers
@@ -925,3 +767,121 @@ def remove_numbers(input_string):
     else:
         # Return the original string if there are 10 or fewer numbers
         return input_string
+
+
+def build_fault_conditions(fault, functions_before, history_buggy):
+    """Converts the unique function calls preceding a fault into user_function_condition
+    objects that can trigger fault injection at the right program point."""
+    begin_conditions = []
+    for function_call, counter in functions_before[1].items():
+        cond = user_function_condition()
+        cond.binary_location = history_buggy.nodes[fault.target].binary
+        cond.symbol = function_call
+        cond.call_count = counter
+        begin_conditions.append(cond)
+    return begin_conditions
+
+
+def get_time_for_fault(fault, faults_detected_time_sorted, fault_before, history):
+    """Computes the trigger time for a fault, using the actual injection time of the
+    preceding fault when available, or falling back to the original detected time."""
+    time_fault_current = fault.start_time
+    time_rounded_current = math.floor(time_fault_current / 10) * 10
+    time_fault_before = get_fault_by_name(
+        faults_detected_time_sorted, fault_before.name
+    ).start_time
+    time_rounded_before = math.floor(time_fault_before / 10) * 10
+
+    # If the previous fault did not occur in the last attempt we leverage the time before in the original
+    # as we did for the previous fault
+    fault_before_testing = next(
+        (x for x in history.faults_injected if fault_before.name in x.name), None
+    )
+    if fault_before_testing is None:
+        time_rounded = time_rounded_before
+    else:
+        # Relax time
+        ts = fault_before_testing.relative_time - 1000
+        time_rounded = math.floor((ts / 1000000) / 10) * 10
+
+    if time_rounded <= 0:
+        print("Time in testing is sub 0, leverage a default 100 milli value")
+        time_rounded = 100
+    return time_rounded
+
+
+def check_fault_order(faults_detected, faults_injected):
+    """Verifies that every detected fault was actually injected, then checks that their
+    relative ordering and timing (within a 2 s gap tolerance) match the detected sequence."""
+    count_faults = 0
+    for fault_detected in faults_detected:
+        for fault_injected in faults_injected:
+            if fault_detected.name in fault_injected.name:
+                count_faults += 1
+                break
+
+    all_faults_were_injected = count_faults == len(faults_detected)
+    if not all_faults_were_injected:
+        print("Not all faults were injected")
+        return all_faults_were_injected
+
+    fault_names_detected = [
+        f.name
+        for f in faults_detected
+        if "syscall" not in f.name and "extra" not in f.name
+    ]
+    fault_names_injected = [
+        f.name
+        for f in faults_injected
+        if "syscall" not in f.name and "extra" not in f.name
+    ]
+
+    for i, fault_detected in enumerate(fault_names_detected):
+        fault_detected_prod_time = next(
+            (x.start_time for x in faults_detected if x.name == fault_detected), None
+        )
+        fault_injected_prod_time = next(
+            (
+                x.start_time
+                for x in faults_detected
+                if x.name == fault_names_injected[i]
+            ),
+            None,
+        )
+        gap = abs(fault_detected_prod_time - fault_injected_prod_time)
+        if fault_names_injected[i] == fault_detected:
+            continue
+        elif gap > 2000:
+            return False
+
+    return True
+
+
+def create_new_faults_for_state(history, fault):
+    """Clones fault for every other node that runs the same binary, appending
+    the node name and "extra" to distinguish the copies."""
+    new_faults = []
+    for node_name, node in history.nodes.items():
+        if (
+            history.nodes[fault.target].binary == node.binary
+            and fault.target != node_name
+        ):
+            new_fault = deepcopy(fault)
+            new_fault.name = new_fault.name + node_name + "extra"
+            new_fault.target = node_name
+            new_fault.traced = node_name
+            new_faults.append(new_fault)
+    return new_faults
+
+
+def reset_offset_for_fault(faults_detected, fault, cond):
+    """Finds all variants of fault in faults_detected and resets the offset of the
+    user_function_condition matching cond.symbol back to 0."""
+    for fault_extra in faults_detected:
+        if fault.name in fault_extra.name:
+            for i in range(0, len(fault_extra.begin_conditions)):
+                if (
+                    isinstance(fault_extra.begin_conditions[i], user_function_condition)
+                    and fault_extra.begin_conditions[i].symbol == cond.symbol
+                ):
+                    fault_extra.begin_conditions[i].offset = 0

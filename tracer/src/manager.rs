@@ -127,7 +127,7 @@ pub fn tracer_println_fmt(args: fmt::Arguments) {
     use std::io::{self, Write};
     let mut stdout = io::stdout().lock();
     // Ignore errors from writeln!/flush to avoid panicking inside logging code.
-    let _ = writeln!(stdout, "TRACER: {}", args);
+    let _ = writeln!(stdout, "{}", args);
     let _ = stdout.flush();
 }
 
@@ -256,7 +256,7 @@ pub fn trace_processes(
             let pid: i32 = match parts[1].trim().parse() {
                 Ok(num) => num,
                 Err(_) => {
-                    tracer_println!("Failed to parse integer on line: {}", line);
+                    tracer_println!("  ✗ [parse]  integer on line: {}", line);
                     continue;
                 }
             };
@@ -279,7 +279,7 @@ pub fn trace_processes(
                 &mut join_handles,
             );
         } else {
-            tracer_println!("Incorrect format on line: {}", line);
+            tracer_println!("  ✗ [parse]  incorrect format on line: {}", line);
         }
     }
 
@@ -312,7 +312,7 @@ pub fn trace_processes_controlled(
     let write_pipe_name = format!("{}_read", nodes_info.clone());
     if Path::new(&read_pipe_name).exists() {
         let file = File::open(read_pipe_name.clone()).unwrap();
-        tracer_println!("Opening FIFO for reading...{}", read_pipe_name.clone());
+        tracer_println!("  [fifo]  opening for reading: {}", read_pipe_name.clone());
         let reader = BufReader::new(file);
 
         let mut file_write = OpenOptions::new()
@@ -323,7 +323,7 @@ pub fn trace_processes_controlled(
         for line in reader.lines() {
             let line = line?;
 
-            tracer_println!("Received:{}", line);
+            tracer_println!("  [fifo]  received: {}", line);
 
             if line == "finished" {
                 break;
@@ -364,15 +364,15 @@ pub fn trace_processes_controlled(
             file_write.write(&buf).expect("Failed to send ping to ROSE");
         }
     } else {
-        tracer_println!("FIFO does not exist.");
+        tracer_println!("  ✗ [fifo]  does not exist");
     }
 
     for tx in tx_handles {
         let send_res = tx.send(());
 
         match send_res {
-            Ok(_) => tracer_println!("Sent successfully"),
-            Err(e) => tracer_println!("Error sending: {}", e),
+            Ok(_) => tracer_println!("  ✓ sent"),
+            Err(e) => tracer_println!("  ✗ send error: {}", e),
         }
     }
 
@@ -380,8 +380,8 @@ pub fn trace_processes_controlled(
         let result = handle.join();
 
         match result {
-            Ok(_) => tracer_println!("Thread finished successfully"),
-            Err(_e) => tracer_println!("Thread finished with an error"),
+            Ok(_) => tracer_println!("  ✓ thread done"),
+            Err(_e) => tracer_println!("  ✗ thread error"),
         }
     }
 
@@ -397,11 +397,7 @@ pub fn start_tracing_process(
     rx: Receiver<()>,
     join_handles: &mut Vec<JoinHandle<()>>,
 ) {
-    tracer_println!(
-        "Started tracing for pid {} with node_name {}",
-        pid,
-        container_name
-    );
+    tracer_println!("  [trace]  started  pid={}  node={}", pid, container_name);
 
     hashmap_links.insert(pid, vec![]);
 
@@ -447,7 +443,7 @@ pub fn trace_containers(
             let pid: i32 = match parts[1].trim().parse() {
                 Ok(num) => num,
                 Err(_) => {
-                    tracer_println!("Failed to parse integer on line: {}", line);
+                    tracer_println!("  ✗ [parse]  integer on line: {}", line);
                     continue;
                 }
             };
@@ -496,7 +492,7 @@ pub fn trace_containers(
             );
             start_xdp_in_container(pid, (veth_index) as i32, CONTAINER_TYPE_DOCKER);
         } else {
-            tracer_println!("Incorrect format on line: {}", line);
+            tracer_println!("  ✗ [parse]  incorrect format on line: {}", line);
         }
     }
 
@@ -518,9 +514,9 @@ pub fn trace_containers(
 
         match send_res {
             Ok(_) => {
-                //tracer_println!("Sent successfully")
+                //tracer_println!("  ✓ sent")
             }
-            Err(e) => tracer_println!("Error sending: {}", e),
+            Err(e) => tracer_println!("  ✗ send error: {}", e),
         }
     }
 
@@ -529,9 +525,9 @@ pub fn trace_containers(
 
         match result {
             Ok(_) => {
-                //tracer_println!("Thread finished successfully")
+                //tracer_println!("  ✓ thread done")
             }
-            Err(_e) => tracer_println!("Thread finished with an error"),
+            Err(_e) => tracer_println!("  ✗ thread error"),
         }
     }
 
@@ -559,7 +555,7 @@ pub fn trace_containers_controlled(
 
     if Path::new(&read_pipe_name).exists() {
         let file = File::open(read_pipe_name.clone()).unwrap();
-        tracer_println!("Opening FIFO for reading...{}", read_pipe_name.clone());
+        tracer_println!("  [fifo]  opening for reading: {}", read_pipe_name.clone());
         let reader = BufReader::new(file);
 
         let mut file_write = OpenOptions::new()
@@ -572,7 +568,7 @@ pub fn trace_containers_controlled(
             if line == "finished" {
                 break;
             }
-            tracer_println!("RECEIVED:{}", line);
+            tracer_println!("  [fifo]  received: {}", line);
             let parts: Vec<&str> = line.split(',').collect();
 
             let node_name = parts[0].to_string();
@@ -682,15 +678,15 @@ pub fn trace_containers_controlled(
                 .expect("Failed to send ping to ROSE");
         }
     } else {
-        tracer_println!("FIFO does not exist.");
+        tracer_println!("  ✗ [fifo]  does not exist");
     }
 
     for tx in tx_handles {
         let send_res = tx.send(());
 
         match send_res {
-            Ok(_) => tracer_println!("Sent successfully"),
-            Err(e) => tracer_println!("Error sending: {}", e),
+            Ok(_) => tracer_println!("  ✓ sent"),
+            Err(e) => tracer_println!("  ✗ send error: {}", e),
         }
     }
 
@@ -698,8 +694,8 @@ pub fn trace_containers_controlled(
         let result = handle.join();
 
         match result {
-            Ok(_) => tracer_println!("Thread finished successfully"),
-            Err(_e) => tracer_println!("Thread finished with an error"),
+            Ok(_) => tracer_println!("  ✓ thread done"),
+            Err(_e) => tracer_println!("  ✗ thread error"),
         }
     }
 
@@ -707,7 +703,7 @@ pub fn trace_containers_controlled(
         let pid = Pid::from_raw(pid as i32);
         kill(pid, Signal::SIGKILL).expect("Failed to kill xdp_pid");
     }
-    tracer_println!("Finished tracing containers");
+    tracer_println!("  ✓ finished tracing containers");
 
     Ok(())
 }
@@ -724,11 +720,7 @@ pub fn start_tracing_container(
     join_handles: &mut Vec<JoinHandle<()>>,
     controlled: bool,
 ) {
-    tracer_println!(
-        "Started tracing for pid {} with node_name {}",
-        pid,
-        container_name
-    );
+    tracer_println!("  [trace]  started  pid={}  node={}", pid, container_name);
     //hashmap_links.insert(pid, vec![]);
 
     // let mut container_location = "".to_string();
@@ -762,7 +754,7 @@ pub fn start_tracing_container(
         });
     }
     join_handles.push(handle);
-    tracer_println!("Finished adding uprobes for node {}", container_name);
+    tracer_println!("  ✓ uprobes added  node={}", container_name);
 }
 
 pub fn end_trace(
@@ -815,7 +807,7 @@ pub fn read_numbers_from_file(filename: &str) -> io::Result<Vec<i32>> {
         let line = line?;
         match line.trim().parse::<i32>() {
             Ok(num) => numbers.push(num),
-            Err(e) => tracer_println!("Error parsing number '{}': {}", line, e),
+            Err(e) => tracer_println!("  ✗ [parse]  number '{}': {}", line, e),
         }
     }
 
@@ -917,7 +909,7 @@ pub fn collect_fd_map(
                     let process_fd: &Processfd = &*process_fd;
 
                     if process_fd.pid == 0 {
-                        tracer_println!("Pid is 0");
+                        tracer_println!("  [fd]  pid is 0, skipping");
                         continue;
                     }
                     let c_str =
@@ -952,7 +944,7 @@ pub fn collect_fd_map(
                 }
             }
             Err(e) => {
-                tracer_println!("Err: {:?}", e);
+                tracer_println!("  ✗ map lookup: {:?}", e);
             }
         }
     }
@@ -972,7 +964,7 @@ pub fn collect_fd_map(
                     let process_fd: &Processfd = &*process_fd;
 
                     if process_fd.pid == 0 {
-                        tracer_println!("Pid is 0");
+                        tracer_println!("  [fd]  pid is 0, skipping");
                         continue;
                     }
 
@@ -1002,9 +994,7 @@ pub fn collect_fd_map(
                             }
                         }
                         None => {
-                            tracer_println!(
-                                "FD with no matching file, probably a read from socket"
-                            );
+                            tracer_println!("  [fd]  no matching file (socket?)");
                         }
                     };
 
@@ -1033,7 +1023,7 @@ pub fn collect_fd_map(
                 }
             }
             Err(e) => {
-                tracer_println!("Err: {:?}", e);
+                tracer_println!("  ✗ map lookup: {:?}", e);
             }
         }
     }
@@ -1069,7 +1059,7 @@ pub fn create_pid_tree(pids: &libbpf_rs::Map, hashmap_pid_to_node: &mut HashMap<
                 }
             }
             Err(e) => {
-                tracer_println!("Err: {:?}", e);
+                tracer_println!("  ✗ map lookup: {:?}", e);
             }
         }
     }
@@ -1224,7 +1214,7 @@ pub fn collect_events(
                 }
             }
             Err(e) => {
-                tracer_println!("Err: {:?}", e);
+                tracer_println!("  ✗ map lookup: {:?}", e);
             }
         }
     }
@@ -1255,12 +1245,12 @@ pub fn process_uprobes_counters_map(
                 uprobes_counters[cookie as usize] = value;
             }
             Err(e) => {
-                tracer_println!("Err: {:?}", e);
+                tracer_println!("  ✗ map lookup: {:?}", e);
             }
         }
     }
 
-    tracer_println!("Total function calls: {}", total_function_call);
+    tracer_println!("  [stats]  total function calls: {}", total_function_call);
 
     File::create("/tmp/function_stats.txt").expect("Failed to create file");
 
@@ -1297,7 +1287,7 @@ pub fn process_syscall_counters_map(
                 syscall_counters[cookie as usize] = value;
             }
             Err(e) => {
-                tracer_println!("Err: {:?}", e);
+                tracer_println!("  ✗ map lookup: {:?}", e);
             }
         }
     }
@@ -1320,7 +1310,7 @@ pub fn monitor_pid(
     stop_signal: mpsc::Receiver<()>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_duration = time::Duration::from_millis(1000);
-    let mut events_process_pause = vec![];
+    let mut process_events = vec![];
 
     let target_pid = pid;
 
@@ -1328,7 +1318,7 @@ pub fn monitor_pid(
     let process = match check_target {
         Ok(p) => p,
         Err(e) => {
-            tracer_println!("Target process {} not found: {}", target_pid, e);
+            tracer_println!("  ✗ [monitor]  process {} not found: {}", target_pid, e);
             return Ok(());
         }
     };
@@ -1338,7 +1328,7 @@ pub fn monitor_pid(
 
     loop {
         if stop_signal.try_recv().is_ok() {
-            tracer_println!("Stopping monitoring for PID:{}", target_pid);
+            tracer_println!("  [monitor]  stopping  pid={}", target_pid);
             break;
         }
 
@@ -1368,8 +1358,11 @@ pub fn monitor_pid(
                         arg4: 0,
                         extra: [0; 256],
                     };
-                    events_process_pause.push(event);
-                    tracer_println!("PROCESS:{} NO LONGER PAUSED, ADDING EVENT", target_pid);
+                    process_events.push(event);
+                    tracer_println!(
+                        "  [monitor]  pid={}  no longer paused, adding event",
+                        target_pid
+                    );
                     duration = 0;
                 } else if state != Waiting && state != Stopped {
                     duration = 0;
@@ -1388,8 +1381,8 @@ pub fn monitor_pid(
                         arg4: 0,
                         extra: [0; 256],
                     };
-                    tracer_println!("PROCESS:{} DEAD, ADDING EVENT", target_pid);
-                    events_process_pause.push(event);
+                    tracer_println!("  !! [monitor]  pid={}  dead, adding event", target_pid);
+                    process_events.push(event);
                     break;
                 }
 
@@ -1410,7 +1403,7 @@ pub fn monitor_pid(
                         arg4: 0,
                         extra: [0; 256],
                     };
-                    events_process_pause.push(event);
+                    process_events.push(event);
                 }
 
                 let event = Event {
@@ -1426,14 +1419,14 @@ pub fn monitor_pid(
                     arg4: 0,
                     extra: [0; 256],
                 };
-                tracer_println!("PROCESS:{} DEAD, ADDING EVENT", target_pid);
-                events_process_pause.push(event);
+                tracer_println!("  !! [monitor]  pid={}  dead, adding event", target_pid);
+                process_events.push(event);
                 break;
             }
         }
     }
 
-    for event in events_process_pause {
+    for event in process_events {
         let event_name = "process_state_change".to_string();
         let node_name = "any".to_string();
         write_event_to_history(
@@ -1453,14 +1446,14 @@ pub fn monitor_pid_controlled(
     stop_signal: mpsc::Receiver<()>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_duration = time::Duration::from_millis(1000);
-    let mut events_process_pause = vec![];
+    let mut process_events = vec![];
 
     // Ensure the original PID exists first
     let check_process = Process::new(pid);
     let _process = match check_process {
         Ok(process_alive) => process_alive,
         Err(e) => {
-            tracer_println!("Process with PID {} not found: {}", pid, e);
+            tracer_println!("  ✗ [monitor]  process {} not found: {}", pid, e);
             return Ok(());
         }
     };
@@ -1480,13 +1473,13 @@ pub fn monitor_pid_controlled(
     // PHASE 3: start monitoring the grandchild PID (target)
     let target_pid = grandchild;
 
-    tracer_println!("Switching to monitoring PID {}", target_pid);
+    tracer_println!("  [monitor]  switching to pid={}", target_pid);
 
     let check_target = Process::new(target_pid);
     let process = match check_target {
         Ok(p) => p,
         Err(e) => {
-            tracer_println!("Target process {} not found: {}", target_pid, e);
+            tracer_println!("  ✗ [monitor]  process {} not found: {}", target_pid, e);
             return Ok(());
         }
     };
@@ -1496,7 +1489,7 @@ pub fn monitor_pid_controlled(
 
     loop {
         if stop_signal.try_recv().is_ok() {
-            tracer_println!("Stopping monitoring for PID:{}", target_pid);
+            tracer_println!("  [monitor]  stopping  pid={}", target_pid);
             break;
         }
 
@@ -1526,8 +1519,11 @@ pub fn monitor_pid_controlled(
                         arg4: 0,
                         extra: [0; 256],
                     };
-                    events_process_pause.push(event);
-                    tracer_println!("PROCESS:{} NO LONGER PAUSED, ADDING EVENT", target_pid);
+                    process_events.push(event);
+                    tracer_println!(
+                        "  [monitor]  pid={}  no longer paused, adding event",
+                        target_pid
+                    );
                     duration = 0;
                 } else if state != Waiting && state != Stopped {
                     duration = 0;
@@ -1546,8 +1542,8 @@ pub fn monitor_pid_controlled(
                         arg4: 0,
                         extra: [0; 256],
                     };
-                    tracer_println!("PROCESS:{} DEAD, ADDING EVENT", target_pid);
-                    events_process_pause.push(event);
+                    tracer_println!("  !! [monitor]  pid={}  dead, adding event", target_pid);
+                    process_events.push(event);
                     break;
                 }
 
@@ -1568,7 +1564,7 @@ pub fn monitor_pid_controlled(
                         arg4: 0,
                         extra: [0; 256],
                     };
-                    events_process_pause.push(event);
+                    process_events.push(event);
                 }
 
                 let event = Event {
@@ -1584,14 +1580,14 @@ pub fn monitor_pid_controlled(
                     arg4: 0,
                     extra: [0; 256],
                 };
-                tracer_println!("PROCESS:{} DEAD, ADDING EVENT", target_pid);
-                events_process_pause.push(event);
+                tracer_println!("  !! [monitor]  pid={}  dead, adding event", target_pid);
+                process_events.push(event);
                 break;
             }
         }
     }
 
-    for event in events_process_pause {
+    for event in process_events {
         let event_name = "process_state_change".to_string();
         let node_name = "any".to_string();
         write_event_to_history(
@@ -1610,7 +1606,7 @@ pub fn find_child(pid: i32, stop_signal: &mpsc::Receiver<()>) -> i32 {
     let mut child_pid: Option<i32> = None;
     loop {
         if stop_signal.try_recv().is_ok() {
-            tracer_println!("Stopping search for child");
+            tracer_println!("  [monitor]  stopping child search");
             return 0;
         }
         if let Ok(all_procs) = procfs::process::all_processes() {
@@ -1668,7 +1664,7 @@ pub fn collect_network_delays(network_delays: &libbpf_rs::Map) {
                 }
             }
             Err(e) => {
-                tracer_println!("Err: {:?}", e);
+                tracer_println!("  ✗ map lookup: {:?}", e);
             }
         }
     }
@@ -1717,7 +1713,7 @@ pub fn collect_network_info(network_info: &libbpf_rs::Map) {
                     );
                 }
                 None => {
-                    tracer_println!("No value found for key: {:?}", key);
+                    tracer_println!("  ✗ [net]  no value for key: {:?}", key);
                     continue;
                 }
             }
@@ -1831,7 +1827,7 @@ pub fn find_filename(
 }
 
 pub fn parse_file_to_pairs(filename: &str) -> Vec<(String, usize)> {
-    tracer_println!("Collecting function pairs from file: {}", filename);
+    tracer_println!("  [parse]  function pairs from: {}", filename);
     let file = File::open(filename).expect("Failed to open file");
     let reader = io::BufReader::new(file);
     reader
@@ -1847,7 +1843,7 @@ pub fn parse_file_to_pairs(filename: &str) -> Vec<(String, usize)> {
             // Ensure we have exactly 2 parts
             if parts.len() != 2 {
                 tracer_println!(
-                    "Warning: Invalid line format (expected 'string,number'): {}",
+                    "  ✗ [parse]  invalid format '{}' (expected string,number)",
                     trimmed
                 );
                 return None;
@@ -1855,7 +1851,7 @@ pub fn parse_file_to_pairs(filename: &str) -> Vec<(String, usize)> {
             match parts[1].parse::<usize>() {
                 Ok(number) => Some((parts[0].to_string(), number)),
                 Err(e) => {
-                    tracer_println!("Warning: Failed to parse number '{}': {}", parts[1], e);
+                    tracer_println!("  ✗ [parse]  number '{}': {}", parts[1], e);
                     None
                 }
             }
@@ -1870,7 +1866,7 @@ pub fn pin_maps(skel: &mut PinMapsSkel) {
         Ok(_) => {
             //tracer_println!("Successfully unpinned map")
         }
-        Err(e) => tracer_println!("Error unpinning map: {}", e),
+        Err(e) => tracer_println!("  ✗ [map]  unpin error: {}", e),
     }
 
     let res = skel
@@ -1882,7 +1878,7 @@ pub fn pin_maps(skel: &mut PinMapsSkel) {
         Ok(_) => {
             //tracer_println!("Successfully unpinned map")
         }
-        Err(e) => tracer_println!("Error unpinning map: {}", e),
+        Err(e) => tracer_println!("  ✗ [map]  unpin error: {}", e),
     }
 
     let res = skel.maps.history_delays.unpin("/sys/fs/bpf/history_delays");
@@ -1891,7 +1887,7 @@ pub fn pin_maps(skel: &mut PinMapsSkel) {
         Ok(_) => {
             //tracer_println!("Successfully unpinned map")
         }
-        Err(e) => tracer_println!("Error unpinning map: {}", e),
+        Err(e) => tracer_println!("  ✗ [map]  unpin error: {}", e),
     }
 
     let res = skel
@@ -1903,7 +1899,7 @@ pub fn pin_maps(skel: &mut PinMapsSkel) {
         Ok(_) => {
             //tracer_println!("Successfully unpinned map")
         }
-        Err(e) => tracer_println!("Error unpinning map: {}", e),
+        Err(e) => tracer_println!("  ✗ [map]  unpin error: {}", e),
     }
 
     let res = skel.maps.pid_tree.unpin("/sys/fs/bpf/pid_tree");
@@ -1912,7 +1908,7 @@ pub fn pin_maps(skel: &mut PinMapsSkel) {
         Ok(_) => {
             //tracer_println!("Successfully unpinned map")
         }
-        Err(e) => tracer_println!("Error unpinning map: {}", e),
+        Err(e) => tracer_println!("  ✗ [map]  unpin error: {}", e),
     }
 
     skel.maps

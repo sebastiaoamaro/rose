@@ -1,5 +1,4 @@
 #!/bin/bash
-set -xe
 cd /vagrant/rw/Anduril/systems/zookeeper-2247
 ./compile.sh
 /vagrant/rw/Anduril/ground_truth/zookeeper-2247/run-original-test.sh
@@ -41,3 +40,5 @@ cd /vagrant/auxiliary_scripts/
 cd /vagrant/rw/Anduril/systems/hdfs-16332
 ./compile.sh
 /vagrant/rw/Anduril/experiment/hdfs-16332/run-original-test.sh
+cd /vagrant/auxiliary_scripts/
+./change_java.sh 8

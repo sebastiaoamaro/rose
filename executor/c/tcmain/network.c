@@ -121,16 +121,3 @@ cleanup:
 	return -err;
 
 }
-
-char** get_device_names(int device_count){
-	char **device_names = malloc(32*sizeof(char));
-	int count_devices;
-
-	count_devices = get_interface_names(device_names,device_count);
-
-	// for (int i=0;i<count_devices;i++){
-	// 	printf("Device name is %s \n",device_names[i]);
-	// }
-
-	return device_names;
-}

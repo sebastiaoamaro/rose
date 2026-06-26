@@ -56,13 +56,6 @@ struct {
 } relevant_fd SEC(".maps");
 
 struct {
-	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, MAP_SIZE);
-	__type(key, char[FUNCNAME_MAX]);
-	__type(value, u64);
-} funcnames SEC(".maps");
-
-struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 256 * 1024);
 } rb SEC(".maps");
@@ -87,7 +80,7 @@ struct {
 //Holds a reference from the status the most recent pid of a node to the start_pid (all of the structs are indexed through this)
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 16384);
+	__uint(max_entries, 4096);
 	__type(key, int);
 	__type(value,int);
 } nodes_pid_translator SEC(".maps");
@@ -95,7 +88,7 @@ struct {
 //Holds pids of nodes, and relates them child->parent
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
-	__uint(max_entries, 16384);
+	__uint(max_entries, 4096);
 	__type(key, int);
 	__type(value,int);
 } pids SEC(".maps");

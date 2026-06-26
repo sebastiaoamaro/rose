@@ -120,7 +120,6 @@ def extract_instructions(disassembly, function_name):
                 break
 
             # Check for indented lines that are likely instructions
-            # if re.match(r'^\s+[0-9a-fA-F]+:', line):  # Look for instruction lines with addresses
             instructions.append(line)
 
     return instructions

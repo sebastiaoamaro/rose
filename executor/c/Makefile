@@ -77,18 +77,17 @@ $(call allow-override,CC,$(CROSS_COMPILE)cc)
 $(call allow-override,LD,$(CROSS_COMPILE)ld)
 
 
-.PHONY:	all
-all: $(APPS) ROSE TC UPROBEMAIN
+.PHONY: all ROSE TC
+all: $(APPS) ROSE TC
 ROSE: $(MAIN)
-TC:	$(TCMAIN)
-UPROBEMAIN: $(UPROBEMAIN)
+TC: $(TCMAIN)
 
 .PHONY: clean
 clean:
 	$(call msg,CLEAN)
 	$(Q)rm -rf $(OUTPUT) $(APPS)
-	rm main/main
-	rm tcmain/network
+	$(Q)rm -f main/main
+	$(Q)rm -f tcmain/network
 
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT):
 	$(call msg,MKDIR,$@)
@@ -120,7 +119,7 @@ $(LIBBLAZESYM_HEADER): $(LIBBLAZESYM_SRC)/target/release/libblazesym.a | $(OUTPU
 	$(Q)cp $(LIBBLAZESYM_SRC)/target/release/blazesym.h $@
 
 # Build BPF code
-$(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) *.h $(wildcard %.h) $(wildcard.%.%.h)$(VMLINUX) | $(OUTPUT) $(BPFTOOL)
+$(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) $(wildcard *.h) $(VMLINUX) | $(OUTPUT) $(BPFTOOL)
 	$(call msg,BPF,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH)		      \
 		     $(INCLUDES) $(CLANG_BPF_SYS_INCLUDES) \
@@ -139,38 +138,30 @@ $(patsubst %,$(OUTPUT)/%.o,$(APPS)): %.o: %.skel.h
 $(OUTPUT)/%.o: %.c $(wildcard %.h) | $(OUTPUT)
 	$(call msg,CC,$@)
 	$(call msg,CC,$^)
-	$(Q)$(CC) $(INCLUDES) -c $(filter %.c,$^) -o $@
+	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -c $(filter %.c,$^) -o $@
 
 $(patsubst %,$(OUTPUT)/%.o,$(BZS_APPS)): $(LIBBLAZESYM_HEADER)
 
 $(BZS_APPS): $(LIBBLAZESYM_OBJ)
 
-# Build applications .o
-$(APPS): %: $(OUTPUT)/%.o $(COMMON_OBJ) $(LIBBPF_OBJ) | $(OUTPUT)
-	$(call msg,APP,$@)
-	$(call msg,APP,$^)
-	$(Q)$(CC) -c $^ $(ALL_LDFLAGS) -lelf -lz -o $@
-
 OFILES=$(patsubst %,$(OUTPUT)/%.o,$(APPS))
 
-# Build main binary .o
+# App modules have no main(); build their .o files and mark done with a stamp
+$(APPS): %: $(OUTPUT)/%.o $(COMMON_OBJ) $(LIBBPF_OBJ) | $(OUTPUT)
+	$(call msg,APP,$@)
+	$(Q)touch $@
+
+# Build main binary
 $(MAIN): %: main/main.c $(LIBBPF_OBJ) $(APPS)
 	$(call msg,BINARY,$@)
-	$(call msg,BINARY,$^)
-	$(call msg,BINARY,$(OFILES))
-	$(call msg,BINARY,$(filter %.c,$^))
 	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -I .output/ -I . -c main/main.c -o .output/main.o
-	$(Q)$(CC) $(CFLAGS) .output/main.o $(ALL_LDFLAGS) $(OFILES) $(COMMON_OBJ).output/libbpf.a  -lelf -lz -o main/main
+	$(Q)$(CC) $(CFLAGS) .output/main.o $(ALL_LDFLAGS) $(OFILES) $(COMMON_OBJ) $(LIBBPF_OBJ) -lelf -lz -o main/main
 
-
-# Build tcmain binary .o
+# Build tcmain binary
 $(TCMAIN): %: tcmain/network.c $(LIBBPF_OBJ) $(APPS)
 	$(call msg,TC BINARY,$@)
-	$(call msg,TC BINARY,$^)
-	$(call msg,TC BINARY,$(OFILES))
-	$(call msg,TC BINARY,$(filter %.c,$^))
 	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -I .output/ -I . -c tcmain/network.c -o .output/network.o
-	$(Q)$(CC) $(CFLAGS) .output/network.o $(ALL_LDFLAGS) $(OFILES) $(COMMON_OBJ).output/libbpf.a  -lelf -lz -o tcmain/network
+	$(Q)$(CC) $(CFLAGS) .output/network.o $(ALL_LDFLAGS) $(OFILES) $(COMMON_OBJ) $(LIBBPF_OBJ) -lelf -lz -o tcmain/network
 
 
 # delete failed targets

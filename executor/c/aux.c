@@ -124,18 +124,6 @@ struct aux_bpf* start_aux_maps(){
 		return NULL;
 	}
 
-	err = bpf_map__unpin(skel->maps.funcnames, "/sys/fs/bpf/funcnames");
-	if(err) {
-		printf("[ERROR] libbpf unpin API: %d\n", err);
-		//return NULL;
-	}
-
-	err = bpf_map__pin(skel->maps.funcnames, "/sys/fs/bpf/funcnames");
-	if(err) {
-		printf("[ERROR] libbpf pin API: %d\n", err);
-		return NULL;
-	}
-
 
 	err = bpf_map__unpin(skel->maps.relevant_fd, "/sys/fs/bpf/relevant_fd");
 	if(err) {
@@ -612,11 +600,9 @@ char* get_lxc_container_location(const char* container_name) {
 
 
 void print_block(char* sentence){
-	printf("###########################################################\n");
-	printf("###########################################################\n");
-	printf("%s\n",sentence);
-	printf("###########################################################\n");
-	printf("###########################################################\n");
+	printf("\n============================================================\n");
+	printf("  %s\n", sentence);
+	printf("============================================================\n\n");
 }
 
 void sleep_for_ms(long milliseconds) {

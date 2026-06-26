@@ -344,7 +344,7 @@ int main()
 	for(int i =0; i< NODE_COUNT;i++){
 
 		if(strlen(nodes[i].script)){
-			kill(nodes[i].current_pid,SIGTERM);
+			//kill(nodes[i].current_pid,SIGTERM);
 			waitpid(nodes[i].current_pid,NULL,0);
 			printf("KILLED PID: %d\n",nodes[i].current_pid);
 		}
@@ -435,8 +435,8 @@ void create_pipes(){
         perror("mkfifo (read pipe)");
         exit(EXIT_FAILURE);
     }
-    printf("Created FIFO for write: %s\n", write_pipe);
-    printf("Created FIFO for read: %s\n", read_pipe);
+    printf("  [pipe]  write -> %s\n", write_pipe);
+    printf("  [pipe]  read  -> %s\n", read_pipe);
 }
 void open_tracer_pipe(){
 	int fd;
@@ -454,7 +454,7 @@ void open_tracer_pipe(){
 
 	fd = open(write_pipe, O_WRONLY);
 	if (fd == -1) {
-	    printf("Failed to open FIFO for write: %s\n", write_pipe);
+	    printf("  ✗ failed to open FIFO for write: %s\n", write_pipe);
 		perror("open");
 		exit(EXIT_FAILURE);
 	}
@@ -462,7 +462,7 @@ void open_tracer_pipe(){
 
 	fd = open(read_pipe, O_RDONLY);
 	if (fd == -1) {
-	    printf("Failed to open FIFO for read: %s\n", read_pipe);
+	    printf("  ✗ failed to open FIFO for read: %s\n", read_pipe);
 		perror("open");
 		exit(EXIT_FAILURE);
 	}
@@ -514,7 +514,7 @@ void run_setup(){
 
 
 	if(strlen(plan->setup.script)){
-		printf("Creating Setup process \n");
+		printf("  [setup]  starting setup script\n");
 		FILE *fp = custom_popen(plan->setup.script,args_script,env_script,'r',&(plan->setup.pid),0);
 		plan->setup.read_end = fp;
 		pthread_t thread_id;
@@ -526,7 +526,7 @@ void run_setup(){
 	}
 
 	if(strlen(plan->pre_workload.script)){
-		printf("Creating Pre Workload process \n");
+		printf("  [setup]  starting pre-workload script\n");
 		FILE *fp = custom_popen(plan->pre_workload.script,args_script,env_script,'r',&(plan->pre_workload.pid),0);
 		plan->pre_workload.read_end = fp;
 		pthread_t thread_id;
@@ -538,7 +538,7 @@ void run_setup(){
 	}
 
 	if(strlen(plan->workload.script)){
-		printf("Creating Workload process \n");
+		printf("  [setup]  starting workload script\n");
 		FILE *fp = custom_popen(plan->workload.script,args_script,env_script,'r',&(plan->workload.pid),0);
 		plan->workload.read_end = fp;
 		pthread_t thread_id;
@@ -580,7 +580,7 @@ void run_setup(){
 	}
 	//Sleep while we wait for setup to start
 	if(plan->setup.duration > 0){
-	   printf("WAITING FOR SETUP TO START \n");
+	   printf("  [setup]  waiting for setup to start...\n");
 	   sleep(plan->setup.duration);
 	}
 }
@@ -591,7 +591,7 @@ void start_workload(){
 			return;
 		if(plan->workload.pid == 0)
 			return;
-		printf("STARTED WORKLOAD:%s, PID:%d \n",plan->workload.script,plan->workload.pid);
+		printf("  [workload]  started  pid=%d  %s\n",plan->workload.pid,plan->workload.script);
 		kill(plan->workload.pid,SIGUSR1);
 }
 
@@ -602,22 +602,22 @@ void start_pre_workload(){
 		return;
 	if(plan->pre_workload.pid == 0)
 		return;
-	printf("STARTED PRE_WORKLOAD, PID:%d\n",plan->pre_workload.pid);
+	printf("  [pre-work]  started  pid=%d\n",plan->pre_workload.pid);
 	kill(plan->pre_workload.pid,SIGUSR1);
 
     int status;
 
-    printf("WAITING FOR PRE_WORKLOAD TO FINISH...\n");
+    printf("  [pre-work]  waiting for completion...\n");
 
     if (waitpid(plan->pre_workload.pid, &status, 0) == -1) {
             perror("waitpid failed");
         } else {
             if (WIFEXITED(status)) {
-                printf("Process %d exited with status %d\n", plan->pre_workload.pid, WEXITSTATUS(status));
+                printf("  ✓ pre-workload  pid=%d  exit_status=%d\n", plan->pre_workload.pid, WEXITSTATUS(status));
             } else if (WIFSIGNALED(status)) {
-                printf("Process %d was terminated by signal %d\n", plan->pre_workload.pid, WTERMSIG(status));
+                printf("  ✗ pre-workload  pid=%d  killed by signal %d\n", plan->pre_workload.pid, WTERMSIG(status));
             } else {
-                printf("Process %d ended (unknown reason)\n", plan->pre_workload.pid);
+                printf("  ? pre-workload  pid=%d  ended (unknown reason)\n", plan->pre_workload.pid);
             }
         }
 }
@@ -629,7 +629,7 @@ void start_lazyfs(){
 	if(plan->lazyfs.pid == 0)
 		return;
 
-	printf("STARTED LAZYFS, PID:%d\n",plan->lazyfs.pid);
+	printf("  [lazyfs]  started  pid=%d\n",plan->lazyfs.pid);
 	kill(plan->lazyfs.pid,SIGUSR1);
 }
 
@@ -669,19 +669,19 @@ void setup_node_scripts(){
 			continue;
 		}
 		if (!strlen(nodes[i].script)){
-			printf("Empty command \n");
+			printf("  [node]  node[%d] empty command, skipping\n",i);
 			continue;
 		}
 
 		if (nodes[i].container){
 		    if (!strlen(nodes[i].pid_file)){
-				printf("NODE[%d].command=[%s]\n",i,nodes[i].script);
+				printf("  [node]  node[%d]  command=%s\n",i,nodes[i].script);
 				start_target_process_in_container(i,&nodes[i].pid);
 			}
 		}
 		else if (!nodes[i].container){
 			start_target_process(i,&nodes[i].pid);
-			printf("NODE[%d].PID=[%d]\n",i,nodes[i].pid);
+			printf("  [node]  node[%d]  pid=%d\n",i,nodes[i].pid);
 			nodes[i].current_pid = nodes[i].pid;
 			int one = 1;
 			bpf_map_update_elem(constants.pids, &nodes[i].current_pid, &one, BPF_ANY);
@@ -690,7 +690,7 @@ void setup_node_scripts(){
 }
 
 void collect_container_processes(){
-    printf("COLLECTING CONTAINER PROCESSES PIDS\n");
+    printf("  [collect]  gathering container process pids\n");
 	for(int i = 0; i< NODE_COUNT; i++){
 		if (nodes[i].container && strlen(nodes[i].script) > 0 && !(strlen(nodes[i].pid_file))){
 		    //The pid is now the pid of the process we started with popen, not of the node
@@ -730,13 +730,13 @@ void collect_container_processes(){
                 }
                 int pid;
                 if (fscanf(file, "%d", &pid) == 1) {
-                    printf("PID IN FILE IS: %d \n", pid);
+                    printf("  [collect]  pid in file: %d\n", pid);
                 } else {
-                    printf("Failed to read an integer.\n");
+                    printf("  ✗ failed to read pid from file\n");
                 }
 
                 int host_pid = find_host_pid_for_container_pid(pid);
-                printf("NODE[%d].HOST_PID: %d\n",i,host_pid);
+                printf("  [collect]  node[%d]  host_pid=%d\n",i,host_pid);
                 nodes[i].pid = host_pid;
                 nodes[i].current_pid = host_pid;
                 //TODO: This basically means redpanda can't setup in time for our experiment messes everything up
@@ -794,7 +794,7 @@ void send_node_and_pid_to_tracer(int container_pid,int container_type,int pid, c
 }
 
 void start_nodes_scripts(){
-    printf("NODES: STARTED\n");
+    printf("  [nodes]  sending SIGUSR1 to non-container nodes\n");
 	for(int i=0;i<NODE_COUNT;i++){
 		if (!(nodes[i].container)){
 			kill(nodes[i].pid,SIGUSR1);
@@ -819,11 +819,11 @@ void start_container_nodes_scripts(){
     		// nodes[i].pid = nodes[i].current_pid;
 		}
 		if(nodes[i].pid_tc_in !=0){
-		    printf("Start TC prog for node %d \n",i);
+		    printf("  [tc]  starting TC prog (in)   node[%d]\n",i);
 			kill(nodes[i].pid_tc_in,SIGUSR1);
 		}
 		if(nodes[i].pid_tc_out !=0){
-		    printf("Start TC prog for node %d \n",i);
+		    printf("  [tc]  starting TC prog (out)  node[%d]\n",i);
 			kill(nodes[i].pid_tc_out,SIGUSR1);
 		}
 	}
@@ -831,7 +831,7 @@ void start_container_nodes_scripts(){
 
 FILE* start_target_process(int node_number, int *pid){
 
-	printf("Starting target script for node:%s with script:%s\n",nodes[node_number].name,nodes[node_number].script);
+	printf("  [node]  starting  %s  script=%s\n",nodes[node_number].name,nodes[node_number].script);
 
 	char script[STRING_SIZE];
 
@@ -978,7 +978,7 @@ FILE* start_target_process_in_container(int node_number,int *pid){
         exit(1);
     }
 
-	printf("STARTED NODE %s,NS_PID:%d,PID:%d,SCRIPT:%s\n",nodes[node_number].name,nodes[node_number].container_pid,*pid,nodes[node_number].script);
+	printf("  [node]  started  %s  ns_pid=%d  pid=%d  script=%s\n",nodes[node_number].name,nodes[node_number].container_pid,*pid,nodes[node_number].script);
 	pthread_t thread_id;
 	struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
 	args->fp= fp;
@@ -1015,7 +1015,7 @@ void setup_begin_conditions(){
 				    snprintf(file_info.filename,sizeof(file_info.filename),"%s",syscall.file_name);
 					//strncpy(file_info.filename,syscall.file_name,sizeof(file_info.filename));
 					file_info.size = strlen(file_info.filename);
-					printf("Created fileinfo with filename %s and len %d\n",file_info.filename,file_info.size);
+					printf("  [cond]  fileinfo  name=%s  len=%d\n",file_info.filename,file_info.size);
 				}
 
 				int syscall_nr = syscall.syscall;
@@ -1027,14 +1027,14 @@ void setup_begin_conditions(){
 
 				error = bpf_map_update_elem(constants.files,&info_key,&file_info,BPF_ANY);
 				if (error){
-					printf("Error of update in files_opened is %d, value->%s \n",error,file_info.filename);
+					printf("  ✗ map update (files) err=%d  file=%s\n",error,file_info.filename);
 				}
 
 				struct relevant_fds relevant_fd_init = {};
 
 				error = bpf_map_update_elem(constants.relevant_fd,&pid,&relevant_fd_init,BPF_ANY);
 				if (error){
-					printf("Error of update in files_opened is %d, value->%d \n",error,pid);
+					printf("  ✗ map update (fd) err=%d  pid=%d\n",error,pid);
 				}
 
 				insert_relevant_condition_in_ebpf(i,pid,syscall_nr,syscall.call_count);
@@ -1112,7 +1112,7 @@ void setup_begin_conditions(){
 	}
 }
 void setup_uprobes(){
-    printf("SETTING UP USER-FUNCTION PROBES \n");
+    printf("\n  [uprobe]  setting up user-function probes\n");
     int user_func_cond_nr = 0;
     for(int i = 0; i < FAULT_COUNT; i++){
 		int has_time_condition = 0;
@@ -1139,7 +1139,7 @@ void setup_uprobes(){
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
 
-					printf("ADDED UPROBE:[%s], IN [%s]\n",user_function.symbol,combined_path);
+					printf("  [uprobe]  attached  %s  in %s\n",user_function.symbol,combined_path);
 
 					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset,user_function.absolute_offset);
 				}else{
@@ -1210,7 +1210,7 @@ void insert_relevant_condition_in_ebpf(int fault_nr,int pid,int cond_nr,int call
 
 	new_information_state->repeat = faults[fault_nr].repeat;
 
-	printf("FAULT: [%d], STATE_KEY:[%d], VALUE:[%d], COND_MATCH:[%d], PID:[%d] \n",fault_nr,cond_nr,new_information_state->relevant_states[fault_nr],faults[fault_nr].initial.conditions_match[fault_nr],pid);
+	printf("  [cond]  fault=%d  key=%d  value=%d  cond_match=%d  pid=%d\n",fault_nr,cond_nr,new_information_state->relevant_states[fault_nr],faults[fault_nr].initial.conditions_match[fault_nr],pid);
 	struct info_state *old_information_state = (struct info_state*)malloc(sizeof(struct info_state));
 
 	old_information_state->current_value = 0;
@@ -1223,7 +1223,7 @@ void insert_relevant_condition_in_ebpf(int fault_nr,int pid,int cond_nr,int call
 		old_information_state->relevant_states[fault_nr] = call_count;
 		error = bpf_map_update_elem(constants.relevant_state_info_fd,&information,old_information_state,BPF_ANY);
 		if (error){
-			printf("Error of update is %d, key->%d \n",error,cond_nr);
+			printf("  ✗ map update (cond) err=%d  key=%d\n",error,cond_nr);
 		}
 		free(new_information_state->relevant_states);
 	}else{
@@ -1236,7 +1236,7 @@ void add_faults_to_bpf(){
 	print_block("Adding Faults to eBPF Maps");
 
 	for (int i = 0; i < FAULT_COUNT; i++){
-		printf("ROSE: ADDING FAULT TO BPF NR: %d, TYPE:%d, PID:%d \n",i,faults[i].faulttype,nodes[faults[i].traced].pid);
+		printf("  [fault]  nr=%d  type=%d  pid=%d\n",i,faults[i].faulttype,nodes[faults[i].traced].pid);
 		struct simplified_fault new_fault;
 		new_fault.run = 0;
 		new_fault.duration = faults[i].duration;
@@ -1268,23 +1268,23 @@ void add_faults_to_bpf(){
 				system_call syscall = faults[i].fault_conditions_begin[j].condition.syscall;
 				int cond_nr = syscall.syscall;
 				new_fault.initial.fault_type_conditions[cond_nr] = syscall.call_count;
-				printf("Fault %d has condition system call %d with call_count %d \n",i,cond_nr,syscall.call_count);
+				printf("  [condition]  fault=%d  syscall=%d  count=%d\n",i,cond_nr,syscall.call_count);
 			}
 			if (type == FILE_SYSCALL){
 				file_system_call syscall = faults[i].fault_conditions_begin[j].condition.file_system_call;
 				int cond_nr = syscall.syscall;
 				new_fault.initial.fault_type_conditions[cond_nr] = syscall.call_count;
-				printf("Fault %d has condition file_system_call %d with call_count %d \n",i,cond_nr,syscall.call_count);
+				printf("  [condition]  fault=%d  file_syscall=%d  count=%d\n",i,cond_nr,syscall.call_count);
 			}
 			if(type == USER_FUNCTION){
 				user_function user_function = faults[i].fault_conditions_begin[j].condition.user_function;
 				int cond_nr = user_function.cond_nr;
 				new_fault.initial.fault_type_conditions[cond_nr] = user_function.call_count;
-				printf("Fault %d has condition user_function name: %s id:%d with call_count %d \n",i,user_function.symbol,cond_nr,user_function.call_count);
+				printf("  [condition]  fault=%d  fn=%s  id=%d  count=%d\n",i,user_function.symbol,cond_nr,user_function.call_count);
 			}
 			if(type == TIME){
 				new_fault.initial.fault_type_conditions[TIME_STATE] = faults[i].fault_conditions_begin[j].condition.time;
-				printf("Fault %d has condition time %d with time %d \n",i,TIME_STATE,faults[i].fault_conditions_begin[j].condition.time);
+				printf("  [condition]  fault=%d  time=%d\n",i,faults[i].fault_conditions_begin[j].condition.time);
 			}
 		}
 
@@ -1307,7 +1307,7 @@ void add_faults_to_bpf(){
 				//memset(file_info.filename,'\0',sizeof(file_system_op.file_name));
 				strcpy(file_info.filename,file_system_op.file_name);
 				file_info.size = strlen(file_info.filename);
-				printf("Created fileinfo with filename %s with size %d for cond %d\n",file_info.filename,file_info.size,syscall_nr);
+				printf("  [fault]  file=%s  size=%d  syscall=%d\n",file_info.filename,file_info.size,syscall_nr);
 			}
 
 
@@ -1319,7 +1319,7 @@ void add_faults_to_bpf(){
 			//Add name of file to eBPF
 			error = bpf_map_update_elem(constants.files,&info_key,&file_info,BPF_ANY);
 			if (error){
-				printf("Error of update in files_opened is %d, value->%s \n",error,file_info.filename);
+				printf("  ✗ map update (files) err=%d  file=%s\n",error,file_info.filename);
 			}
 
 			//Init relevant fd struct for this pid
@@ -1329,7 +1329,7 @@ void add_faults_to_bpf(){
 
 			error = bpf_map_update_elem(constants.relevant_fd,&pid,&relevant_fd_init,BPF_ANY);
 			if (error){
-				printf("Error of update in files_opened is %d, value->%d \n",error,pid);
+				printf("  ✗ map update (fd) err=%d  pid=%d\n",error,pid);
 			}
 
 			new_fault.return_value = file_system_op.return_value;
@@ -1339,7 +1339,7 @@ void add_faults_to_bpf(){
 
 		int error = bpf_map_update_elem(constants.bpf_map_fault_fd,&i,&new_fault,BPF_ANY);
 		if (error)
-			printf("Error of update in adding fault to bpf is %d \n",error);
+			printf("  ✗ map update (fault bpf) err=%d  fault=%d\n",error,i);
 	}
 
 }
@@ -1402,7 +1402,7 @@ int setup_tc_progs(){
 
 			int error = bpf_map_update_elem(constants.blocked_ips,&egress_key,&ips_to_block_out,BPF_ANY);
 			if (error){
-				printf("Error of update in blocked_ips is %d, key->%d \n",error,index);
+				printf("  ✗ map update (blocked_ips egress) err=%d  if_index=%d\n",error,index);
 			}
 
 			sprintf(nsenter_args[2], "%d", nodes[target].container_pid);
@@ -1456,7 +1456,7 @@ int setup_tc_progs(){
 
 			error = bpf_map_update_elem(constants.blocked_ips,&ingress_key,&ips_to_block_in,BPF_ANY);
 			if (error){
-				printf("Error of update in blocked_ips is %d, key->%d \n",error,index);
+				printf("  ✗ map update (blocked_ips ingress) err=%d  if_index=%d\n",error,index);
 			}
 
 
@@ -1493,35 +1493,37 @@ void count_time(){
 
     int time=0;
 	int maximum_time = 1000 * get_maximum_time();
-	printf("COUNT_TIME: STARTED %d \n",maximum_time);
+	printf("\n  [time]  started  max=%dms\n",maximum_time);
 	while(1){
 		sleep_for_ms(10);
 		time += 10;
 
 		for (int i = 0; i< FAULT_COUNT;i++){
 			int fault_time = faults[i].initial.fault_type_conditions[TIME_STATE];
-			if (time >= fault_time && faults[i].initial.fault_type_conditions[TIME_STATE]){
+			if (fault_time == 0)
+			    continue;
+			if (((time % fault_time == 0) && faults[i].initial.fault_type_conditions[TIME_STATE]) ){
 
 				struct simplified_fault fault;
 				int err_lookup;
 				err_lookup = bpf_map_lookup_elem(constants.bpf_map_fault_fd, &i,&fault);
 				if (err_lookup){
-					printf("Did not find elem in count_time errno is %d \n",errno);
+					printf("  ✗ [time]  map lookup failed  errno=%d\n",errno);
 				}
 
-				if (fault.done){
+				if (fault.done == fault.occurrences){
 					continue;
 				}
 				if (fault.initial.conditions_match[TIME_STATE] > 0){
 					continue;
 				}
 				//printf("Time value property is %d \n",fault.initial.conditions_match[TIME_STATE]);
-				printf("TIME:TRUE, FAULT:%d \n",fault.fault_nr);
+				printf("  [time]  trigger  fault=%d\n",fault.fault_nr);
 				fault.initial.conditions_match[TIME_STATE] = 1;
 				fault.run+=1;
 				int error = bpf_map_update_elem(constants.bpf_map_fault_fd,&i,&fault,BPF_ANY);
 				if(error)
-					printf("Error of update in adding fault to bpf is %d \n",error);
+					printf("  ✗ [time]  map update failed  err=%d\n",error);
 
 			}
 		}
@@ -1548,7 +1550,7 @@ void count_time(){
 
 
 		if (time >= maximum_time){
-			printf("ROSE: MAXIMUM TIME REACHED \n");
+			printf("\n  [time]  maximum time reached, exiting\n");
 			exiting = true;
 			break;
 		}
@@ -1578,7 +1580,7 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
 			}
 
 			if (fault->target == -1){
-				printf("STOPPING LEADER %d \n ",LEADER_PID);
+				printf("  [event]  PROCESS_STOP  leader  pid=%d\n",LEADER_PID);
 				args->pid = LEADER_PID;
 			}else{
 				args->pid = e->pid;
@@ -1587,11 +1589,11 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
 			args->duration = fault->duration;
 			args->name = nodes[get_node_nr_from_pid(args->pid)].name;
 
-			printf("STOPPING: %s FOR %d \n",args->name,fault->duration);
+			printf("  [event]  PROCESS_STOP  node=%s  duration=%d\n",args->name,fault->duration);
 
 			pthread_create(&thread_id, NULL, (void*)pause_process, (void*)args);
 			fault->done++;
-			printf("FAULT[%d]:DONE -> %d \n",fault_nr,fault->done);
+			printf("  [fault]  fault[%d]  done=%d\n",fault_nr,fault->done);
 
 			break;
 		}
@@ -1606,7 +1608,6 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
 			}
 
 			if (fault->target == -1){
-				printf("Stopping LEADER %d \n ",LEADER_PID);
 				args->pid = LEADER_PID;
 			}else{
 				args->pid = e->pid;
@@ -1616,14 +1617,14 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
 			int node_nr = get_node_nr_from_pid(e->pid);
 
 			if (node_nr < 0){
-			    printf("Node not found, fault not injected\n");
+			    printf("  ✗ [event]  PROCESS_KILL  node not found for pid=%d, fault not injected\n",e->pid);
 				break;
 			}
 
 			args->duration = fault->duration;
 			args->node_to_restart = node_nr;
 
-			printf("NODE: %s, PID: %d, DURATION: %d, FAULT_NR: %d \n",nodes[(args->node_to_restart)].name,(args->pid),(args->duration),fault_nr);
+			printf("  [event]  PROCESS_KILL  node=%s  pid=%d  duration=%d  fault=%d\n",nodes[(args->node_to_restart)].name,(args->pid),(args->duration),fault_nr);
 
 			pthread_create(&thread_id, NULL, (void*)restart_process, (void*)args);
 			fault->done++;
@@ -1631,16 +1632,16 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
 		}
 		case LEADER_CHANGE:{
 			LEADER_PID = e->pid;
-			printf("NEW LEADER: %d \n",e->pid);
+			printf("  [event]  LEADER_CHANGE  new_leader_pid=%d\n",e->pid);
 			int zero = 0;
 			int error = bpf_map_update_elem(constants.auxiliary_info_map_fd,&zero,&LEADER_PID,BPF_ANY);
 			if (error){
-				printf("UPDATING LEADER, ERROR: %d \n",error);
+				printf("  ✗ map update (leader) err=%d\n",error);
 			}
 			break;
 		}
 		case CLEAR_CACHE:{
-		    printf("Received CLEAR_CACHE from eBPF \n");
+		    printf("  [event]  CLEAR_CACHE\n");
 			FILE *file;
             file = fopen(plan->lazyfs.pipe_location, "w");
 
@@ -1658,14 +1659,14 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
 
             fclose(file);
 
-            printf("Data written successfully to lazyfs pipe\n");
+            printf("  ✓ lazyfs pipe written (clear-cache)\n");
             struct fault *fault = &faults[fault_nr];
             fault->done++;
 
             break;
 		}
         case TORN_OP:{
-   	        printf("Received TORN_OP from eBPF \n");
+   	        printf("  [event]  TORN_OP\n");
     		FILE *file;
             file = fopen(plan->lazyfs.pipe_location, "w");
 
@@ -1682,14 +1683,14 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
 
             fclose(file);
 
-            printf("Data written successfully to lazyfs pipe\n");
+            printf("  ✓ lazyfs pipe written (torn-op)\n");
             struct fault *fault = &faults[fault_nr];
             fault->done++;
 
             break;
         }
         case TORN_SEQ:{
-   	        printf("Received TORN_SEQ from eBPF \n");
+   	        printf("  [event]  TORN_SEQ\n");
       		FILE *file;
             file = fopen(plan->lazyfs.pipe_location, "w");
 
@@ -1706,14 +1707,14 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
 
             fclose(file);
 
-            printf("Data written successfully to lazyfs pipe\n");
+            printf("  ✓ lazyfs pipe written (torn-seq)\n");
             struct fault *fault = &faults[fault_nr];
             fault->done++;
 
             break;
         }
         case CRASH_FS:{
-            printf("Received CRASH_FS from eBPF \n");
+            printf("  [event]  CRASH_FS\n");
       		FILE *file;
             file = fopen(plan->lazyfs.pipe_location, "w");
 
@@ -1730,7 +1731,7 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
 
             fclose(file);
 
-            printf("Data written successfully to lazyfs pipe\n");
+            printf("  ✓ lazyfs pipe written (crash)\n");
             struct fault *fault = &faults[fault_nr];
             fault->done++;
             break;
@@ -1752,24 +1753,24 @@ void choose_leader(){
 			int error = bpf_map_update_elem(constants.auxiliary_info_map_fd,&zero,&(nodes[i].pid),BPF_ANY);
 
 			if(error){
-				printf("Error in changing leader %d \n",error);
+				printf("  ✗ map update (leader pid) err=%d\n",error);
 			}
 			//printf("Node %s is %d \n",nodes[i].name,one);
 			error = bpf_map_update_elem(constants.nodes_status_map_fd,&(nodes[i].pid),&one,BPF_ANY);
 			if(error){
-				printf("Error in updating node status for leader %d \n",error);
+				printf("  ✗ map update (node_status leader) err=%d\n",error);
 			}
 		}else{
 			//printf("Node %s is %d \n",nodes[i].name,zero);
 			int error = bpf_map_update_elem(constants.nodes_status_map_fd,&(nodes[i].pid),&zero,BPF_ANY);
 			if(error){
-				printf("Error in updating a node %d \n",error);
+				printf("  ✗ map update (node_status) err=%d\n",error);
 			}
 		}
 		int pos = i + 2;
 		int error = bpf_map_update_elem(constants.auxiliary_info_map_fd,&pos,&(nodes[i].pid),BPF_ANY);
 		if(error){
-			printf("Error in adding pid to auxiliary_info %d \n",error);
+			printf("  ✗ map update (auxiliary_info) err=%d\n",error);
 		}
 	}
 }
@@ -1829,7 +1830,7 @@ void retrieve_new_pid_container(int node_nr,int nsenter_pid){
 		script_pid = get_children_pids(child_pid);
 	}
 	nodes[node_nr].current_pid = script_pid;
-	printf("NODE[%d]: PID[%d] -> PID[%d] CHANGED\n",node_nr,nsenter_pid,script_pid);
+	printf("  [pid]  node[%d]  %d -> %d\n",node_nr,nsenter_pid,script_pid);
 
 }
 
@@ -1837,38 +1838,38 @@ void retrieve_new_pid_container(int node_nr,int nsenter_pid){
 //boot_pid the pid that information is based in the maps
 //old pid is the pid pre restart
 void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
-    printf("NEW IN PID_TREE: CHILD: %d, PARENT: %d\n",new_pid,old_pid);
-	printf("PID TRANSLATED: NEW: %d, OLD: %d\n",new_pid,boot_pid);
+    printf("  [pid]  pid_tree   child=%d  parent=%d\n",new_pid,old_pid);
+	printf("  [pid]  translate  new=%d  boot=%d\n",new_pid,boot_pid);
 
 	int one = 1;
 	//Insert in the map which is a pid_tree
 	int error = bpf_map_update_elem(constants.pids, &new_pid, &old_pid, BPF_ANY);
 	if(error){
-		printf("Error inserting in pids map %d \n",error);
+		printf("  ✗ map update (pids) err=%d\n",error);
 	}
 
 	//Insert in the map which maps new_pid -> boot_pid, to access faults structures
 	error = bpf_map_update_elem(constants.nodes_translator_map_fd,&new_pid,&boot_pid,BPF_ANY);
 	if(error){
-		printf("Error inserting in pid translator %d \n",error);
+		printf("  ✗ map update (pid_translator) err=%d\n",error);
 	}
 
 	//Insert in the map which contains node_status (checks if faults are gonna be injected)
 	int zero = 0;
 	error = bpf_map_update_elem(constants.nodes_status_map_fd,&new_pid,&zero,BPF_ANY);
 	if(error){
-		printf("Error inserting in node_status %d \n",error);
+		printf("  ✗ map update (node_status insert) err=%d\n",error);
 	}
 
 	error = bpf_map_delete_elem(constants.nodes_status_map_fd,&old_pid);
 	if(error){
-		printf("Error deleting pid in node_status %d \n",error);
+		printf("  ✗ map delete (node_status old_pid) err=%d\n",error);
 	}
 	//+2 is because the first two positions are reserved for other information
 	int pos = node_nr + 2;
 	error = bpf_map_update_elem(constants.auxiliary_info_map_fd,&pos,&new_pid,BPF_ANY);
 	if(error){
-		printf("Error in adding pid to auxiliary_info %d \n",error);
+		printf("  ✗ map update (auxiliary_info) err=%d\n",error);
 	}
 
 	//Updates the pid in the fault structure, so that we know in what pid the fault must be injected
@@ -1876,7 +1877,7 @@ void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
         struct simplified_fault fault;
         int lookup_err = bpf_map_lookup_elem(constants.bpf_map_fault_fd, &i, &fault);
         if (lookup_err) {
-            printf("update_faults_pid_in_bpf: lookup failed for key %d errno=%d\n", i, lookup_err);
+            printf("  ✗ [pid]  fault map lookup failed  key=%d  errno=%d\n", i, lookup_err);
             continue;
         }
 
@@ -1884,9 +1885,9 @@ void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
             fault.pid = new_pid;
             int update_err = bpf_map_update_elem(constants.bpf_map_fault_fd, &i, &fault, BPF_ANY);
             if (update_err) {
-                printf("update_faults_pid_in_bpf: failed to update fault %d pid -> %d (err=%d)\n", i, new_pid, update_err);
+                printf("  ✗ [pid]  fault pid update failed  fault=%d  new_pid=%d  err=%d\n", i, new_pid, update_err);
             } else {
-                printf("update_faults_pid_in_bpf: updated fault %d pid %d -> %d\n", i, old_pid, new_pid);
+                printf("  [pid]  fault=%d  %d -> %d\n", i, old_pid, new_pid);
             }
         }
     }

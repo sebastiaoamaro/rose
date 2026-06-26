@@ -98,7 +98,7 @@ Breakdown of run time: 1~2 hours
 - (Table 2 ): Cost of rose tracer versus other alternatives
 
 ```
-~/rose/artifact_evaluation/$ ./display_tracing_table.sh
+~/rose/artifact_evaluation/$ ./display_overhead_table.sh
 ```
 
 - Now you can proceed to the full evaluation described in the appendix.
