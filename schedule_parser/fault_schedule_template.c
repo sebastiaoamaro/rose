@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <sys/resource.h>
 #include <bpf/libbpf.h>
 #include <net/if.h>
@@ -135,14 +134,14 @@ int get_maximum_time(){
 }
 
 
-void create_fault(struct fault* fault,char* name,int target,int traced, int faulttype,int fault_category,fault_details fault_details,int repeat,int occurrences,int duration,int condition_count,int exit){
+void create_fault(struct fault* fault,char* name,int target,int traced, int fault_type,int fault_category,fault_details fault_details,int repeat,int occurrences,int duration,int condition_count,int exit){
 
     // memset(fault->name,'\0',sizeof(name));
     strcpy(fault->name,name);
     fault->target = target;
     fault->traced = traced;
     fault->fault_details = fault_details;
-    fault->faulttype = faulttype;
+    fault->fault_type = fault_type;
     fault->category = fault_category;
 	fault->done = 0;
 	fault->repeat = repeat;

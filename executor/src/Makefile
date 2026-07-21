@@ -24,9 +24,9 @@ INCLUDES := -I$(OUTPUT) -I../../libbpf/include/uapi -I$(dir $(VMLINUX))
 CFLAGS := -g -Wall -Wextra
 ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
-APPS = uprobes tc aux fs popen fault_schedule fault_inject
-MAIN = main
-TCMAIN = network
+APPS = uprobes tc aux fault_schedule fault_inject
+MAIN = executor
+TCMAIN = network_manager
 
 CARGO ?= $(shell which cargo)
 ifeq ($(strip $(CARGO)),)
@@ -40,7 +40,6 @@ endif
 
 COMMON_OBJ = \
 	$(OUTPUT)/trace_helpers.o \
-	$(OUTPUT)/map_helpers.o \
 	$(OUTPUT)/uprobe_helpers.o \
 	$(OUTPUT)/btf_helpers.o \
 
@@ -86,8 +85,8 @@ TC: $(TCMAIN)
 clean:
 	$(call msg,CLEAN)
 	$(Q)rm -rf $(OUTPUT) $(APPS)
-	$(Q)rm -f main/main
-	$(Q)rm -f tcmain/network
+	$(Q)rm -f executor/executor
+	$(Q)rm -f network_manager/network_manager
 
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT):
 	$(call msg,MKDIR,$@)
@@ -151,17 +150,17 @@ $(APPS): %: $(OUTPUT)/%.o $(COMMON_OBJ) $(LIBBPF_OBJ) | $(OUTPUT)
 	$(call msg,APP,$@)
 	$(Q)touch $@
 
-# Build main binary
-$(MAIN): %: main/main.c $(LIBBPF_OBJ) $(APPS)
+# Build executor binary
+$(MAIN): %: executor/executor.c $(LIBBPF_OBJ) $(APPS)
 	$(call msg,BINARY,$@)
-	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -I .output/ -I . -c main/main.c -o .output/main.o
-	$(Q)$(CC) $(CFLAGS) .output/main.o $(ALL_LDFLAGS) $(OFILES) $(COMMON_OBJ) $(LIBBPF_OBJ) -lelf -lz -o main/main
+	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -I .output/ -I . -c executor/executor.c -o .output/executor.o
+	$(Q)$(CC) $(CFLAGS) .output/executor.o $(ALL_LDFLAGS) $(OFILES) $(COMMON_OBJ) $(LIBBPF_OBJ) -lelf -lz -o executor/executor
 
-# Build tcmain binary
-$(TCMAIN): %: tcmain/network.c $(LIBBPF_OBJ) $(APPS)
+# Build network_manager binary
+$(TCMAIN): %: network_manager/network_manager.c $(LIBBPF_OBJ) $(APPS)
 	$(call msg,TC BINARY,$@)
-	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -I .output/ -I . -c tcmain/network.c -o .output/network.o
-	$(Q)$(CC) $(CFLAGS) .output/network.o $(ALL_LDFLAGS) $(OFILES) $(COMMON_OBJ) $(LIBBPF_OBJ) -lelf -lz -o tcmain/network
+	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -I .output/ -I . -c network_manager/network_manager.c -o .output/network_manager.o
+	$(Q)$(CC) $(CFLAGS) .output/network_manager.o $(ALL_LDFLAGS) $(OFILES) $(COMMON_OBJ) $(LIBBPF_OBJ) -lelf -lz -o network_manager/network_manager
 
 
 # delete failed targets

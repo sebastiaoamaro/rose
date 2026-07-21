@@ -1,18 +1,12 @@
 // SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 /* Copyright (c) 2022 Hengqi Chen */
 #include <vmlinux.h>
-//#include <stddef.h>
-//#include <linux/bpf.h>
-//#include <linux/if_ether.h>
-//#include <linux/ip.h>
-//#include <linux/in.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
-#include "aux.h"
+#include "bpf_shared.h"
 #include "tc.h"
-#include "maps.bpf.h"
 
 
 #define IP_MF		0x2000

@@ -21,9 +21,7 @@ class Event:
     A class representing a single event with attributes: Node, Pid, Tid, name, and time.
     """
 
-    def __init__(
-        self, type, node, pid, tid, name, time, ret, arg1, arg2, arg3, arg4, arg5
-    ):
+    def __init__(self, type, node, pid, tid, name, time, ret, arg1, arg2, arg3, arg4, arg5):
         """Stores all event fields; for connect/network events arg1/arg2 are decoded
         from little-endian integers to IPv4Address objects."""
         self.type = type
@@ -209,12 +207,7 @@ class History:
                 self.pids[node_id] = []
                 self.new_pid_events[node_id] = []
 
-            if (
-                node_id != "any"
-                and event.pid not in self.pids[node_id]
-                and int(event.pid) != 0
-                and int(event.pid) != 4
-            ):
+            if node_id != "any" and event.pid not in self.pids[node_id] and int(event.pid) != 0 and int(event.pid) != 4:
                 self.pids[node_id].append(event.pid)
                 self.new_pid_events[node_id].append(event)
 
@@ -322,10 +315,7 @@ class History:
                 events = self.events_by_node[event.node]
                 prev_event = None
                 for previous_event in reversed(events):
-                    if (
-                        previous_event.time < event.time
-                        and previous_event.pid == event.pid
-                    ):
+                    if previous_event.time < event.time and previous_event.pid == event.pid:
                         prev_event = previous_event
                         break
 
@@ -365,17 +355,11 @@ class History:
 
                 # Processes are stopped by us to setup other things, thus pauses at the start are detected but are not real
                 if fault.start_time <= 1000:
-                    print(
-                        "Skipped process_pause it is at the start target was {} duration was {}".format(
-                            fault.target, fault.duration
-                        )
-                    )
+                    print("Skipped process_pause it is at the start target was {} duration was {}".format(fault.target, fault.duration))
                     continue
 
                 fault_timestamp = int(event.time) - fault.duration * 1000000
-                fault.event_id = self.find_event_by_id_by_time(
-                    fault_timestamp, event.node
-                )
+                fault.event_id = self.find_event_by_id_by_time(fault_timestamp, event.node)
 
                 cond = time_cond()
                 cond.time = time_rounded
@@ -489,9 +473,7 @@ class History:
                     time_rounded = math.floor(time / 10) * 10
                     fault.start_time = time_rounded
 
-                    fault.event_id = self.find_event_by_id_by_time(
-                        start_time_fault, node
-                    )
+                    fault.event_id = self.find_event_by_id_by_time(start_time_fault, node)
 
                     if len(fault.begin_conditions) == 0:
                         cond = time_cond()
@@ -528,10 +510,7 @@ class History:
         # Checks for unique events in window
         print("Function calls in window:\n", function_calls)
         for function_call in function_calls:
-            if (
-                function_call.name in function_calls_counter
-                and function_calls_counter[function_call.name] > 1
-            ):
+            if function_call.name in function_calls_counter and function_calls_counter[function_call.name] > 1:
                 function_calls_counter.pop(function_call.name)
 
         # Returns number of events found: int, important events: dict and the events:list
@@ -549,14 +528,10 @@ class History:
         if fault_injected_event.id == 0:
             print("Fault not injected")
             return False
-        functions_before = self.get_functions_before(
-            fault_injected_event.node, fault_injected_event.id, window
-        )
+        functions_before = self.get_functions_before(fault_injected_event.node, fault_injected_event.id, window)
         new_order = functions_before[2]
         for i in range(0, len(new_order) - 1):
-            print(
-                "Comparing {} with {}".format(new_order[i].name, origin_order[i].name)
-            )
+            print("Comparing {} with {}".format(new_order[i].name, origin_order[i].name))
             if new_order[i].name != origin_order[i].name:
                 return False
         return True
@@ -616,8 +591,8 @@ def calculate_faults_removed(buggy_run, normal_run):
 
     buggy_keys = set(faults_buggy.keys())
     normal_keys = set(faults_normal.keys())
-    print("Normal:", normal_keys)
-    print("Buggy:", buggy_keys)
+    # print("Normal:", normal_keys)
+    # print("Buggy:", buggy_keys)
 
     removed_keys = buggy_keys - normal_keys
 
@@ -626,7 +601,7 @@ def calculate_faults_removed(buggy_run, normal_run):
 
     removed_pct = (abs(len(buggy_keys) - len(removed_keys)) / len(buggy_keys)) * 100.0
 
-    print("Removed PCT is", removed_pct)
+    # print("Removed PCT is", removed_pct)
     return removed_pct
 
 
@@ -637,15 +612,9 @@ def group_faults(fault_list):
     for fault in fault_list:
         if fault.type == "syscall":
             if fault.fault_specifics.syscall_name in faults:
-                faults[
-                    fault.fault_specifics.syscall_name
-                    + str(fault.fault_specifics.return_value)
-                ].append(fault)
+                faults[fault.fault_specifics.syscall_name + str(fault.fault_specifics.return_value)].append(fault)
             else:
-                faults[
-                    fault.fault_specifics.syscall_name
-                    + str(fault.fault_specifics.return_value)
-                ] = [fault]
+                faults[fault.fault_specifics.syscall_name + str(fault.fault_specifics.return_value)] = [fault]
         if fault.type == "process_kill":
             if fault.type in faults:
                 faults[fault.type].append(fault)
@@ -653,34 +622,14 @@ def group_faults(fault_list):
                 faults[fault.type] = [fault]
         if fault.type == "block_ips":
             if fault.type in faults:
-                faults[
-                    fault.type
-                    + fault.target
-                    + fault.fault_specifics.nodes_in[0]
-                    + str(fault.start_time)
-                ].append(fault)
+                faults[fault.type + fault.target + fault.fault_specifics.nodes_in[0] + str(fault.start_time)].append(fault)
             else:
-                faults[
-                    fault.type
-                    + fault.target
-                    + fault.fault_specifics.nodes_in[0]
-                    + str(fault.start_time)
-                ] = [fault]
+                faults[fault.type + fault.target + fault.fault_specifics.nodes_in[0] + str(fault.start_time)] = [fault]
         if fault.type == "process_pause":
             if fault.type in faults:
-                faults[
-                    fault.type
-                    + str(fault.target)
-                    + str(fault.duration)
-                    + str(fault.start_time)
-                ].append(fault)
+                faults[fault.type + str(fault.target) + str(fault.duration) + str(fault.start_time)].append(fault)
             else:
-                faults[
-                    fault.type
-                    + str(fault.target)
-                    + str(fault.duration)
-                    + str(fault.start_time)
-                ] = [fault]
+                faults[fault.type + str(fault.target) + str(fault.duration) + str(fault.start_time)] = [fault]
     return faults
 
 
@@ -698,12 +647,8 @@ def choose_faults(faults):
         # Group block_ips to reduce number of total faults
         if fault.type == "block_ips":
             if fault.target + str(fault.start_time) in partitions:
-                partitions[fault.target + str(fault.start_time)][
-                    0
-                ].fault_specifics.nodes_in.append(fault.fault_specifics.nodes_in[0])
-                partitions[fault.target + str(fault.start_time)][
-                    0
-                ].fault_specifics.nodes_out.append(fault.fault_specifics.nodes_out[0])
+                partitions[fault.target + str(fault.start_time)][0].fault_specifics.nodes_in.append(fault.fault_specifics.nodes_in[0])
+                partitions[fault.target + str(fault.start_time)][0].fault_specifics.nodes_out.append(fault.fault_specifics.nodes_out[0])
             else:
                 partitions[fault.target + str(fault.start_time)] = [fault]
         if fault.type == "process_kill":
@@ -724,10 +669,7 @@ def choose_faults(faults):
                     start_pause = fault_ahead.start_time
                     end_pause = fault_ahead.start_time + fault_ahead.duration
                     partition_end = fault.start_time + fault.duration
-                    target_match = (
-                        fault.target == fault_ahead.target
-                        or fault_ahead.target in fault.fault_specifics.nodes_in
-                    )
+                    target_match = fault.target == fault_ahead.target or fault_ahead.target in fault.fault_specifics.nodes_in
                     part_ends_in_pause = start_pause < partition_end < end_pause
                     if target_match and part_ends_in_pause:
                         benign_partitions_to_remove.append(fault.name)
@@ -737,9 +679,7 @@ def choose_faults(faults):
         if fault.type == "block_ips":
             for fault_ahead in faults_choosen:
                 if fault_ahead.type == "process_pause":
-                    time_gap = abs(
-                        fault_ahead.start_time - (fault.start_time + fault.duration)
-                    )
+                    time_gap = abs(fault_ahead.start_time - (fault.start_time + fault.duration))
                     if time_gap <= 2000:
                         benign_partitions_to_remove.append(fault.name)
                         continue
@@ -787,16 +727,12 @@ def get_time_for_fault(fault, faults_detected_time_sorted, fault_before, history
     preceding fault when available, or falling back to the original detected time."""
     time_fault_current = fault.start_time
     time_rounded_current = math.floor(time_fault_current / 10) * 10
-    time_fault_before = get_fault_by_name(
-        faults_detected_time_sorted, fault_before.name
-    ).start_time
+    time_fault_before = get_fault_by_name(faults_detected_time_sorted, fault_before.name).start_time
     time_rounded_before = math.floor(time_fault_before / 10) * 10
 
     # If the previous fault did not occur in the last attempt we leverage the time before in the original
     # as we did for the previous fault
-    fault_before_testing = next(
-        (x for x in history.faults_injected if fault_before.name in x.name), None
-    )
+    fault_before_testing = next((x for x in history.faults_injected if fault_before.name in x.name), None)
     if fault_before_testing is None:
         time_rounded = time_rounded_before
     else:
@@ -825,27 +761,13 @@ def check_fault_order(faults_detected, faults_injected):
         print("Not all faults were injected")
         return all_faults_were_injected
 
-    fault_names_detected = [
-        f.name
-        for f in faults_detected
-        if "syscall" not in f.name and "extra" not in f.name
-    ]
-    fault_names_injected = [
-        f.name
-        for f in faults_injected
-        if "syscall" not in f.name and "extra" not in f.name
-    ]
+    fault_names_detected = [f.name for f in faults_detected if "syscall" not in f.name and "extra" not in f.name]
+    fault_names_injected = [f.name for f in faults_injected if "syscall" not in f.name and "extra" not in f.name]
 
     for i, fault_detected in enumerate(fault_names_detected):
-        fault_detected_prod_time = next(
-            (x.start_time for x in faults_detected if x.name == fault_detected), None
-        )
+        fault_detected_prod_time = next((x.start_time for x in faults_detected if x.name == fault_detected), None)
         fault_injected_prod_time = next(
-            (
-                x.start_time
-                for x in faults_detected
-                if x.name == fault_names_injected[i]
-            ),
+            (x.start_time for x in faults_detected if x.name == fault_names_injected[i]),
             None,
         )
         gap = abs(fault_detected_prod_time - fault_injected_prod_time)
@@ -862,10 +784,7 @@ def create_new_faults_for_state(history, fault):
     the node name and "extra" to distinguish the copies."""
     new_faults = []
     for node_name, node in history.nodes.items():
-        if (
-            history.nodes[fault.target].binary == node.binary
-            and fault.target != node_name
-        ):
+        if history.nodes[fault.target].binary == node.binary and fault.target != node_name:
             new_fault = deepcopy(fault)
             new_fault.name = new_fault.name + node_name + "extra"
             new_fault.target = node_name
@@ -880,8 +799,5 @@ def reset_offset_for_fault(faults_detected, fault, cond):
     for fault_extra in faults_detected:
         if fault.name in fault_extra.name:
             for i in range(0, len(fault_extra.begin_conditions)):
-                if (
-                    isinstance(fault_extra.begin_conditions[i], user_function_condition)
-                    and fault_extra.begin_conditions[i].symbol == cond.symbol
-                ):
+                if isinstance(fault_extra.begin_conditions[i], user_function_condition) and fault_extra.begin_conditions[i].symbol == cond.symbol:
                     fault_extra.begin_conditions[i].offset = 0

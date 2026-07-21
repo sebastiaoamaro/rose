@@ -1,7 +1,7 @@
 #!/bin/bash
 ROSE_DIR=/vagrant
-EXECUTOR_DIR=$ROSE_DIR/executor/c
-KERNEL_DIR=$ROSE_DIR/executor/kernelmodule
+EXECUTOR_DIR=$ROSE_DIR/executor/src
+KERNEL_DIR=$ROSE_DIR/executor/kernel_module
 TMP_FILES=(/tmp/containerpid_read /tmp/containerpid_write /tmp/history.txt /tmp/pid_tree.txt)
 
 silent() { "$@" > /dev/null 2>&1; }
@@ -18,13 +18,13 @@ clean_tmp() {
 
 build_schedule() {
     local schedule=$1
-    silent python3 "$ROSE_DIR/parser.py" "$schedule"
+    python3 "$ROSE_DIR/parser.py" "$schedule"
     silent mv fault_schedule.c "$EXECUTOR_DIR/"
     make -j"$(nproc)" -C "$EXECUTOR_DIR"
 }
 
 run_main() {
-    sudo -E "$EXECUTOR_DIR/main/main"
+    sudo -E "$EXECUTOR_DIR/executor/executor"
 }
 
 # --- Build kernel module once ---

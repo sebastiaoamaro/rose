@@ -1,13 +1,8 @@
-import itertools
-import math
-import random
 import shutil
-import signal
 import subprocess
 import sys
 import time
 from copy import deepcopy
-from types import new_class
 
 import yaml
 
@@ -194,9 +189,7 @@ def reproduce_bug(bug_specification: str):
     bug_reproduction = parse_bug_reproduction(bug_specification)
     print("  [repro]  running faultless schedule")
     run_reproduction(bug_reproduction.schedule)
-    trace_location = collect_history(
-        bug_reproduction.trace_location, bug_reproduction.result_folder, "normal"
-    )
+    trace_location = collect_history(bug_reproduction.trace_location, bug_reproduction.result_folder, "normal")
     run_cleanup(bug_reproduction.cleanup)
 
     # Parse faultless schedule
@@ -218,7 +211,7 @@ def reproduce_bug(bug_specification: str):
 
     runs_counter = 1
     # First attempt run a first schedule, based on first level context information
-    faults_detected = choose_faults(faults_detected, history_buggy, history)
+    faults_detected = choose_faults(faults_detected)
     print(f"  [repro]  faults to use: {faults_detected}")
     schedule_location = "/tmp/temp_sched.yaml"
     buggy_schedules = []
@@ -246,9 +239,7 @@ def reproduce_bug(bug_specification: str):
                 fault_removal_pct,
             )
 
-        schedule = save_schedule(
-            schedule_location, bug_reproduction.result_folder, "first_guess"
-        )
+        schedule = save_schedule(schedule_location, bug_reproduction.result_folder, "first_guess")
         buggy_schedules.append(schedule)
 
     print("  [repro]  level 2: what happened before?")
@@ -283,9 +274,7 @@ def reproduce_bug(bug_specification: str):
                 print(f"  [repro]  testing fault: {faults_detected[fault_counter]}")
 
                 # If we have a lot of system calls faults they break workloads
-                buggy_run = run_test(
-                    bug_reproduction, faults_detected[fault_counter : fault_counter + 1]
-                )
+                buggy_run = run_test(bug_reproduction, faults_detected[fault_counter : fault_counter + 1])
                 schedules_generated += 1
 
                 # Normal Rose behavior
@@ -294,16 +283,12 @@ def reproduce_bug(bug_specification: str):
                 runs_counter += 1
                 total_faults = 0
                 if buggy_run:
-                    (runs, replay_rate) = check_replay_rate(
-                        schedule_location, bug_reproduction
-                    )
+                    (runs, replay_rate) = check_replay_rate(schedule_location, bug_reproduction)
                     runs_counter += runs
                     if replay_rate >= 75:
                         break
                     run_name = str(fault_counter) + ":" + str(call_count)
-                    schedule = save_schedule(
-                        schedule_location, bug_reproduction.result_folder, run_name
-                    )
+                    schedule = save_schedule(schedule_location, bug_reproduction.result_folder, run_name)
                     buggy_schedules.append(schedule)
                 else:
                     history = collect_and_parse(
@@ -349,26 +334,15 @@ def reproduce_bug(bug_specification: str):
             last_created_aux_faults = []
 
             # Loop while we do not find a schedule, the fault is occuring, the conditions and faults are in correct order, or we achieve 7 conditions
-            while (
-                replay_rate < 75
-                and fault_occuring
-                and condition_order
-                and fault_order
-                and len(last_used_conditions) < 7
-            ):
+            while replay_rate < 75 and fault_occuring and condition_order and fault_order and len(last_used_conditions) < 7:
                 # Unique functions which precede the fault
                 functions_before = []
                 window = count
                 if not amplification:
-                    functions_before = history_buggy.get_functions_before(
-                        fault.target, fault.event_id, window
-                    )
+                    functions_before = history_buggy.get_functions_before(fault.target, fault.event_id, window)
                     # If we saw all functions before the fault
                     if last_event_counter_value == functions_before[0]:
-                        print(
-                            f"  [repro]  all functions seen  LECV={last_event_counter_value}"
-                            f"  FUNC_BEFORE={functions_before[0]}"
-                        )
+                        print(f"  [repro]  all functions seen  LECV={last_event_counter_value}  FUNC_BEFORE={functions_before[0]}")
                         fault_counter += 1
                         break
                     # If incrementing the window did not increase the number of unique functions
@@ -395,15 +369,11 @@ def reproduce_bug(bug_specification: str):
                         previous_number_unique_events = len(functions_before[1])
                 # If we are amplyfing just recalculate functions_before
                 else:
-                    functions_before = history_buggy.get_functions_before(
-                        fault.target, fault.event_id, window
-                    )
+                    functions_before = history_buggy.get_functions_before(fault.target, fault.event_id, window)
 
                 print(f"  [repro]  using chain: {functions_before}")
                 # Add functions to Fault conditions
-                fault.begin_conditions = build_fault_conditions(
-                    fault, functions_before, history_buggy
-                )
+                fault.begin_conditions = build_fault_conditions(fault, functions_before, history_buggy)
 
                 # Add time condition to Fault
                 cond = time_cond()
@@ -421,9 +391,7 @@ def reproduce_bug(bug_specification: str):
                     print("  [repro]  no previous fault")
                     time_rounded = 0
                 else:
-                    time_rounded = get_time_for_fault(
-                        fault, faults_detected_time_sorted, fault_before, last_history
-                    )
+                    time_rounded = get_time_for_fault(fault, faults_detected_time_sorted, fault_before, last_history)
                 if time_rounded != 0:
                     cond.time = time_rounded
                     fault.begin_conditions.append(cond)
@@ -447,21 +415,15 @@ def reproduce_bug(bug_specification: str):
                 schedules_generated += 1
                 runs_counter += 1
                 if buggy_run and first_buggy_schedule_for_fault:
-                    (runs, replay_rate) = check_replay_rate(
-                        schedule_location, bug_reproduction
-                    )
+                    (runs, replay_rate) = check_replay_rate(schedule_location, bug_reproduction)
                     runs_counter += runs
                     if replay_rate >= 75:
                         break
                     first_buggy_schedule_for_fault = False
-                    schedule = save_schedule(
-                        schedule_location, bug_reproduction.result_folder, run_name
-                    )
+                    schedule = save_schedule(schedule_location, bug_reproduction.result_folder, run_name)
                     buggy_schedules.append(schedule)
                 elif buggy_run:
-                    schedule = save_schedule(
-                        schedule_location, bug_reproduction.result_folder, run_name
-                    )
+                    schedule = save_schedule(schedule_location, bug_reproduction.result_folder, run_name)
                     buggy_schedules.append(schedule)
 
                 # If it is not a buggy_run we need to check if the fault we are changing occurred
@@ -486,20 +448,13 @@ def reproduce_bug(bug_specification: str):
                         continue
                     # We do not amplify network delays
                     elif fault.type != "block_ips":
-                        print(
-                            f"  [repro]  fault_occuring={fault_occuring}"
-                            f"  cond_order={condition_order}"
-                            f"  fault_order={fault_order}"
-                            f"  len_luc={len(last_used_conditions)}"
-                        )
+                        print(f"  [repro]  fault_occuring={fault_occuring}  cond_order={condition_order}  fault_order={fault_order}  len_luc={len(last_used_conditions)}")
                         fault_occuring = True
                         amplification = True
                         continue
 
                 elif not amplification:
-                    fault_order = check_fault_order(
-                        faults_detected_time_sorted, history.faults_injected
-                    )
+                    fault_order = check_fault_order(faults_detected_time_sorted, history.faults_injected)
 
                     print(f"  [repro]  time_sorted: {faults_detected_time_sorted}")
                     print(f"  [repro]  injected:    {history.faults_injected}")
@@ -551,9 +506,7 @@ def reproduce_bug(bug_specification: str):
                 fault_removal_pct,
             )
 
-    schedule_location = write_new_schedule(
-        bug_reproduction.schedule, faults_detected, "/tmp/temp_sched.yaml"
-    )
+    schedule_location = write_new_schedule(bug_reproduction.schedule, faults_detected, "/tmp/temp_sched.yaml")
 
     # Third attempts run schedules based on third level context information
     fault_to_condition_map_plt = {}
@@ -574,9 +527,7 @@ def reproduce_bug(bug_specification: str):
             if fault.type in ("process_kill", "process_pause", "block_ips"):
                 for cond in fault.begin_conditions:
                     if isinstance(cond, user_function_condition):
-                        offsets = calculate_plt_offsets(
-                            bug_reproduction.binary, cond.symbol
-                        )
+                        offsets = calculate_plt_offsets(bug_reproduction.binary, cond.symbol)
                         # No plt calls found
                         if len(offsets) == 0:
                             break
@@ -586,16 +537,14 @@ def reproduce_bug(bug_specification: str):
                         )
                         fault_to_offsets_plt.append(offsets)
                         faults_with_function_counter += 1
-                        (runs, replay_rate, buggy_schedules_3_1) = (
-                            test_offsets_for_fault(
-                                offsets,
-                                faults_detected,
-                                fault,
-                                bug_reproduction,
-                                runs_counter,
-                                schedule_location,
-                                cond,
-                            )
+                        (runs, replay_rate, buggy_schedules_3_1) = test_offsets_for_fault(
+                            offsets,
+                            faults_detected,
+                            fault,
+                            bug_reproduction,
+                            runs_counter,
+                            schedule_location,
+                            cond,
                         )
                         if replay_rate > 75:
                             runs_counter += runs
@@ -625,9 +574,7 @@ def reproduce_bug(bug_specification: str):
             if fault.type in ("process_kill", "process_pause", "block_ips"):
                 for cond in fault.begin_conditions:
                     if isinstance(cond, user_function_condition):
-                        offsets = calculate_call_offsets(
-                            bug_reproduction.binary, cond.symbol
-                        )
+                        offsets = calculate_call_offsets(bug_reproduction.binary, cond.symbol)
                         # No plt calls found
                         if len(offsets) == 0:
                             break
@@ -637,16 +584,14 @@ def reproduce_bug(bug_specification: str):
                         )
                         fault_to_offsets_call.append(offsets)
                         faults_with_function_counter += 1
-                        (runs, replay_rate, buggy_schedules_3_2) = (
-                            test_offsets_for_fault(
-                                offsets,
-                                faults_detected,
-                                fault,
-                                bug_reproduction,
-                                runs_counter,
-                                schedule_location,
-                                cond,
-                            )
+                        (runs, replay_rate, buggy_schedules_3_2) = test_offsets_for_fault(
+                            offsets,
+                            faults_detected,
+                            fault,
+                            bug_reproduction,
+                            runs_counter,
+                            schedule_location,
+                            cond,
                         )
                         if replay_rate > 75:
                             runs_counter += runs
@@ -695,13 +640,9 @@ def reproduce_bug(bug_specification: str):
 
 
 def run_test(bug_reproduction, faults_detected):
-    schedule_location = write_new_schedule(
-        bug_reproduction.schedule, faults_detected, "/tmp/temp_sched.yaml"
-    )
+    schedule_location = write_new_schedule(bug_reproduction.schedule, faults_detected, "/tmp/temp_sched.yaml")
     run_reproduction(schedule_location)
-    buggy_run = check_oracle(
-        bug_reproduction.oracle, str(0), bug_reproduction.result_folder
-    )
+    buggy_run = check_oracle(bug_reproduction.oracle, str(0), bug_reproduction.result_folder)
     run_cleanup(bug_reproduction.cleanup)
     return buggy_run
 
@@ -725,9 +666,7 @@ def check_replay_rate(schedule, bug_reproduction):
     normal_runs_counter = 0
     for i in range(0, 10):
         run_reproduction(schedule)
-        buggy_run = check_oracle(
-            bug_reproduction.oracle, str(0), bug_reproduction.result_folder
-        )
+        buggy_run = check_oracle(bug_reproduction.oracle, str(0), bug_reproduction.result_folder)
         run_cleanup(bug_reproduction.cleanup)
         if buggy_run:
             buggy_runs_counter += 1
@@ -747,9 +686,7 @@ def check_replay_rate_post_phase(schedule, bug_reproduction):
     normal_runs_counter = 0
     for i in range(0, 10):
         run_reproduction(schedule)
-        buggy_run = check_oracle(
-            bug_reproduction.oracle, str(0), bug_reproduction.result_folder
-        )
+        buggy_run = check_oracle(bug_reproduction.oracle, str(0), bug_reproduction.result_folder)
         run_cleanup(bug_reproduction.cleanup)
         if buggy_run:
             buggy_runs_counter += 1
@@ -803,23 +740,13 @@ def save_schedule(schedule_location, result_folder, run_name):
     return location
 
 
-def end_reproduction(
-    replay_rate, runs, schedules_generated, start_time, schedule, fault_removal_pct
-):
+def end_reproduction(replay_rate, runs, schedules_generated, start_time, schedule, fault_removal_pct):
     end_time = time.time()
     elapsed_time = end_time - start_time
     if replay_rate >= 60:
-        print(
-            f"  ✓ reproduction done"
-            f"  rr={replay_rate:.0f}%  runs={runs}  time={elapsed_time:.1f}s"
-            f"  schedule={schedule}"
-        )
+        print(f"  ✓ reproduction done  rr={replay_rate:.0f}%  runs={runs}  time={elapsed_time:.1f}s  schedule={schedule}")
     else:
-        print(
-            f"  ✗ reproduction failed"
-            f"  rr={replay_rate:.0f}%  runs={runs}  time={elapsed_time:.1f}s"
-            f"  schedule={schedule}"
-        )
+        print(f"  ✗ reproduction failed  rr={replay_rate:.0f}%  runs={runs}  time={elapsed_time:.1f}s  schedule={schedule}")
     return (
         replay_rate,
         runs,
@@ -845,20 +772,13 @@ def test_offsets_for_fault(
         for fault_extra in faults_detected:
             if fault.name in fault_extra.name:
                 for i in range(0, len(fault_extra.begin_conditions)):
-                    if (
-                        isinstance(
-                            fault_extra.begin_conditions[i], user_function_condition
-                        )
-                        and fault_extra.begin_conditions[i].symbol == cond.symbol
-                    ):
+                    if isinstance(fault_extra.begin_conditions[i], user_function_condition) and fault_extra.begin_conditions[i].symbol == cond.symbol:
                         fault_extra.begin_conditions[i].offset = offset
         buggy_run = run_test(bug_reproduction, faults_detected)
         runs_counter += 1
         if buggy_run:
             run_name = fault.name + str(offset)
-            schedule = save_schedule(
-                schedule_location, bug_reproduction.result_folder, run_name
-            )
+            schedule = save_schedule(schedule_location, bug_reproduction.result_folder, run_name)
             buggy_schedules.append(schedule)
             (runs, replay_rate) = check_replay_rate(schedule_location, bug_reproduction)
             runs_counter += runs

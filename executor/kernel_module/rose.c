@@ -8,16 +8,12 @@
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("SA");
-MODULE_DESCRIPTION("Example eBPF kfunc module providing bpf_strstr");
+MODULE_DESCRIPTION("eBPF kfunc module providing bpf_strstr");
 MODULE_VERSION("1.0");
 
 /* === Define the BPF kfunc === */
 __bpf_kfunc_start_defs();
 
-/* This function checks if str1 (needle) is contained in str2 (haystack)
- * within the first str_len bytes of str2. It looks for a contiguous ordered
- * match (not just presence of each character in any order).
- */
 __bpf_kfunc int bpf_strstr(const char *str1, const char *str2, int str_len)
 {
     /* Bound constants to keep loops provably finite (helpful for eBPF verifier). */
@@ -29,13 +25,11 @@ __bpf_kfunc int bpf_strstr(const char *str1, const char *str2, int str_len)
     if (!str1 || !str2 || str_len <= 0)
         return 0;
 
-    //pr_info("Comparing %s and %s\n", str1, str2);
 
     /* Compute needle length up to MAX_NEEDLE */
     for (needle_len = 0; needle_len < MAX_NEEDLE && str1[needle_len] != '\0'; needle_len++)
         ;
 
-    //pr_info("Needle len is %d, str_len is %d \n",needle_len,str_len);
 
     if (needle_len == 0 && str1[0] == '\0')
         return 1;
@@ -45,24 +39,15 @@ __bpf_kfunc int bpf_strstr(const char *str1, const char *str2, int str_len)
         //pr_info("Needle not nul-terminated %d \n",needle_len);
         return 0;
     }
-    /* If needle is longer than the provided hay length, no match is possible */
-    // if (needle_len > str_len){
-    //     pr_info("Needle is longer than str_len %d \n",needle_len);
-    //     return 0;
-    // }
-
-    /* Scan haystack (str2) up to the min(str_len, MAX_HAY). Look for contiguous match. */
     for (int i = 0; i < MAX_HAY && str2[i] != '\0'; i++) {
         int j;
 
         for (j = 0; j < needle_len; j++) {
-            //pr_info("Comparing char: %c and %c \n", str2[i + j], str1[j]);
             if (str2[i + j] != str1[j])
                 break;
         }
 
         if (j == needle_len) {
-            //pr_info("bpf_strstr(): match found: needle=%s hay=%s str_len=%d\n",str1, str2, str_len);
             return 1;
         }
     }

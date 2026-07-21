@@ -25,7 +25,6 @@
 #include "aux.h"
 #include "uprobes.skel.h"
 #include "trace_helpers.h"
-#include "map_helpers.h"
 #include "btf_helpers.h"
 #include "uprobe_helpers.h"
 
@@ -131,7 +130,7 @@ struct uprobes_bpf* uprobe(int pid,char* funcname,char *binary_location,int faul
 		return NULL;
 	}
 	obj->rodata->fault_count = faultcount;
-	obj->rodata->time_only = timemode;
+	obj->rodata->mode = timemode;
 	obj->rodata->units = MSEC;
 	obj->rodata->cond_pos = cond_pos;
 	obj->rodata->primary_function = primary_function;

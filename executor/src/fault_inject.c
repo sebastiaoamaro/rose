@@ -7,7 +7,7 @@
 #include "fault_inject.h"
 #include "fault_inject.skel.h"
 
-struct fault_inject_bpf* fault_inject(int faults,int timemode)
+struct fault_inject_bpf* fault_inject(int faults,int mode)
 {
 	struct fault_inject_bpf *skel;
 	int err;
@@ -19,7 +19,7 @@ struct fault_inject_bpf* fault_inject(int faults,int timemode)
 		return NULL;
 	}
 	skel->rodata->fault_count = faults;
-	skel->rodata->time_only = timemode;
+	skel->rodata->mode = mode;
 	/* Load & verify BPF programs */
 	err = fault_inject_bpf__load(skel);
 	if (err) {
@@ -33,22 +33,6 @@ struct fault_inject_bpf* fault_inject(int faults,int timemode)
 		fprintf(stderr, "Failed to attach BPF skeleton\n");
 		return NULL;
 	}
-
-	// char binary_path[] = "/usr/lib/jvm/java-11-openjdk-amd64/lib/server/libjvm.so";
-	// // err = get_jvmso_path(binary_path,pid);
-	// // 	if (err){
-	// // 	    printf("Failed to get JVM path\n");
-	// // 		return NULL;
-	// // 	}
-	// printf("Binary path: %s\n", binary_path);
-
-	// skel->links.entry_probe = bpf_program__attach_usdt(skel->progs.entry_probe, -1,binary_path, "hotspot", "method__entry", NULL);
-
-	// if (!skel->links.entry_probe) {
-	// 	err = errno;
-	// 	printf("attach usdt method__entry failed: %s\n", strerror(err));
-	// 	return NULL;
-	// }
 
 	return skel;
 }

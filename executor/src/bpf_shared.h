@@ -1,27 +1,25 @@
-#ifndef __AUX_H_
-#define __AUX_H_
-#define STRING_SIZE 128
-#define MAX_ENTRIES 10240
-#define PATH_MAX	4096
-#define STATE_PROPERTIES_COUNT 30
+#ifndef __BPF_SHARED_H_
+#define __BPF_SHARED_H_
+// Structs/enums here must stay byte-identical between the BPF programs
+// (*.bpf.c / *.bpf.h) and the userspace loader (aux.c, main.c) since they're
+// used as BPF map keys/values or ring buffer event payloads. Only put
+// something here if a *.bpf.c file actually needs it - everything else
+// belongs in aux.h.
+#define STATE_PROPERTIES_COUNT 32
+// fault_schedule.h includes this header to get MAX_IPS_BLOCKED, sizing
+// fault.fault_details.block_ips the same as the blocked_ips BPF map value
+// type (__be32[MAX_IPS_BLOCKED]) below.
 #define MAX_IPS_BLOCKED 8
-#define TASK_COMM_LEN 16
-#define MAX_FILENAME_LEN 64
-#define FUNCNAME_MAX 256
 #define MAX_FUNCTIONS 32
-#define FILENAME_SIZE 64
-#define FAULTSSUPPORTED 26
 #define MAX_RELEVANT_FILES 16
-#define MAX_ARGS 16
-#define MAX_FAULTS 32
+#define MAX_FAULTS 16
+#define MAX_NODES 8
+#define MAX_FAULT_DEPS 4
 #define MAP_SIZE 32
-#define MAX_FILE_LOCATION_LEN 1024
-#define MAX_COMMAND_LEN 512
-#define MAX_RESPONSE_LEN 1024
-#define CONTAINER_TYPE_DOCKER 1
-#define CONTAINER_TYPE_LXC 2
-#define CONTAINER_TYPE_DOCKER_AUTOMATIC 3
-struct fault;
+#define FILENAME_MAX_SIZE 64
+#define MAX_JUMPS 			16
+#define MAX_FILE_OFFSET		(FILENAME_MAX_SIZE>>1)
+#define SUB_STR_MAX			512
 
 struct tc_key{
     int index;
@@ -34,10 +32,12 @@ struct faultstate_simple{
     int fault_type_conditions[STATE_PROPERTIES_COUNT+MAX_FUNCTIONS];
     //Holds if the conditions are met
     int conditions_match[STATE_PROPERTIES_COUNT+MAX_FUNCTIONS];
+    int dependency_fault_nrs[MAX_FAULT_DEPS];
+    int dependency_satisfied[MAX_FAULT_DEPS];
 };
 
 struct simplified_fault{
-    int faulttype;
+    int fault_type;
     __u64 duration;
     int done;
     __u64 start_time;
@@ -60,7 +60,7 @@ struct simplified_fault{
 
 struct fault_key{
     int pid;
-    int faulttype;
+    int fault_type;
 };
 
 struct fault_description{
@@ -89,6 +89,22 @@ struct  relevant_fds{
     __u64 fds[MAX_RELEVANT_FILES];
     int size;
 };
+
+struct file_info_simple {
+	int size;
+	char filename[32];
+}__attribute__((packed));
+
+typedef struct file_fd_key_t {
+	uint32_t dev;
+    uint32_t ino;
+} __attribute__((packed)) FileFDKey;
+
+typedef struct file_info_t {
+	uint32_t offset;
+	uint32_t size;
+	char filename[FILENAME_MAX_SIZE];
+} FileInfo;
 
 enum fault_type{
     FORK = 1,
@@ -128,6 +144,8 @@ enum fault_type{
     STAT_FAULT = 49,
     LSEEK_FAULT = 50,
     UNLINK_FAULT = 51,
+    SYNC_FILE_RANGE_FAULT = 52,
+    BIND_FAULT = 53,
     //LAZYFS
     CLEAR_CACHE = 44,
     CRASH_FS = 45,
@@ -168,13 +186,21 @@ enum stateinfo{
     CONNECT_STATE = 27,
     STAT_STATE = 28,
     LSEEK_STATE = 29,
-    UNLINK_STATE = 30
+    UNLINK_STATE = 30,
+    SYNC_FILE_RANGE_STATE = 31,
+    BIND_STATE = 32
 };
 
 
 enum generic{
     ANY_PID = 411,
     LEADER_CHANGE = 13
+};
+
+enum condition_mode {
+    NORMAL   = 0,
+    FAULT_DEP = 1,
+    TIME_DEP  = 2,
 };
 
 struct event {
@@ -188,39 +214,14 @@ struct event {
     int syscall_nr;
 };
 
-
-struct process_fault_args{
-	int pid;
-	int duration;
-    int node_to_restart;
-    char* name;
+struct sys_info {
+	int fd;
+	int general_syscall_code;
+	int file_specific_code;
+	int general_fault_code;
+	int file_specific_fault_code;
+	int fault_count;
+	int mode;
 };
 
-struct aux_bpf* start_aux_maps();
-int get_interface_index(char*);
-void build_fault(struct fault* ,int,int,int,int,int,int,char**,int,char *);
-void set_if_name(struct fault*,char *);
-void add_function_to_monitor(struct fault*,char*,int);
-int bpf_map_lookup_or_try_init_user(int, const void *, void *,void *);
-int get_interface_names(char **,int);
-int translate_pid(int);
-void pause_process(void* args);
-void print_block(char*);
-pid_t get_lxc_container_pid(const char *container_name);
-pid_t get_docker_container_pid(const char *container_name);
-char* get_lxc_container_location(const char* container_name);
-char* get_docker_container_location(const char* container_name);
-void kill_process(void* args);
-void sleep_for_ms(long milliseconds);
-bool is_element_in_array(int arr[], int size, int element);
-void print_fault_schedule();
-int send_signal(int pid, int signal,char*);
-long get_children_pids(pid_t pid);
-void kill_child_processes(pid_t parent_pid);
-void bump_memlock_rlimit(void);
-void bump_file_rlimit(void);
-pid_t find_host_pid_for_container_pid(pid_t target_pid);
-char **build_nsenter_args(const char *pid_str,int container_type);
-long long get_nanoseconds();
-void print_output(void* args);
-#endif /* __AUX_H */
+#endif /* __BPF_SHARED_H_ */

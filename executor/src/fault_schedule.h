@@ -1,19 +1,17 @@
 #ifndef __FAULTS_SCHEDULE_H_
 #define __FAULTS_SCHEDULE_H_
+#include "bpf_shared.h"
+// STRING_SIZE and FUNCNAME_MAX are sized specifically for the structs below
+// (larger than aux.h's copies) and are the canonical definitions for these
+// names; every other size macro here that's also defined in aux.h is unused
+// in this file, so it's left solely in aux.h (consumers already include both
+// headers). MAX_IPS_BLOCKED, STATE_PROPERTIES_COUNT and MAX_FUNCTIONS come
+// from bpf_shared.h above instead of being redefined here, since the structs
+// below need them and bpf_shared.h is guaranteed to already be included by
+// the time this file is parsed.
 #define STRING_SIZE 256
-#define MAX_ENTRIES 10240
-#define PATH_MAX	4096
-#define STATE_PROPERTIES_COUNT 30
-#define MAX_IPS_BLOCKED 16
-#define TASK_COMM_LEN 16
-#define MAX_FILENAME_LEN 128
 #define FUNCNAME_MAX 512
-#define MAX_FUNCTIONS 32
 #define FILENAME_MAX 64
-#define FAULTSSUPPORTED 21
-#define MAX_RELEVANT_FILES 256
-#define MAX_ARGS 16
-#define MAX_FAULTS 32
 
 typedef struct Tracer{
     char tracer_location[STRING_SIZE];
@@ -172,12 +170,17 @@ typedef struct system_call{
     int call_count;
 }system_call;
 
+typedef struct fault_dependency{
+    int fault_nr;
+}fault_dependency;
+
 typedef struct fault_condition{
     int type;
     union condition{
         user_function user_function;
         file_system_call file_system_call;
         system_call syscall;
+        fault_dependency fault_dep;
         int time;
     } condition;
 }fault_condition;
@@ -186,11 +189,11 @@ enum condition_types{
     USER_FUNCTION = 1,
     FILE_SYSCALL = 2,
     SYSCALL = 3,
-    TIME = 4
-
+    TIME = 4,
+    FAULT_CONDITION = 5,
 };
 
-struct faultstate{
+struct fault_state{
     int fault_type_conditions[STATE_PROPERTIES_COUNT];
     int conditions_match[STATE_PROPERTIES_COUNT];
 };
@@ -200,14 +203,11 @@ typedef struct fault {
     int target;
     int traced;
     int category;
-    int faulttype;
+    int fault_type;
     int done;
     fault_details fault_details;
     fault_condition *fault_conditions_begin;
     fault_condition *fault_conditions_end;
-
-    //trigger_statement_begin
-    //trigger_statement_end
 
     __be32 ips_blocked[MAX_IPS_BLOCKED];
     char *veth;
@@ -215,8 +215,8 @@ typedef struct fault {
     char func_names[MAX_FUNCTIONS][FUNCNAME_MAX];
     struct uprobes_bpf *list_of_functions[MAX_FUNCTIONS];
 
-    struct faultstate initial;
-    struct faultstate end;
+    struct fault_state initial;
+    struct fault_state end;
     int pid;
     int repeat;
     int occurrences;
@@ -231,10 +231,9 @@ typedef struct fault {
     int exit;
 }fault;
 
-
-
+// Defined by the generated fault_schedule.c (see schedule_parser/fault_schedule_template.c),
+// not by the checked-in placeholder fault_schedule.c.
 void create_node(node* node, char* name,int pid,char* pid_file, char* veth, char* ip, char* script,char* env,int container,int container_type,char* binary,char *leader_symbol,int leader);
-void add_ip_to_block(struct fault*,char *,int);
 
 int get_maximum_time();
 node* build_nodes();

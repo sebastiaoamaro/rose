@@ -6,7 +6,7 @@
 #include <bpf/bpf_tracing.h>
 #include "uprobes.h"
 #include "bits.bpf.h"
-#include "aux.h"
+#include "bpf_shared.h"
 #include "maps.bpf.h"
 #include "state_processor.bpf.h"
 const volatile pid_t targ_tgid = 0;
@@ -73,7 +73,7 @@ struct {
 __u32 hist[MAX_SLOTS] = {};
 
 const volatile int fault_count = 0;
-const volatile int time_only = 0;
+const volatile int mode = 0;
 const volatile int cond_pos = 0;
 
 const volatile int primary_function = 0;
@@ -85,7 +85,7 @@ static void entry(struct pt_regs *ctx)
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
 	bpf_printk("UPROBE HIT:[%d], PID:[%d]\n",cond_pos,pid);
-	int result = process_current_state(cond_pos,pid,fault_count,time_only,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator);
+	int result = process_current_state(cond_pos,0,pid,fault_count,mode,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,NULL);
 
 }
 

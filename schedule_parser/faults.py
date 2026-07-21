@@ -1,11 +1,13 @@
 import re
 
 from schedule_parser.conditions import (
+    build_fault_condition,
     build_fault_conditions,
     build_file_syscall,
     build_syscall,
     build_time,
     build_user_function,
+    fault_dependency_condition,
     file_syscall_condition,
     get_cond_type_nr,
 )
@@ -155,9 +157,7 @@ def createFault(name, faultconfig, nodes_dict):
             else:
                 file_system_operation_fault.success = 0
 
-        file_system_operation_fault.return_value = faultconfig["details"][
-            "return_value"
-        ]
+        file_system_operation_fault.return_value = faultconfig["details"]["return_value"]
 
         fault.fault_specifics = file_system_operation_fault
 
@@ -177,11 +177,7 @@ def createFault(name, faultconfig, nodes_dict):
 
         fault.fault_specifics = syscall_fault
 
-    if (
-        fault.type == "process_kill"
-        or fault.type == "process_pause"
-        or fault.type == "process_restart"
-    ):
+    if fault.type == "process_kill" or fault.type == "process_pause" or fault.type == "process_restart":
         fault.fault_category = 1
 
     if fault.type == "lazyfs":
@@ -266,6 +262,10 @@ def createFault(name, faultconfig, nodes_dict):
             condition = build_time(condition)
             fault.begin_conditions.append(condition)
 
+        if type_cond == "fault_condition":
+            condition = build_fault_condition(condition)
+            fault.begin_conditions.append(condition)
+
     if "end_conditions" in faultconfig:
         fault.trigger_statement_end = faultconfig["end_conditions"]["trigger_statement"]
 
@@ -283,9 +283,7 @@ def build_faults_cfile(file, nodes, faults):
     if faults is None:
         build_faults_begin = """\nfault* build_faults_extra(){\n"""
         file.write(build_faults_begin)
-        build_faults_malloc = (
-            """    fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));\n"""
-        )
+        build_faults_malloc = """    fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));\n"""
         file.write(build_faults_malloc)
         build_faults_end = """
     return faults;
@@ -296,45 +294,46 @@ def build_faults_cfile(file, nodes, faults):
     build_faults_begin = """\nfault* build_faults_extra(){\n"""
     file.write(build_faults_begin)
 
-    build_faults_malloc = (
-        """    fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));\n"""
-    )
+    build_faults_malloc = """    fault* faults = ( fault*)malloc(FAULT_COUNT * sizeof(fault));\n"""
     file.write(build_faults_malloc)
+
+    fault_name_to_nr = {name: i for i, name in enumerate(faults.keys())}
+    for fault in faults.values():
+        for cond in fault.begin_conditions:
+            if isinstance(cond, fault_dependency_condition):
+                if cond.name not in fault_name_to_nr:
+                    print(f"ERROR: fault_condition references unknown fault '{cond.name}'")
+                    exit(1)
+                cond.fault_nr = fault_name_to_nr[cond.name]
 
     fault_count = 0
     for name, fault in faults.items():
         create_fault_detail_var = """    fault_details fault_details#fault_nr;\n"""
-        create_fault_detail_var = create_fault_detail_var.replace(
-            "#fault_nr", str(fault_count)
-        )
+        create_fault_detail_var = create_fault_detail_var.replace("#fault_nr", str(fault_count))
         file.write(create_fault_detail_var)
 
         fault_type_nr = get_fault_type_nr(fault.type, fault.fault_specifics)
 
         fault_details = None
 
-        fault_details = build_fault_details(
-            fault.type, fault_type_nr, fault_count, fault.fault_specifics, nodes, ""
-        )
+        fault_details = build_fault_details(fault.type, fault_type_nr, fault_count, fault.fault_specifics, nodes, "")
 
         file.write(fault_details)
-        build_fault = """    create_fault(&faults[#faultnr],"#name",#target,#traced,#faulttype,#fault_category,fault_details#fault_nr,#repeat,#occurrences,#duration,#condition_count,#exit);\n\n"""
+        build_fault = """    create_fault(&faults[#faultnr],"#name",#target,#traced,#fault_type,#fault_category,fault_details#fault_nr,#repeat,#occurrences,#duration,#condition_count,#exit);\n\n"""
 
         build_fault = build_fault.replace("#faultnr", str(fault_count))
         build_fault = build_fault.replace("#name", fault.name)
         build_fault = build_fault.replace("#target", str(fault.target_nr))
         build_fault = build_fault.replace("#traced", str(fault.traced_nr))
 
-        build_fault = build_fault.replace("#faulttype", str(fault_type_nr))
+        build_fault = build_fault.replace("#fault_type", str(fault_type_nr))
 
         build_fault = build_fault.replace("#fault_category", str(fault.fault_category))
         build_fault = build_fault.replace("#fault_nr", str(fault_count))
         build_fault = build_fault.replace("#repeat", str(fault.repeatable))
         build_fault = build_fault.replace("#occurrences", str(fault.occurrences))
         build_fault = build_fault.replace("#duration", str(fault.duration))
-        build_fault = build_fault.replace(
-            "#condition_count", str(len(fault.begin_conditions))
-        )
+        build_fault = build_fault.replace("#condition_count", str(len(fault.begin_conditions)))
         build_fault = build_fault.replace("#exit", str(fault.exit))
         # build_fault = build_fault.replace("#faultnr",str(fault_count))
         # build_fault = build_fault.replace("#faultnr",str(fault_count))
@@ -349,9 +348,7 @@ def build_faults_cfile(file, nodes, faults):
     file.write(build_faults_end)
 
 
-def build_fault_details(
-    fault_type, fault_type_nr, fault_nr, fault_specifics, nodes, node_name
-):
+def build_fault_details(fault_type, fault_type_nr, fault_nr, fault_specifics, nodes, node_name):
     match fault_type:
         case "block_ips":
             block_ips_definition = """    block_ips block_ips#nr;\n"""
@@ -376,20 +373,14 @@ def build_fault_details(
                 ip = nodes[name].ip
                 add_ip_block_line = add_ip_block_line.replace("#nr", str(fault_nr))
                 add_ip_block_line = add_ip_block_line.replace("#ipname", str(ip))
-                add_ip_block_line = add_ip_block_line.replace(
-                    "#ipnr", str(ip_count_out)
-                )
+                add_ip_block_line = add_ip_block_line.replace("#ipnr", str(ip_count_out))
                 add_ip_block_line = add_ip_block_line.replace("#direction", str(2))
                 block_ips_definition = block_ips_definition + add_ip_block_line
                 ip_count_out += 1
 
             assign_line = """    fault_details#nr.block_ips = block_ips#nr;\n"""
-            assign_line += (
-                """    fault_details#nr.block_ips.count_in = #ip_count_in;\n"""
-            )
-            assign_line += (
-                """    fault_details#nr.block_ips.count_out = #ip_count_out;\n"""
-            )
+            assign_line += """    fault_details#nr.block_ips.count_in = #ip_count_in;\n"""
+            assign_line += """    fault_details#nr.block_ips.count_out = #ip_count_out;\n"""
 
             assign_line = assign_line.replace("#ip_count_in", str(ip_count_in))
             assign_line = assign_line.replace("#ip_count_out", str(ip_count_out))
@@ -404,76 +395,40 @@ def build_fault_details(
 
         case "process_kill":
             process_kill_definition = """    process_fault process_kill#nr;\n"""
-            process_kill_definition = process_kill_definition.replace(
-                "#nr", str(fault_nr)
-            )
+            process_kill_definition = process_kill_definition.replace("#nr", str(fault_nr))
 
-            process_kill_definition += (
-                """    process_kill#nr.type = #fault_type_nr;\n"""
-            )
-            process_kill_definition = process_kill_definition.replace(
-                "#fault_type_nr", str(fault_type_nr)
-            )
-            process_kill_definition += (
-                """    fault_details#nr.process_fault = process_kill#nr;\n"""
-            )
-            process_kill_definition = process_kill_definition.replace(
-                "#nr", str(fault_nr)
-            )
+            process_kill_definition += """    process_kill#nr.type = #fault_type_nr;\n"""
+            process_kill_definition = process_kill_definition.replace("#fault_type_nr", str(fault_type_nr))
+            process_kill_definition += """    fault_details#nr.process_fault = process_kill#nr;\n"""
+            process_kill_definition = process_kill_definition.replace("#nr", str(fault_nr))
             return process_kill_definition
         case "process_pause":
             process_pause_definition = """    process_fault process_pause#nr;\n"""
-            process_pause_definition = process_pause_definition.replace(
-                "#nr", str(fault_nr)
-            )
+            process_pause_definition = process_pause_definition.replace("#nr", str(fault_nr))
 
-            process_pause_definition += (
-                """    process_pause#nr.type = #fault_type_nr;\n"""
-            )
-            process_pause_definition = process_pause_definition.replace(
-                "#fault_type_nr", str(fault_type_nr)
-            )
-            process_pause_definition += (
-                """    fault_details#nr.process_fault = process_pause#nr;\n"""
-            )
-            process_pause_definition = process_pause_definition.replace(
-                "#nr", str(fault_nr)
-            )
+            process_pause_definition += """    process_pause#nr.type = #fault_type_nr;\n"""
+            process_pause_definition = process_pause_definition.replace("#fault_type_nr", str(fault_type_nr))
+            process_pause_definition += """    fault_details#nr.process_fault = process_pause#nr;\n"""
+            process_pause_definition = process_pause_definition.replace("#nr", str(fault_nr))
             return process_pause_definition
         case "process_restart":
             process_restart_definition = """   process_fault process_restart#nr;\n"""
-            process_restart_definition = process_restart_definition.replace(
-                "#nr", str(fault_nr)
-            )
+            process_restart_definition = process_restart_definition.replace("#nr", str(fault_nr))
 
-            process_restart_definition += (
-                """  process_restart#nr.type = #fault_type_nr;\n"""
-            )
-            process_restart_definition = process_restart_definition.replace(
-                "#fault_type_nr", str(fault_type_nr)
-            )
-            process_restart_definition += (
-                """  fault_details#nr.process_fault = process_restart#nr;\n"""
-            )
-            process_restart_definition = process_restart_definition.replace(
-                "#nr", str(fault_nr)
-            )
+            process_restart_definition += """  process_restart#nr.type = #fault_type_nr;\n"""
+            process_restart_definition = process_restart_definition.replace("#fault_type_nr", str(fault_type_nr))
+            process_restart_definition += """  fault_details#nr.process_fault = process_restart#nr;\n"""
+            process_restart_definition = process_restart_definition.replace("#nr", str(fault_nr))
             return process_restart_definition
 
         case "syscall":
             syscall_definition = """    syscall_operation syscall#nr;\n"""
             syscall_definition += """    syscall#nr.syscall = #fault_type_nr;\n"""
-            syscall_definition = syscall_definition.replace(
-                "#fault_type_nr", str(fault_type_nr)
-            )
+            syscall_definition = syscall_definition.replace("#fault_type_nr", str(fault_type_nr))
             syscall_definition += """    syscall#nr.success = #success;\n"""
-            syscall_definition = syscall_definition.replace(
-                "#success", str(fault_specifics.success)
-            )
+            syscall_definition = syscall_definition.replace("#success", str(fault_specifics.success))
             syscall_definition += """    syscall#nr.return_value = #return_value;\n"""
-            syscall_definition = syscall_definition.replace(
-                "#return_value", str(fault_specifics.return_value)
-            )
+            syscall_definition = syscall_definition.replace("#return_value", str(fault_specifics.return_value))
             syscall_definition += """    fault_details#nr.syscall = syscall#nr;\n"""
             syscall_definition = syscall_definition.replace("#nr", str(fault_nr))
             return syscall_definition
@@ -489,40 +444,26 @@ def build_fault_details(
             file_sys_op = """    file_system_operation file_syscall#nr;\n"""
             file_sys_op += """    file_syscall#nr.syscall = #fault_type_nr;\n"""
             file_sys_op = file_sys_op.replace("#fault_type_nr", str(fault_type_nr))
-            file_sys_op += (
-                """    file_syscall#nr.syscall_condition = #condition_nr;\n"""
-            )
+            file_sys_op += """    file_syscall#nr.syscall_condition = #condition_nr;\n"""
             # Need to know which cond this is, because one thing is fault and the other is cond
             temporary_condition = file_syscall_condition()
             temporary_condition.syscall_name = fault_specifics.syscall_name
-            file_sys_op = file_sys_op.replace(
-                "#condition_nr", str(get_cond_type_nr(2, temporary_condition))
-            )
+            file_sys_op = file_sys_op.replace("#condition_nr", str(get_cond_type_nr(2, temporary_condition)))
 
             if len(fault_specifics.file_name) > 0:
-                file_sys_op += (
-                    """    strcpy(file_syscall#nr.file_name,"#file_name");\n"""
-                )
-                file_sys_op = file_sys_op.replace(
-                    "#file_name", fault_specifics.file_name
-                )
+                file_sys_op += """    strcpy(file_syscall#nr.file_name,"#file_name");\n"""
+                file_sys_op = file_sys_op.replace("#file_name", fault_specifics.file_name)
                 # file_sys_op = file_sys_op.replace("#string_size",str(len(fault_specifics.file_name)))
             else:
-                file_sys_op += (
-                    """    strcpy(file_syscall#nr.file_name,"#file_name");\n"""
-                )
+                file_sys_op += """    strcpy(file_syscall#nr.file_name,"#file_name");\n"""
                 file_sys_op = file_sys_op.replace("#file_name", "")
                 # file_sys_op = file_sys_op.replace("#string_size","1")
 
             file_sys_op += """    file_syscall#nr.success = #success;\n"""
             file_sys_op = file_sys_op.replace("#success", str(fault_specifics.success))
             file_sys_op += """    file_syscall#nr.return_value = #return_value;\n"""
-            file_sys_op = file_sys_op.replace(
-                "#return_value", str(fault_specifics.return_value)
-            )
-            file_sys_op += (
-                """    fault_details#nr.file_system_op = file_syscall#nr;\n"""
-            )
+            file_sys_op = file_sys_op.replace("#return_value", str(fault_specifics.return_value))
+            file_sys_op += """    fault_details#nr.file_system_op = file_syscall#nr;\n"""
             file_sys_op = file_sys_op.replace("#nr", str(fault_nr))
 
             return file_sys_op
@@ -576,6 +517,10 @@ def get_fault_type_nr(type, fault_specifics):
                         return "STAT_FAULT"
                     case "unlink":
                         return "UNLINK_FAULT"
+                    case "sync_file_range":
+                        return "SYNC_FILE_RANGE_FAULT"
+                    case "bind":
+                        return "BIND_FAULT"
                     case _:
                         return "TEMP_EMPTY"
             if fault_specifics.success == 1:
@@ -597,13 +542,13 @@ def check_if_syscall_supported(syscall_name):
     match syscall_name:
         # Needs success = 0
         case "write":
-            return 2
+            return "WRITE"
         case "read":
-            return 3
+            return "READ"
         case "open":
-            return 15
+            return "OPEN"
         case "mkdir":
-            return 23
+            return "MKDIR"
         case "newfstatat":
             return "NEWFSTATAT_FAULT"
         case "openat":
@@ -628,5 +573,9 @@ def check_if_syscall_supported(syscall_name):
             return "LSEEK_FAULT"
         case "unlink":
             return "UNLINK_FAULT"
+        case "sync_file_range":
+            return "SYNC_FILE_RANGE_FAULT"
+        case "bind":
+            return "BIND_FAULT"
         case _:
             return "TEMP_EMPTY"

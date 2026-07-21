@@ -55,6 +55,20 @@ class time_cond:
         return {"type": "time", "time": int(self.time)}
 
 
+class fault_dependency_condition:
+    name = ""     # fault name — resolved to fault_nr before codegen
+    fault_nr = -1
+
+    def to_yaml(self):
+        return {"type": "fault_condition", "name": self.name}
+
+
+def build_fault_condition(config):
+    cond = fault_dependency_condition()
+    cond.name = config["name"]
+    return cond
+
+
 def build_time(time_config):
     time = time_cond()
 
@@ -203,6 +217,15 @@ def build_fault_conditions(file, fault_nr, begin_conditions):
             fault_condition = fault_condition.replace("#faultnr", str(fault_nr))
             fault_condition = fault_condition.replace("#condnr", str(condition_counter))
             file.write(fault_condition)
+        if isinstance(condition, fault_dependency_condition):
+            fault_condition = """    fault_condition fault_condition_#faultnr_#condnr;\n"""
+            fault_condition += """    fault_condition_#faultnr_#condnr.type = FAULT_CONDITION;\n"""
+            fault_condition += """    fault_condition_#faultnr_#condnr.condition.fault_dep.fault_nr = #dep_fault_nr;\n"""
+            fault_condition += """    add_begin_condition(&faults[#faultnr],fault_condition_#faultnr_#condnr,#condnr);\n"""
+            fault_condition = fault_condition.replace("#dep_fault_nr", str(condition.fault_nr))
+            fault_condition = fault_condition.replace("#faultnr", str(fault_nr))
+            fault_condition = fault_condition.replace("#condnr", str(condition_counter))
+            file.write(fault_condition)
         condition_counter += 1
 
 
@@ -262,5 +285,15 @@ def get_cond_type_nr(type, condition):
                     return "FUTEX_STATE"
                 case "connect":
                     return "CONNECT_STATE"
+                case "stat":
+                    return "STAT_STATE"
+                case "lseek":
+                    return "LSEEK_STATE"
+                case "unlink":
+                    return "UNLINK_STATE"
+                case "sync_file_range":
+                    return "SYNC_FILE_RANGE_STATE"
+                case "bind":
+                    return "BIND_STATE"
         case 4:
             return 21

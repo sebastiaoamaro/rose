@@ -1,5 +1,6 @@
 #include <argp.h>
 #include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <sys/resource.h>
@@ -15,7 +16,6 @@
 #include <linux/if_ether.h>
 #include <linux/in.h>
 #include <net/if.h>
-#include <ifaddrs.h>
 #include "fault_schedule.h"
 #include "aux.h"
 #include <unistd.h>
@@ -27,6 +27,7 @@
 #include <bpf/bpf.h>
 #include <dirent.h>
 #include <limits.h>
+#include <sys/wait.h>
 
 
 static struct env {
@@ -250,96 +251,6 @@ int get_interface_index(char* if_name){
 	return ifr.ifr_ifindex;
 }
 
-int get_interface_names(char** device_names,int device_count){
-	//Add to all networkdevices
-	struct ifaddrs *ifaddr;
-
-	int count_devices = 0;
-
-	if (getifaddrs(&ifaddr) == -1) {
-		perror("getifaddrs \n");
-		exit(EXIT_FAILURE);
-	}
-
-	/* Walk through linked list, maintaining head pointer so we can free list later. */
-
-    for (struct ifaddrs *ifa = ifaddr; ifa != NULL && count_devices < device_count; ifa = ifa->ifa_next) {
-
-		device_names[count_devices] = malloc(32*sizeof(char));
-        sprintf(device_names[count_devices++], "%s", ifa->ifa_name);
-    }
-
-    freeifaddrs(ifaddr);
-
-	return count_devices;
-}
-
-void build_fault(struct fault* fault, int repeat,int faulttype,int occurrences,int duration, int network_directions,int return_value,char **command,int container_pid,char *binary_location){
-	fault->done = 0;
-	fault->repeat = repeat;
-	fault->pid = 0;
-	fault->faulttype = faulttype;
-	// fault->initial = (struct faultstate*)malloc(sizeof(struct faultstate));
-	// fault->end = (struct faultstate*)malloc(sizeof(struct faultstate));
-	fault->network_directions = network_directions;
-	fault->return_value = return_value;
-	fault->container_pid = container_pid;
-	fault->relevant_conditions = 0;
-	fault->duration = duration;
-
-	if(binary_location)
-		strcpy(fault->binary_location,binary_location);
-	//fault->initial->fault_type_conditions = (__u64*)malloc(STATE_PROPERTIES_COUNT * sizeof(__u64));
-	//fault->initial->conditions_match = (int*)malloc(STATE_PROPERTIES_COUNT * sizeof(int));
-
-	//fault->faulttype_count = (int*)malloc(FAULTSSUPPORTED*sizeof(int));
-
-	for (int i = 0; i< STATE_PROPERTIES_COUNT;i++){
-		fault->initial.conditions_match[i] = 0;
-	}
-	for (int i=0; i < STATE_PROPERTIES_COUNT;i++){
-		fault->initial.fault_type_conditions[i] = 0;
-	}
-
-	for (int i=0; i < FAULTSSUPPORTED;i++){
-		//fault->faulttype_count[i] = 0;
-	}
-
-	if(faulttype != TEMP_EMPTY){
-		//fault->faulttype_count[faulttype] = occurrences;
-		fault->occurrences = occurrences;
-	}
-
-	char string[64] = "empty";
-	//I do not remember what this was for
-	for(int i=0;i<MAX_FUNCTIONS;i++){
-		strcpy(fault->func_names[i],string);
-	}
-
-	if(command){
-		fault->command = (char**)malloc(FUNCNAME_MAX*MAX_ARGS*sizeof(char));
-		memcpy(fault->command,command,sizeof(command)*MAX_ARGS);
-	}
-	// for(int i = 0;i<MAX_ARGS;i++){
-	// 	if(!command[i])
-	// 		break;
-	// 	strcpy(fault->command[i],command[i]);
-	// }
-
-}
-
-
-void set_if_name(struct fault* fault, char*if_name){
-		fault->veth = (char*)malloc(sizeof(char)*sizeof(if_name));
-		strcpy(fault->veth,if_name);
-}
-
-
-void add_function_to_monitor(struct fault* fault, char *funcname,int pos){
-	printf("Funcname in aux.c is %s \n",funcname);
-	strcpy(fault->func_names[pos],funcname);
-}
-
 int bpf_map_lookup_or_try_init_user(int map, const void *key, void *init,void *value)
 {
 	long err;
@@ -358,38 +269,6 @@ int bpf_map_lookup_or_try_init_user(int map, const void *key, void *init,void *v
 		return 0;
 	}
 }
-int translate_pid(int pid){
-
-	char result[100];
-
-	char chr_pid[10];
-
-	sprintf(chr_pid,"%d",pid);
-
-	strcpy(result,"/proc/");
-
-	strcat(result,chr_pid);
-
-	strcat(result,"/status");
-
-	printf("result is %s \n ",result);
-
-	FILE *fptr;
-
-	fptr = fopen(result, "r");
-
-
-	char inLine[1024];
-    while (fgets(inLine, sizeof(inLine), fptr) != NULL)
-    {
-		if(strstr(inLine,"NSpid"))
-       		printf("%s\n", inLine);
-    }
-
-
-	return pid;
-}
-
 void pause_process(void* args){
 	int pid = ((struct process_fault_args*)args)->pid;
 	int duration = ((struct process_fault_args*)args)->duration;
@@ -401,86 +280,7 @@ void pause_process(void* args){
 
 
 int send_signal(int pid, int signal,char* node_name){
-	printf("SIGNAL:%d TO %s.PID:%d\n",signal,node_name,pid);
 	kill(pid,signal);
-}
-
-
-void print_fault_schedule(execution_plan* plan, node* nodes, fault * faults,tracer* deployment_tracer){
-
-
-	if (deployment_tracer){
-	printf("Tracer config: \ntracer_location: %s \npipe_location: %s\nfunctions_file: %s\n",deployment_tracer->tracer_location,deployment_tracer->pipe_location,deployment_tracer->functions_file);
-	}
-
-	if(plan){
-		printf("Setup is %s it takes %d seconds to start, and workload is %s \n",plan->setup.script,plan->setup.duration,plan->workload.script);
-		if (plan->cleanup.script){
-			printf("Cleanup script is %s \n",plan->cleanup.script);
-		}
-	}
-
-
-	for(int i = 0;i<get_node_count();i++){
-		printf("Node name:%s | pid:%d | veth:%s | script:%s | leader:%d \n", nodes[i].name,nodes[i].pid,nodes[i].veth,nodes[i].script,nodes[i].leader);
-	}
-
-	for(int i=0;i<get_fault_count();i++){
-		printf("Fault name:%s | type:%d | target:%d \n",faults[i].name,faults[i].faulttype,faults[i].target);
-
-		switch(faults[i].faulttype){
-			case WRITE: case READ: case CLONE:
-				break;
-			case NETWORK_ISOLATION:
-				break;
-			case BLOCK_IPS:
-				block_ips block_ips = faults[i].fault_details.block_ips;
-				for(int i = 0; i < block_ips.count_in; i++){
-					if (block_ips.nodes_in[i])
-						printf("ip_blocked: %u \n",block_ips.nodes_in[i]);
-				}
-				for(int i = 0; i < block_ips.count_in; i++){
-					if (block_ips.nodes_out[i])
-						printf("ip_blocked: %u \n",block_ips.nodes_out[i]);
-				}
-				break;
-			case DROP_PACKETS:
-				break;
-			case WRITE_FILE: case READ_FILE: case WRITE_RET: case READ_RET: case OPEN:
-			case MKDIR: case NEWFSTATAT_FAULT:  case OPENAT_FAULT: case NEWFSTATAT_RET: case OPENAT_RET:
-				break;
-			case PROCESS_KILL: case PROCESS_STOP:
-				break;
-		}
-
-		for(int j = 0; j < faults[i].relevant_conditions; j++){
-			int condition_type = faults[i].fault_conditions_begin[j].type;
-
-			switch(condition_type){
-				case 1:
-					user_function user_function = faults[i].fault_conditions_begin[j].condition.user_function;
-
-					printf("User function condition symbol: %s | binary: %s | call_count: %d \n",user_function.symbol,user_function.binary_location,user_function.call_count);
-
-					break;
-				case 2:
-					file_system_call file_system_call = faults[i].fault_conditions_begin[j].condition.file_system_call;
-
-					printf("File syscall nr: %d | dir_name: %s | file_name: %s | call_count: %d \n",file_system_call.syscall,file_system_call.directory_name,file_system_call.file_name,file_system_call.call_count);
-					break;
-				case 3:
-					system_call syscall = faults[i].fault_conditions_begin[j].condition.syscall;
-
-					printf("Syscall nr: %d | call_count:%d \n",syscall.syscall,syscall.call_count);
-					break;
-				case 4:
-					int time = faults[i].fault_conditions_begin[j].condition.time;
-					printf("TIME COND: %d \n",time);
-
-					break;
-			}
-		}
-	}
 }
 
 
@@ -612,16 +412,6 @@ void sleep_for_ms(long milliseconds) {
 
     nanosleep(&ts, NULL);
 }
-
-bool is_element_in_array(int arr[], int size, int element) {
-    for(int i = 0; i < size; i++) {
-        if(arr[i] == element) {
-            return true;
-        }
-    }
-    return false;
-}
-
 
 long get_children_pids(pid_t pid) {
     char path[256];
@@ -801,4 +591,74 @@ long long get_nanoseconds() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////PROCESS_SPAWNING/////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////
+
+static int ready = 0;
+static void sig_handler(int signum){
+    ready = 1;
+}
+
+FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid, int container_process)
+{
+    pid_t child_pid;
+    int fd[2];
+    pipe(fd);
+    if((child_pid = fork()) == -1)
+    {
+        perror("fork \n");
+        exit(1);
+    }
+    if (child_pid == 0)
+    {
+        if (type == 'r')
+        {
+            close(fd[0]);
+            dup2(fd[1], 1);
+        }
+        else
+        {
+            close(fd[1]);
+            dup2(fd[0],0);
+        }
+
+        setpgid(child_pid, child_pid); //Needed so negative PIDs can kill children of /bin/sh
+
+        //If it is not a container process, wait for the signal to start
+        if (!container_process){
+            signal(SIGUSR1,sig_handler);
+            while(true){
+                if(ready){
+                    break;
+                }
+                sleep_for_ms(10);
+            }
+        }
+        int err = execvp(command,args);
+        if (err < 0)
+            printf("COMMAND:%s, Err in execvp: %s (errno=%d)\n", command, strerror(errno), errno);
+        exit(0);
+    }
+    else
+    {
+        if (type == 'r')
+        {
+            close(fd[1]); //Close the WRITE end of the pipe since parent's fd is read-only
+        }
+        else
+        {
+            close(fd[0]); //Close the READ end of the pipe since parent's fd is write-only
+        }
+
+    }
+    *pid = child_pid;
+    if (type == 'r')
+    {
+        return fdopen(fd[0], "r");
+    }
+
+    return fdopen(fd[1], "w");
 }

@@ -29,7 +29,7 @@ faults = history.discover_faults(normal_history)  # extract fault candidates
 - `sys_exit` with a supported syscall → **syscall error** fault
 - `process_state_change` arg1=1 → **process kill** fault
 - `process_state_change` arg1=4 → **process pause** fault
-- `network_event` / `network_information` above a frequency threshold → **network isolation** fault
+- `network_event` / `network_information` above a frequency threshold → **block_ips** fault
 
 ## `binary_parser.py`
 

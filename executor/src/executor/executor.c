@@ -23,15 +23,14 @@
 #include <fcntl.h>
 #include <sys/sysinfo.h>
 #include <sys/stat.h>
+#include <libgen.h>
+#include <limits.h>
 //Modules
 #include <aux.skel.h>
 #include <fault_inject.h>
 #include <fault_inject.skel.h>
-#include <fs.h>
-#include <fs.skel.h>
 #include <uprobes.h>
 #include <uprobes.skel.h>
-#include <popen.h>
 #include <fault_schedule.h>
 #include <aux.h>
 #include <sys/wait.h>
@@ -39,7 +38,7 @@
 void process_counter(const struct event *event,int stateinfo);
 int process_tc(const struct event*);
 void process_fs(const struct event*);
-void inject_fault(int faulttype,int pid,int fault_id,int syscall_nr);
+void inject_fault(int fault_type,int pid,int fault_id,int syscall_nr);
 void setup_begin_conditions();
 void setup_node_scripts();
 void start_container_nodes_scripts();
@@ -79,12 +78,12 @@ const char *argp_program_version = "Tool for FI 0.01";
 const char *argp_program_bug_address = "sebastiao.amaro@ŧecnico.ulisboa.pt";
 const char argp_program_doc[] = "eBPF Fault Injection Tool.\n"
 				"\n"
-				"USAGE: ./main/main [-f fault count] [-d network device count] [-p process ids] \n";
+				"USAGE: ./executor/executor [-f fault count] [-d network device count] [-p process ids] \n";
 
 
 //TODO: remove non_used rename to maps
 static struct constants {
-	int faulttype_fd;
+	int fault_type_fd;
 	int relevant_state_info_fd;
 	int blocked_ips;
 	int relevant_fd;
@@ -98,7 +97,7 @@ static struct constants {
 	int target_pid;
 	int maintainpid;
 	int time_map_fd;
-	int timemode;
+	int mode;
 	int auxiliary_info_map_fd;
 	int nodes_status_map_fd;
 	int nodes_translator_map_fd;
@@ -198,7 +197,7 @@ int main()
 
 	struct fault_inject_bpf* fault_inject_bpf;
 
-	fault_inject_bpf = fault_inject(FAULT_COUNT,constants.timemode);
+	fault_inject_bpf = fault_inject(FAULT_COUNT,constants.mode);
 
 	if (!fault_inject_bpf){
 		printf("Error in creating fault injection bpf\n");
@@ -482,7 +481,7 @@ void write_start_event() {
 //Save FD of maps in constants
 void get_fd_of_maps (struct aux_bpf *bpf){
 	constants.relevant_state_info_fd = bpf_map__fd(bpf->maps.relevant_state_info);
-	constants.faulttype_fd = bpf_map__fd(bpf->maps.faults_specification	);
+	constants.fault_type_fd = bpf_map__fd(bpf->maps.faults_specification	);
 	constants.blocked_ips = bpf_map__fd(bpf->maps.blocked_ips);
 	constants.files = bpf_map__fd(bpf->maps.files);
 	constants.relevant_fd = bpf_map__fd(bpf->maps.relevant_fd);
@@ -586,7 +585,6 @@ void run_setup(){
 }
 
 void start_workload(){
-	//Start workload
 		if (!plan)
 			return;
 		if(plan->workload.pid == 0)
@@ -597,7 +595,6 @@ void start_workload(){
 
 
 void start_pre_workload(){
-	//Start workload
 	if (!plan)
 		return;
 	if(plan->pre_workload.pid == 0)
@@ -992,8 +989,10 @@ void setup_begin_conditions(){
 
 	print_block("Adding relevant conditions, file_names and uprobes to kernel");
 	int user_func_cond_nr = 0;
+	constants.mode = NORMAL;
 	for(int i = 0; i < FAULT_COUNT; i++){
 		int has_time_condition = 0;
+		int has_fault_dep_condition = 0;
 		for(int j = 0; j <faults[i].relevant_conditions;j++){
 			int type = faults[i].fault_conditions_begin[j].type;
 			int traced = faults[i].traced;
@@ -1043,24 +1042,6 @@ void setup_begin_conditions(){
 			if(type == USER_FUNCTION){
 				//user_func_cond_nr is the position where the call_count will reside in fault_type_conditions
 				user_function user_function = faults[i].fault_conditions_begin[j].condition.user_function;
-				// faults[i].fault_conditions_begin[j].condition.user_function.cond_nr = user_func_cond_nr+STATE_PROPERTIES_COUNT;
-
-				// if(nodes[traced].container){
-
-				// 	//Find the directory in hostnamespace
-				// 	char* dir;
-				// 	if (nodes[traced].container_type == CONTAINER_TYPE_DOCKER)
-				// 	   dir = get_docker_container_location(nodes[traced].name);
-				// 	if (nodes[traced].container_type == CONTAINER_TYPE_LXC)
-				// 	   dir = get_lxc_container_location(nodes[traced].name);
-				// 	//Combine paths
-				// 	char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
-				// 	snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
-
-				// 	faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
-				// }else{
-				// 	faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset);
-				// }
 				insert_relevant_condition_in_ebpf(i,pid,faults[i].fault_conditions_begin[j].condition.user_function.cond_nr,user_function.call_count);
 				user_func_cond_nr++;
 			}
@@ -1077,12 +1058,14 @@ void setup_begin_conditions(){
 					insert_relevant_condition_in_ebpf(i,pid,TIME_STATE,1);
 				}
 			}
+			if(type == FAULT_CONDITION){
+				has_fault_dep_condition = 1;
+			}
 		}
-		//printf("has_time_condition %d and relevant conditions %d \n",has_time_condition,faults[i].relevant_conditions);
-		if (has_time_condition){
-			//printf("Need to process all syscalls to check time \n");
-			constants.timemode = 1;
-		}
+		if (has_time_condition)
+			constants.mode |= TIME_DEP;
+		if (has_fault_dep_condition)
+			constants.mode |= FAULT_DEP;
 
 		// if (faults[i].target == -1){
 		// 	for(int i = 0; i < NODE_COUNT; i++){
@@ -1099,9 +1082,9 @@ void setup_begin_conditions(){
 		// 			//Combine paths
 		// 			char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 		// 			snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
-		// 			nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1,0);
+		// 			nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.mode & TIME_DEP, 1,0);
 		// 		}else{
-		// 			nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].leader_symbol,FAULT_COUNT,0,constants.timemode, 1,0);
+		// 			nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].leader_symbol,FAULT_COUNT,0,constants.mode & TIME_DEP, 1,0);
 		// 		}
 		// 	}
 		// }
@@ -1141,9 +1124,9 @@ void setup_uprobes(){
 
 					printf("  [uprobe]  attached  %s  in %s\n",user_function.symbol,combined_path);
 
-					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset,user_function.absolute_offset);
+					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.mode,0,user_function.offset,user_function.absolute_offset);
 				}else{
-					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset,user_function.absolute_offset);
+					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.mode,0,user_function.offset,user_function.absolute_offset);
 				}
 				user_func_cond_nr++;
 			}
@@ -1164,9 +1147,9 @@ void setup_uprobes(){
 					//Combine paths
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1,0,false);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.mode, 1,0,false);
 				}else{
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].leader_symbol,FAULT_COUNT,0,constants.timemode, 1,0,false);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].leader_symbol,FAULT_COUNT,0,constants.mode, 1,0,false);
 				}
 			}
 		}
@@ -1185,10 +1168,10 @@ void setup_uprobes(){
 					//Combine paths
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode, 1,0,false);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.mode, 1,0,false);
 
 				}else{
-					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].binary,FAULT_COUNT,0,constants.timemode, 1,0,false);
+					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].binary,FAULT_COUNT,0,constants.mode, 1,0,false);
 				}
 
 			}
@@ -1236,13 +1219,13 @@ void add_faults_to_bpf(){
 	print_block("Adding Faults to eBPF Maps");
 
 	for (int i = 0; i < FAULT_COUNT; i++){
-		printf("  [fault]  nr=%d  type=%d  pid=%d\n",i,faults[i].faulttype,nodes[faults[i].traced].pid);
+		printf("  [fault]  nr=%d  type=%d  pid=%d\n",i,faults[i].fault_type,nodes[faults[i].traced].pid);
 		struct simplified_fault new_fault;
 		new_fault.run = 0;
 		new_fault.duration = faults[i].duration;
 		new_fault.start_time = 0;
 		new_fault.timestamp = 0;
-		new_fault.faulttype = faults[i].faulttype;
+		new_fault.fault_type = faults[i].fault_type;
 		new_fault.done = faults[i].done;
 		new_fault.quorum_size = QUORUM;
 		new_fault.faults_done = 0;
@@ -1250,7 +1233,7 @@ void add_faults_to_bpf(){
 
 		new_fault.target = faults[i].target;
 
-		if (faults[i].faulttype == BLOCK_IPS)
+		if (faults[i].fault_type == BLOCK_IPS)
 		  new_fault.target_if_index = get_interface_index(nodes[faults[i].target].veth)-1;
 		new_fault.occurrences = faults[i].occurrences;
 		new_fault.relevant_conditions = faults[i].relevant_conditions;
@@ -1260,6 +1243,10 @@ void add_faults_to_bpf(){
 		for(int k = 0; k < (STATE_PROPERTIES_COUNT+MAX_FUNCTIONS); k++){
 			new_fault.initial.conditions_match[k] = 0;
 			new_fault.initial.fault_type_conditions[k] = 0;
+		}
+		for(int k = 0; k < MAX_FAULT_DEPS; k++){
+			new_fault.initial.dependency_fault_nrs[k] = -1;
+			new_fault.initial.dependency_satisfied[k] = 0;
 		}
 
 		for(int j = 0; j <faults[i].relevant_conditions;j++){
@@ -1285,6 +1272,16 @@ void add_faults_to_bpf(){
 			if(type == TIME){
 				new_fault.initial.fault_type_conditions[TIME_STATE] = faults[i].fault_conditions_begin[j].condition.time;
 				printf("  [condition]  fault=%d  time=%d\n",i,faults[i].fault_conditions_begin[j].condition.time);
+			}
+			if(type == FAULT_CONDITION){
+				fault_dependency dep = faults[i].fault_conditions_begin[j].condition.fault_dep;
+				for(int k = 0; k < MAX_FAULT_DEPS; k++){
+					if(new_fault.initial.dependency_fault_nrs[k] == -1){
+						new_fault.initial.dependency_fault_nrs[k] = dep.fault_nr;
+						printf("  [condition]  fault=%d  depends_on=%d\n",i,dep.fault_nr);
+						break;
+					}
+				}
 			}
 		}
 
@@ -1344,6 +1341,43 @@ void add_faults_to_bpf(){
 
 }
 
+// network_manager/network_manager is built to src/network_manager/network_manager
+// by the Makefile, while this binary itself is built to src/executor/executor
+// (see the "-o executor/executor" and "-o network_manager/network_manager"
+// rules) - the two are siblings under src/, not parent/child. Resolve it
+// relative to this binary's own on-disk location via /proc/self/exe rather
+// than the executor process's current working directory - the executor is
+// commonly launched from an unrelated CWD (e.g. /vagrant/), where a plain
+// relative "./network_manager/network_manager" silently resolves to the
+// wrong path.
+static void get_network_manager_path(char *out, size_t out_size){
+	char exe_path[PATH_MAX];
+	ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+	if (len == -1){
+		// Fall back to the old CWD-relative behavior if /proc/self/exe is
+		// somehow unavailable.
+		snprintf(out, out_size, "./network_manager/network_manager");
+		return;
+	}
+	exe_path[len] = '\0';
+
+	char exe_path_copy[PATH_MAX];
+	strncpy(exe_path_copy, exe_path, sizeof(exe_path_copy) - 1);
+	exe_path_copy[sizeof(exe_path_copy) - 1] = '\0';
+
+	// First dirname() strips the filename, leaving .../src/executor (this
+	// binary's own directory). Second strips that, leaving .../src, where
+	// network_manager/ actually sits as a sibling of executor/.
+	char *exe_dir = dirname(exe_path_copy);
+
+	char exe_dir_copy[PATH_MAX];
+	strncpy(exe_dir_copy, exe_dir, sizeof(exe_dir_copy) - 1);
+	exe_dir_copy[sizeof(exe_dir_copy) - 1] = '\0';
+
+	char *src_dir = dirname(exe_dir_copy);
+	snprintf(out, out_size, "%s/network_manager/network_manager", src_dir);
+}
+
 //Create TC programs, one for each interface
 int setup_tc_progs(){
 	print_block("STARTING TC PROGRAMS");
@@ -1361,7 +1395,7 @@ int setup_tc_progs(){
 	strcpy(nsenter_args[0],"nsenter");
 	strcpy(nsenter_args[1],"-t");
 	strcpy(nsenter_args[3],"-n");
-	strcpy(nsenter_args[4],"./tcmain/network");
+	get_network_manager_path(nsenter_args[4], STRING_SIZE);
 	nsenter_args[10] = NULL;
 
 	char *env_script[STRING_SIZE];
@@ -1370,7 +1404,7 @@ int setup_tc_progs(){
 
 	for (int i =0;i<FAULT_COUNT;i++){
 
-		if(faults[i].faulttype == BLOCK_IPS){
+		if(faults[i].fault_type == BLOCK_IPS){
 
 			int target = faults[i].target;
 			int index = get_interface_index(nodes[target].veth);
@@ -1477,9 +1511,9 @@ int setup_tc_progs(){
 
 		}
 		//TODO: Implement these later (useless for our current approach)
-		if (faults[i].faulttype == NETWORK_ISOLATION){
+		if (faults[i].fault_type == NETWORK_ISOLATION){
 		}
-		if(faults[i].faulttype == DROP_PACKETS){
+		if(faults[i].fault_type == DROP_PACKETS){
 
 		}
 
@@ -1906,7 +1940,7 @@ void reinject_uprobes(int node_nr){
                 dir = get_lxc_container_location(nodes[node_nr].name);
       		char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
       		snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes->binary);
-      		node->leader_probe = uprobe(nodes->current_pid,nodes->leader_symbol,combined_path,FAULT_COUNT,0,constants.timemode,1,0,false);
+      		node->leader_probe = uprobe(nodes->current_pid,nodes->leader_symbol,combined_path,FAULT_COUNT,0,constants.mode,1,0,false);
 		}
 	}
 	int user_func_cond_nr = 0;
@@ -1926,9 +1960,9 @@ void reinject_uprobes(int node_nr){
 						//Combine paths
 						char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 						snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, user_function.binary_location);
-						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset,user_function.absolute_offset);
+						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.mode,0,user_function.offset,user_function.absolute_offset);
 					}else{
-						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.timemode,0,user_function.offset,user_function.absolute_offset);
+						faults[i].list_of_functions[user_func_cond_nr] = uprobe(node->current_pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.mode,0,user_function.offset,user_function.absolute_offset);
 					}
 					user_func_cond_nr++;
 				}
