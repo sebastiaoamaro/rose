@@ -1371,9 +1371,11 @@ pub fn monitor_pid(
                     events_process_pause.push(event);
                     tracer_println!("PROCESS:{} NO LONGER PAUSED, ADDING EVENT", target_pid);
                     duration = 0;
-                } else if state != Waiting && state != Stopped {
+                } else if state != Zombie {
+                    // Waiting and Stopped are handled by the first branch, so only
+                    // Zombie reaches the process finished event below.
                     duration = 0;
-                } else if state == Zombie {
+                } else {
                     //Process finished event
                     let event = Event {
                         event_type: 6,
@@ -1529,9 +1531,11 @@ pub fn monitor_pid_controlled(
                     events_process_pause.push(event);
                     tracer_println!("PROCESS:{} NO LONGER PAUSED, ADDING EVENT", target_pid);
                     duration = 0;
-                } else if state != Waiting && state != Stopped {
+                } else if state != Zombie {
+                    // Waiting and Stopped are handled by the first branch, so only
+                    // Zombie reaches the process finished event below.
                     duration = 0;
-                } else if state == Zombie {
+                } else {
                     //Process finished event
                     let event = Event {
                         event_type: 6,
