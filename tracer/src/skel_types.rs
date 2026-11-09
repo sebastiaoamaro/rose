@@ -53,7 +53,7 @@ pub trait SkelEndTraceTrait {
         &mut self,
         skel_maps: &mut PinMapsSkel,
         hashmap_pid_to_node: &mut HashMap<i32, String>,
-        functions: Vec<(String, usize)>,
+        functions: Vec<(String, usize, Option<String>)>,
     );
 }
 
@@ -68,32 +68,56 @@ impl<'a, 'obj> SkelUpdatePidTrait for SkelEnum<'a, 'obj> {
     fn update(&mut self, pid_vec: &[u8; 4], one: &[u8; 4]) {
         match self {
             SkelEnum::Production(skel_instance) => {
-                skel_instance
+                if let Err(e) = skel_instance
                     .maps
                     .pid_tree
                     .update(pid_vec, one, MapFlags::ANY)
-                    .expect("Failed to add pid to eBPF");
+                {
+                    crate::tracer_println!(
+                        "  ✗ [map]  pid_tree update failed (pid={}): {} — pid not tracked",
+                        u32::from_le_bytes(*pid_vec),
+                        e
+                    );
+                }
             }
             SkelEnum::SysAllTracer(skel_instance) => {
-                skel_instance
+                if let Err(e) = skel_instance
                     .maps
                     .pid_tree
                     .update(pid_vec, one, MapFlags::ANY)
-                    .expect("Failed to add pid to eBPF");
+                {
+                    crate::tracer_println!(
+                        "  ✗ [map]  pid_tree update failed (pid={}): {} — pid not tracked",
+                        u32::from_le_bytes(*pid_vec),
+                        e
+                    );
+                }
             }
             SkelEnum::RwTracer(skel_instance) => {
-                skel_instance
+                if let Err(e) = skel_instance
                     .maps
                     .pid_tree
                     .update(pid_vec, one, MapFlags::ANY)
-                    .expect("Failed to add pid to eBPF");
+                {
+                    crate::tracer_println!(
+                        "  ✗ [map]  pid_tree update failed (pid={}): {} — pid not tracked",
+                        u32::from_le_bytes(*pid_vec),
+                        e
+                    );
+                }
             }
             SkelEnum::StatisticsTracer(skel_instance) => {
-                skel_instance
+                if let Err(e) = skel_instance
                     .maps
                     .pid_tree
                     .update(pid_vec, one, MapFlags::ANY)
-                    .expect("Failed to add pid to eBPF");
+                {
+                    crate::tracer_println!(
+                        "  ✗ [map]  pid_tree update failed (pid={}): {} — pid not tracked",
+                        u32::from_le_bytes(*pid_vec),
+                        e
+                    );
+                }
             }
         }
     }
@@ -255,7 +279,7 @@ impl<'a, 'obj> SkelEndTraceTrait for SkelEnum<'a, 'obj> {
         &mut self,
         skel_maps: &mut PinMapsSkel,
         hashmap_pid_to_node: &mut HashMap<i32, String>,
-        functions: Vec<(String, usize)>,
+        functions: Vec<(String, usize, Option<String>)>,
     ) {
         match self {
             SkelEnum::Production(skel_instance) => {

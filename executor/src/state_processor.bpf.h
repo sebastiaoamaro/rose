@@ -5,6 +5,19 @@
 #include "fault_inject.h"
 #include "bpf_shared.h"
 
+/* rose.ko's kfuncs (see rose.c): arm its kprobes/kretprobe directly, in-kernel,
+ * with no ring-buffer/userspace round trip.
+ * - partial_write: corrupt_buffer 1 also poisons the write buffer's tail
+ *   (rose.c's corrupt_write_tail), 0 truncates the syscall's count only,
+ *   leaving the buffer untouched.
+ * - partial_read: truncates the syscall's count only, buffer untouched -
+ *   a genuine short read.
+ * - torn_read: lets the real read() complete, then poisons buf[offset:n) of
+ *   the *actually returned* bytes - read() still reports full success. */
+extern void bpf_rose_arm_partial_write(int pid, int tid, int count, int corrupt_buffer) __ksym;
+extern void bpf_rose_arm_partial_read(int pid, int tid, int count) __ksym;
+extern void bpf_rose_arm_torn_read(int pid, int tid, int offset) __ksym;
+
 ///////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////FILE_HELPERS/////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -448,7 +461,45 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 		}
 
 		int zero = 0;
-		if (run >= relevant_conditions){
+		// target == -3 ("any", static schedule_parser path): first of this
+		// fault's N begin_conditions to match wins - gate on run>=1, not
+		// run>=relevant_conditions (which would mean ALL conditions, i.e.
+		// the existing AND semantics every other target already uses).
+		int required_run = (fault->target == -3) ? 1 : relevant_conditions;
+		if (run >= required_run){
+			// CAS gate: replaces the old userspace-only "poll every sibling
+			// slot, reset_slot() the losers" mechanism (coverage_fixed.py),
+			// which had a real race window where two siblings could both
+			// have their kernel-side condition satisfied, and BOTH
+			// independently inject, before userspace noticed and disarmed
+			// the loser. See bpf_shared.h's `claimed`/`group_leader_fault_nr`
+			// comment for the two cases this covers.
+			if (fault->target == -3){
+				// Static path: N conditions already share this one fault_nr,
+				// so CAS directly on our own `claimed` field.
+				if (!__sync_bool_compare_and_swap(&fault->claimed, 0, 1)){
+					return 0;
+				}
+			} else if (fault->group_leader_fault_nr >= 0){
+				// Dynamic reserved-slot path: N independent fault_nr's (one
+				// per node) share one designated leader slot's `claimed`
+				// field, looked up via the `faults` map we're already
+				// iterating over (the `map` argument) - no new BPF map.
+				struct simplified_fault *leader = fault;
+				if (fault->group_leader_fault_nr != fault->fault_nr){
+					leader = bpf_map_lookup_elem(map, &fault->group_leader_fault_nr);
+				}
+				if (leader){
+					if (!__sync_bool_compare_and_swap(&leader->claimed, 0, 1)){
+						// Another sibling in this group already won -
+						// treat this slot as resolved so userspace's
+						// is_slot_free()/polling sees it as done, without
+						// a second real injection landing.
+						fault->done = fault->occurrences;
+						return 0;
+					}
+				}
+			}
 			if (fault->target == -1){
 				//TODO: inject fault on leader
 			}
@@ -486,6 +537,12 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 			else if (fault->fault_type == NETWORK_ISOLATION ||fault->fault_type == DROP_PACKETS ||fault->fault_type == BLOCK_IPS){
 				inject_fault(fault_key,fault->target_if_index,fault,*pos,data->maps,data->ctx);
 			}
+			//target == -3 ("any"): inject on whichever node's condition
+			//actually won the CAS above, not a fixed fault->pid (there is
+			//no single "the" target node for an "any" fault).
+			else if (fault->target == -3){
+				inject_fault(fault_key,pid_to_use,fault,*pos,data->maps,data->ctx);
+			}
 			else{
 				inject_fault(fault_key,fault->pid,fault,*pos,data->maps,data->ctx);
 			}
@@ -496,27 +553,44 @@ static inline __u64 process(struct bpf_map *map, int *pos,struct simplified_faul
 }
 
 static __always_inline void satisfy_fault_deps(struct bpf_map *faults, int fired_nr){
-	#pragma unroll
-	for (int d = 0; d < MAX_FAULTS; d++){
-		int d_idx = d;
-		struct simplified_fault *df = bpf_map_lookup_elem(faults, &d_idx);
-		if (!df || df->done >= df->occurrences) continue;
-		if (df->initial.dependency_fault_nrs[0] == fired_nr && !df->initial.dependency_satisfied[0])
-			{ df->initial.dependency_satisfied[0] = 1; df->run++; }
-		if (df->initial.dependency_fault_nrs[1] == fired_nr && !df->initial.dependency_satisfied[1])
-			{ df->initial.dependency_satisfied[1] = 1; df->run++; }
-		if (df->initial.dependency_fault_nrs[2] == fired_nr && !df->initial.dependency_satisfied[2])
-			{ df->initial.dependency_satisfied[2] = 1; df->run++; }
-		if (df->initial.dependency_fault_nrs[3] == fired_nr && !df->initial.dependency_satisfied[3])
-			{ df->initial.dependency_satisfied[3] = 1; df->run++; }
-	}
+	// This loop's #pragma unroll runs MAX_FAULTS iterations at every
+	// fault-firing call site, so it's what forces MAX_FAULTS to stay at
+	// 16 - doubling it to 32/64 previously overflowed the BPF verifier's
+	// 1M-instruction limit (-E2BIG) with only 8 faults declared. No
+	// schedule today actually sets a fault's dependency_fault_nrs
+	// (fault_deps), so this check is currently a no-op that only costs
+	// verifier headroom. Only re-enable it if a schedule is written that
+	// declares real fault dependencies between faults.
+	// #pragma unroll
+	// for (int d = 0; d < MAX_FAULTS; d++){
+	// 	int d_idx = d;
+	// 	struct simplified_fault *df = bpf_map_lookup_elem(faults, &d_idx);
+	// 	if (!df || df->done >= df->occurrences) continue;
+	// 	if (df->initial.dependency_fault_nrs[0] == fired_nr && !df->initial.dependency_satisfied[0])
+	// 		{ df->initial.dependency_satisfied[0] = 1; df->run++; }
+	// 	if (df->initial.dependency_fault_nrs[1] == fired_nr && !df->initial.dependency_satisfied[1])
+	// 		{ df->initial.dependency_satisfied[1] = 1; df->run++; }
+	// 	if (df->initial.dependency_fault_nrs[2] == fired_nr && !df->initial.dependency_satisfied[2])
+	// 		{ df->initial.dependency_satisfied[2] = 1; df->run++; }
+	// 	if (df->initial.dependency_fault_nrs[3] == fired_nr && !df->initial.dependency_satisfied[3])
+	// 		{ df->initial.dependency_satisfied[3] = 1; df->run++; }
+	// }
 }
 
 static __always_inline int inject_fault(int fault_key,int current_pid,struct simplified_fault *fault,int pos,struct maps_ebpf *maps,struct pt_regs *ctx){
 
 	int pid_to_target = current_pid;
-	int running_pid = bpf_get_current_pid_tgid() >> 32;
+	__u64 running_pid_tgid = bpf_get_current_pid_tgid();
+	int running_pid = running_pid_tgid >> 32;
 	int fault_fired = 0;
+
+	// TEMPORARY debug instrumentation - confirming the early-return path
+	// below (running_pid != pid_to_target) is what skips the
+	// conditions_match[] reset, permanently freezing process_kill/Send.
+	// Revert after diagnosis.
+	if (fault && fault->fault_nr == 5) {
+		bpf_printk("DBG3: fault_nr=5 pid_to_target=%d running_pid=%d match=%d\n", pid_to_target, running_pid, running_pid == pid_to_target);
+	}
 
 	if (fault){
 		//If it is a fault to inject on a leader we use the leader_pid
@@ -537,6 +611,12 @@ static __always_inline int inject_fault(int fault_key,int current_pid,struct sim
 				return 0;
 			}
 		}
+
+		// The thread whose rose.ko-backed syscall should fail (partial write/read,
+		// torn read): the current one, if it belongs to the target process - it
+		// is the execution that just hit the fault's condition. 0 when armed from
+		// another process, which rose.ko treats as "any thread of pid_to_target".
+		int tid_to_target = (running_pid == pid_to_target) ? (int)(__u32)running_pid_tgid : 0;
 
 
 		if(fault->fault_type == PROCESS_KILL || fault->fault_type == PROCESS_STOP){
@@ -636,6 +716,60 @@ static __always_inline int inject_fault(int fault_key,int current_pid,struct sim
 		else if (fault->fault_type == TORN_OP){
 		    fault->done++;
 		    bpf_printk("FAULT:%d INJECTED TORN_OP, PID:%d, OCCURRENCES:%d/%d\n",fault->fault_nr,pid_to_target,fault->done,fault->occurrences);
+			struct event *e;
+			e = bpf_ringbuf_reserve(maps->rb, sizeof(*e), 0);
+			if (!e)
+				return 0;
+
+			e->type = fault->fault_type;
+			e->pid = pid_to_target;
+			e->fault_nr = fault->fault_nr;
+
+			bpf_ringbuf_submit(e, 0);
+			fault_fired = 1;
+		}
+		else if (fault->fault_type == PARTIAL_WRITE_FAULT){
+		    fault->done++;
+		    /* Arm rose.ko's kprobe synchronously, right here, instead of relaying
+		     * through userspace - see rose.c's bpf_rose_arm_partial_write() for why. */
+		    bpf_rose_arm_partial_write(pid_to_target, tid_to_target, fault->return_value, fault->corrupt_buffer);
+		    bpf_printk("FAULT:%d INJECTED PARTIAL_WRITE_FAULT, PID:%d, TID:%d, COUNT:%d, CORRUPT_BUFFER:%d, OCCURRENCES:%d/%d\n",fault->fault_nr,pid_to_target,tid_to_target,fault->return_value,fault->corrupt_buffer,fault->done,fault->occurrences);
+			struct event *e;
+			e = bpf_ringbuf_reserve(maps->rb, sizeof(*e), 0);
+			if (!e)
+				return 0;
+
+			e->type = fault->fault_type;
+			e->pid = pid_to_target;
+			e->fault_nr = fault->fault_nr;
+
+			bpf_ringbuf_submit(e, 0);
+			fault_fired = 1;
+		}
+		else if (fault->fault_type == PARTIAL_READ_FAULT){
+		    fault->done++;
+		    /* Arm rose.ko's read_pre_handler synchronously, right here - same
+		     * reasoning as PARTIAL_WRITE_FAULT above. */
+		    bpf_rose_arm_partial_read(pid_to_target, tid_to_target, fault->return_value);
+		    bpf_printk("FAULT:%d INJECTED PARTIAL_READ_FAULT, PID:%d, TID:%d, COUNT:%d, OCCURRENCES:%d/%d\n",fault->fault_nr,pid_to_target,tid_to_target,fault->return_value,fault->done,fault->occurrences);
+			struct event *e;
+			e = bpf_ringbuf_reserve(maps->rb, sizeof(*e), 0);
+			if (!e)
+				return 0;
+
+			e->type = fault->fault_type;
+			e->pid = pid_to_target;
+			e->fault_nr = fault->fault_nr;
+
+			bpf_ringbuf_submit(e, 0);
+			fault_fired = 1;
+		}
+		else if (fault->fault_type == TORN_READ_FAULT){
+		    fault->done++;
+		    /* Arm rose.ko's torn_read_krp kretprobe synchronously, right here -
+		     * same reasoning as PARTIAL_WRITE_FAULT above. */
+		    bpf_rose_arm_torn_read(pid_to_target, tid_to_target, fault->return_value);
+		    bpf_printk("FAULT:%d INJECTED TORN_READ_FAULT, PID:%d, TID:%d, OFFSET:%d, OCCURRENCES:%d/%d\n",fault->fault_nr,pid_to_target,tid_to_target,fault->return_value,fault->done,fault->occurrences);
 			struct event *e;
 			e = bpf_ringbuf_reserve(maps->rb, sizeof(*e), 0);
 			if (!e)

@@ -4,6 +4,7 @@ class ExecutionPlan:
     cleanup = None
     pre_workload = None
     lazyfs = None
+    dynamic = None
 
 
 class Setup:
@@ -32,6 +33,16 @@ class LazyFS:
     root_dir = ""
     mount_dir = ""
     pipe_location = ""
+
+
+class Dynamic:
+    # Number of extra, initially-inert fault slots to reserve beyond the
+    # statically-declared faults. A controller (toexfi/rose_injector.py's
+    # RoseInjector) arms/rearms these live, directly in
+    # the pinned BPF maps, while the schedule is already running. Slots are
+    # reused once their fault is done, so this stays small even for a long
+    # run with many sequential dynamic injections.
+    reserved_slots = 0
 
 
 def parse_execution_plan(plan):
@@ -95,6 +106,11 @@ def parse_execution_plan(plan):
             lazyfs.pipe_location = plan["lazyfs"]["pipe_location"]
 
         exe_plan.lazyfs = lazyfs
+
+    dynamic = Dynamic()
+    if "dynamic" in plan and "reserved_slots" in plan["dynamic"]:
+        dynamic.reserved_slots = int(plan["dynamic"]["reserved_slots"])
+    exe_plan.dynamic = dynamic
 
     return exe_plan
 

@@ -27,6 +27,7 @@ ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 APPS = uprobes tc aux fault_schedule fault_inject
 MAIN = executor
 TCMAIN = network_manager
+INJECTMAIN = rose_inject_helper
 
 CARGO ?= $(shell which cargo)
 ifeq ($(strip $(CARGO)),)
@@ -76,10 +77,11 @@ $(call allow-override,CC,$(CROSS_COMPILE)cc)
 $(call allow-override,LD,$(CROSS_COMPILE)ld)
 
 
-.PHONY: all ROSE TC
-all: $(APPS) ROSE TC
+.PHONY: all ROSE TC INJECT
+all: $(APPS) ROSE TC INJECT
 ROSE: $(MAIN)
 TC: $(TCMAIN)
+INJECT: $(INJECTMAIN)
 
 .PHONY: clean
 clean:
@@ -87,6 +89,7 @@ clean:
 	$(Q)rm -rf $(OUTPUT) $(APPS)
 	$(Q)rm -f executor/executor
 	$(Q)rm -f network_manager/network_manager
+	$(Q)rm -f inject/rose_inject_helper
 
 $(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT):
 	$(call msg,MKDIR,$@)
@@ -161,6 +164,15 @@ $(TCMAIN): %: network_manager/network_manager.c $(LIBBPF_OBJ) $(APPS)
 	$(call msg,TC BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -I .output/ -I . -c network_manager/network_manager.c -o .output/network_manager.o
 	$(Q)$(CC) $(CFLAGS) .output/network_manager.o $(ALL_LDFLAGS) $(OFILES) $(COMMON_OBJ) $(LIBBPF_OBJ) -lelf -lz -o network_manager/network_manager
+
+# Build rose_inject_helper binary - the one compiled piece dynamic fault
+# injection needs (attaching a brand-new uprobe / dumping struct layout
+# for schedule_parser/rose_injector.py). Links against the same $(APPS)
+# object files as `executor`, in particular uprobes.o for uprobe() itself.
+$(INJECTMAIN): %: inject/rose_inject_helper.c $(LIBBPF_OBJ) $(APPS)
+	$(call msg,BINARY,$@)
+	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -I .output/ -I . -c inject/rose_inject_helper.c -o .output/rose_inject_helper.o
+	$(Q)$(CC) $(CFLAGS) .output/rose_inject_helper.o $(ALL_LDFLAGS) $(OFILES) $(COMMON_OBJ) $(LIBBPF_OBJ) -lelf -lz -o inject/rose_inject_helper
 
 
 # delete failed targets

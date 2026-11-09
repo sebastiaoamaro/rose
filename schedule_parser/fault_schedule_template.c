@@ -66,7 +66,10 @@ void create_execution_plan(execution_plan* exe_plan,char* setup_script,int setup
     strcpy(exe_plan->lazyfs.pipe_location,pipe_location);
 
 }
-void create_node(node* node, char* name,int pid,char* pid_file, char* veth, char* ip, char* script,char* env,int container,int container_type,char *binary,char *leader_symbol,int leader){
+void create_node(node* node, char* name,int pid,char* pid_file, char* veth, char* ip, char* script,char* env,int container,int container_type,char *binary,char *leader_symbol,int leader,int latency_ms,int jitter_ms){
+
+    node->latency_ms = latency_ms;
+    node->jitter_ms = jitter_ms;
 
     // memset(node->name,'\0',strlen(name));
     strcpy(node->name,name);
@@ -110,13 +113,23 @@ void create_node(node* node, char* name,int pid,char* pid_file, char* veth, char
             char* interface_name = get_veth_interface_name_docker(node->name);
             //printf("Interface name is %s \n",interface_name);
             // memset(node->veth,'\0',strlen(interface_name));
-            strcpy(node->veth,interface_name);
+            if (interface_name) {
+                strcpy(node->veth,interface_name);
+            } else {
+                fprintf(stderr, "WARNING: could not resolve veth interface for node '%s' - network faults for this node will not work\n", node->name);
+                node->veth[0] = '\0';
+            }
         }
         if (container_type == CONTAINER_TYPE_LXC){
             char* interface_name = get_veth_interface_name_lxc(node->name);
             //printf("Interface name is %s \n",interface_name);
             // memset(node->veth,'\0',strlen(interface_name));
-            strcpy(node->veth,interface_name);
+            if (interface_name) {
+                strcpy(node->veth,interface_name);
+            } else {
+                fprintf(stderr, "WARNING: could not resolve veth interface for node '%s' - network faults for this node will not work\n", node->name);
+                node->veth[0] = '\0';
+            }
         }
     }
 }
@@ -219,8 +232,12 @@ char* get_veth_interface_name_docker(const char* container_name) {
     char buffer[512];
     int iflink = -1;
 
-    // Get the iflink of the container's eth0 interface
-    snprintf(command, sizeof(command), "docker exec -it %s bash -c 'cat /sys/class/net/eth0/iflink'", container_name);
+    // Get the iflink of the container's eth0 interface. No -it: this runs
+    // non-interactively (the executor itself is invoked via `sudo -E` under a
+    // non-tty SSH session), and `docker exec -it` without an attachable
+    // terminal fails outright ("cannot attach stdin to a TTY-enabled
+    // container because stdin is not a terminal") - `cat` doesn't need one.
+    snprintf(command, sizeof(command), "docker exec %s bash -c 'cat /sys/class/net/eth0/iflink'", container_name);
     FILE* pipe = popen(command, "r");
     if (!pipe) {
         perror("popen");

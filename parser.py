@@ -44,19 +44,30 @@ def parse_fault_schedule(filename):
     if "faults" in fault_schedule:
         faults = parse_faults(fault_schedule["faults"], nodes)
 
-    build_cfile(nodes, faults, plan, tracer, max_time)
+    reserved_slots = 0
+    if plan is not None and plan.dynamic is not None:
+        reserved_slots = plan.dynamic.reserved_slots
+
+    build_cfile(nodes, faults, plan, tracer, max_time, reserved_slots)
 
 
-def build_cfile(nodes, faults, plan, tracer, max_time):
+def build_cfile(nodes, faults, plan, tracer, max_time, reserved_slots=0):
     file = open("fault_schedule.c", "w+")
 
     file_template = open("schedule_parser/fault_schedule_template.c").read()
     file_template = file_template.replace("#node_count", str(len(nodes.items())))
 
-    fault_count = 0
+    static_fault_count = 0
     if faults is not None:
-        fault_count = len(faults)
-    file_template = file_template.replace("#fault_count", str(fault_count))
+        static_fault_count = len(faults)
+    # #fault_count also becomes the BPF .rodata loop bound every in-kernel
+    # fault handler scans - reserved_slots extra inert entries (placeholder
+    # faults appended by build_faults_cfile below) must be included here so
+    # those slots are inside that bound from the start, even though their
+    # real content is only written later, live, by
+    # toexfi/rose_injector.py's RoseInjector. 0 (the default)
+    # reproduces today's exact behaviour.
+    file_template = file_template.replace("#fault_count", str(static_fault_count + reserved_slots))
 
     file_template = file_template.replace("#maximum_time", str(max_time))
 
@@ -73,7 +84,7 @@ def build_cfile(nodes, faults, plan, tracer, max_time):
         build_empty_tracer_cfile(file)
 
     build_nodes_cfile(file, nodes)
-    build_faults_cfile(file, nodes, faults)
+    build_faults_cfile(file, nodes, faults, reserved_slots)
 
     return 0
 

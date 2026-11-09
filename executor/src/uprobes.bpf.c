@@ -52,6 +52,29 @@ struct {
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } auxiliary_info SEC(".maps");
 
+// SUNFLOWER-MECH[entry-hit-counts]: (LRU so it can never fill up and stop counting)
+// Diagnostic only: counts every entry() invocation for a given
+// (pid, cond_pos), UNCONDITIONALLY - independent of whether
+// process_current_state()'s own relevant_state_info lookup (keyed the
+// same way, see struct info_key) succeeds. relevant_state_info's
+// current_value only increments on a successful lookup, so it can't
+// tell "this uprobe never fired" apart from "it fired but every lookup
+// missed" - this map can, by comparing its count for (pid, cond_pos)
+// against relevant_state_info's current_value for the same key:
+// equal (and nonzero) means every fire found its entry; this map
+// higher means some fires missed; this map at zero means the uprobe
+// itself never fired at all (a different bug than a lookup race).
+// Read via bpftool, not a printk, to avoid trace_pipe's own buffering/
+// loss pitfalls (see rose_injector.py's RoseInjector.entry_hit_count()).
+struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__uint(max_entries, MAP_SIZE);
+	__type(key, struct info_key);
+	__type(value, __u64);
+	__uint(pinning, LIBBPF_PIN_BY_NAME);
+} entry_hit_counts SEC(".maps");
+
+
 
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
@@ -84,7 +107,20 @@ static void entry(struct pt_regs *ctx)
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
-	bpf_printk("UPROBE HIT:[%d], PID:[%d]\n",cond_pos,pid);
+	//bpf_printk("UPROBE HIT:[%d], PID:[%d]\n",cond_pos,pid);
+
+	// Diagnostic only - see entry_hit_counts' own comment above. Counts
+	// this exact invocation UNCONDITIONALLY, before process_current_
+	// state() does its own (possibly-missing) relevant_state_info lookup.
+	struct info_key hit_key = {pid, cond_pos};
+	__u64 *hit_count = bpf_map_lookup_elem(&entry_hit_counts, &hit_key);
+	if (hit_count) {
+		(*hit_count)++;
+	} else {
+		__u64 one = 1;
+		bpf_map_update_elem(&entry_hit_counts, &hit_key, &one, BPF_ANY);
+	}
+
 	int result = process_current_state(cond_pos,0,pid,fault_count,mode,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,NULL);
 
 }

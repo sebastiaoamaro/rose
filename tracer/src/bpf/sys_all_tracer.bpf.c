@@ -15,7 +15,8 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, u32);
 	__type(value, u32);
-	__uint(max_entries, 1024);
+	__uint(max_entries, 4194304);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } pid_tree SEC(".maps");
 
@@ -49,6 +50,15 @@ struct {
 	__uint(max_entries, 512);
 } pid_tgid_fd SEC(".maps");
 
+// Requested byte count of the in-flight write() per thread, so sys_exit can tell a
+// short write (0 <= ret < count) apart from a complete one.
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, u64);
+	__type(value, u64);
+	__uint(max_entries, 4096);
+} pid_tgid_write_count SEC(".maps");
+
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, struct process_fd);
@@ -79,7 +89,9 @@ struct {
 }important_arguments SEC(".maps");
 
 
-enum type { SYSCALL_ENTER = 1,SYSCALL_EXIT = 2, UPROBE = 3, OPEN = 5};
+// SYSCALL_EXIT_SHORT: a write() that succeeded but wrote fewer bytes than asked.
+// Kept apart from SYSCALL_EXIT, which analyzer/trace_analysis.py replays as a fault.
+enum type { SYSCALL_ENTER = 1,SYSCALL_EXIT = 2, UPROBE = 3, OPEN = 5, SYSCALL_EXIT_SHORT = 6};
 
 const volatile int pid_counter = 0;
 volatile int event_counter = 0;
@@ -130,6 +142,13 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 
 		bpf_map_update_elem(&pid_tgid_fd, &pid_tgid, &fd, BPF_ANY);
 
+		// read/write: arg2 = requested byte count (args[2]).
+		u64 count = 0;
+		if (id == 0 || id == 1)
+			count = ctx->args[2];
+		if (id == 1)
+			bpf_map_update_elem(&pid_tgid_write_count, &pid_tgid, &count, BPF_ANY);
+
 		u32 pid = pid_tgid >> 32; // Extract the PID (upper 32 bits)
 		u32 tid = (u32)pid_tgid;  // Extract the TID (lower 32 bits)
 
@@ -142,7 +161,7 @@ int trace_sys_enter(struct trace_event_raw_sys_enter *ctx) {
 			pid,
 			tid,
 			fd,
-			0,
+			(u32)count,
 			0,
 			0,
 			0
@@ -368,6 +387,34 @@ int trace_sys_exit(struct trace_event_raw_sys_exit *ctx) {
 		}
 
     }
+
+	// Short write: ret < requested count. Callers that loop (e.g. Go's
+	// internal/poll) follow it with a write of the remainder on the same fd.
+	else if (id == 1){
+		u64 *count = bpf_map_lookup_elem(&pid_tgid_write_count, &pid_tgid);
+		if (!count || ret >= (long)*count)
+			return 0;
+
+		int fd = 0;
+		int *fd_in_map = bpf_map_lookup_elem(&pid_tgid_fd, &pid_tgid);
+		if (fd_in_map)
+			fd = *fd_in_map;
+
+		struct event key = {
+			SYSCALL_EXIT_SHORT,
+			bpf_ktime_get_ns(),
+			id,
+			pid_tgid >> 32,
+			(u32)pid_tgid,
+			fd,
+			(u32)*count,
+			0,
+			0,
+			ret,
+		};
+		bpf_map_update_elem(&history, &event_counter, &key, BPF_ANY);
+		update_event_counter();
+	}
 
 	else if (id == 9 || id == 12){
 		if (ret == MAP_FAILED){

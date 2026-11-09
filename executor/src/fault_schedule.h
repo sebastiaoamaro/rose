@@ -93,16 +93,12 @@ typedef struct Node {
     char **args;
     int if_index;
     FILE *read_end;
+    // Optional baseline network latency (not a fault - see
+    // apply_node_latency() in executor.c). 0 = disabled.
+    int latency_ms;
+    int jitter_ms;
 }node;
 
-
-typedef struct file_system_operation{
-    int syscall;
-    int syscall_condition;
-    char file_name[STRING_SIZE];
-    int success;
-    int return_value;
-}file_system_operation;
 
 typedef struct syscall_operation{
     int syscall;
@@ -127,24 +123,73 @@ typedef struct process_fault{
 
 typedef struct lazyfs_fault{
     int operation;
+    // Params forwarded verbatim (when non-empty) as `key=value` segments of the
+    // `lazyfs::<cmd>::...` pipe command - see executor.c's TORN_OP/TORN_SEQ/
+    // CRASH_FS cases. file/op/persist/parts/parts_bytes are used by LazyFS's
+    // torn-op/torn-seq protocol. from_rgx/to_rgx are CRASH_FS-only: they give
+    // LazyFS's `crash` fault regex-based path targeting (matching a filename
+    // pattern instead of a literal path, for when the exact path being
+    // written isn't known ahead of time, e.g. apps that write to a generated
+    // temp filename before renaming it) - LazyFS's torn-op/torn-seq fifo
+    // commands do not accept from_rgx/to_rgx at all and reject the whole
+    // fault with an "unknown attribute" error if sent, so executor.c must
+    // never forward these two fields for TORN_OP/TORN_SEQ.
+    char file[STRING_SIZE];
+    char fs_op[STRING_SIZE];
+    char persist[STRING_SIZE];
+    char parts[STRING_SIZE];
+    char parts_bytes[STRING_SIZE];
+    char from_rgx[STRING_SIZE];
+    char to_rgx[STRING_SIZE];
 }lazyfs_fault;
 
+typedef struct partial_write_fault{
+    // Bytes to truncate the target's next write() to - forwarded verbatim to
+    // rose.ko's `partial_count` module parameter. See executor.c's
+    // PARTIAL_WRITE_FAULT case.
+    int count;
+    // 0 (default): truncate the syscall's count only, buf is left untouched -
+    // a genuine short write, where a correctly-retrying caller recovers the
+    // full, correct data. 1: also poison buf[count:orig_count) with 0xEE
+    // (rose.c's corrupt_write_tail) - a "correct" retry from the same buffer
+    // still persists garbage. See rose.c's write_pre_handler.
+    int corrupt_buffer;
+}partial_write_fault;
+
+typedef struct partial_read_fault{
+    // Bytes to truncate the target's next read() to - forwarded verbatim to
+    // rose.ko's `partial_read_count` module parameter. Buffer beyond that
+    // count is left untouched - a genuine short read. See rose.c's
+    // read_pre_handler.
+    int count;
+}partial_read_fault;
+
+typedef struct torn_read_fault{
+    // Offset within the *actually returned* bytes of the target's next
+    // read() to start poisoning with 0xEE from - forwarded verbatim to
+    // rose.ko's `torn_read_offset` module parameter. read() still reports
+    // its real, full success count - only the data is silently wrong. See
+    // rose.c's torn_read_ret_handler.
+    int offset;
+}torn_read_fault;
 
 typedef union fault_details{
-    file_system_operation file_system_op;
     syscall_operation syscall;
     block_ips block_ips;
     packet_drop packet_drop;
     process_fault process_fault;
     lazyfs_fault lazyfs_fault;
+    partial_write_fault partial_write_fault;
+    partial_read_fault partial_read_fault;
+    torn_read_fault torn_read_fault;
 }fault_details;
 
 enum fault_categories{
     NETWORK = 0,
     PROCESS = 1,
     SYSCALL_FAULT = 2,
-    FILE_SYS_OP = 3,
     LAZYFS = 4,
+    KERNEL_FAULT = 5,
 
 };
 
@@ -233,7 +278,7 @@ typedef struct fault {
 
 // Defined by the generated fault_schedule.c (see schedule_parser/fault_schedule_template.c),
 // not by the checked-in placeholder fault_schedule.c.
-void create_node(node* node, char* name,int pid,char* pid_file, char* veth, char* ip, char* script,char* env,int container,int container_type,char* binary,char *leader_symbol,int leader);
+void create_node(node* node, char* name,int pid,char* pid_file, char* veth, char* ip, char* script,char* env,int container,int container_type,char* binary,char *leader_symbol,int leader,int latency_ms,int jitter_ms);
 
 int get_maximum_time();
 node* build_nodes();

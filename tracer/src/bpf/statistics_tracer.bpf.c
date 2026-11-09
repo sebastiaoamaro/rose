@@ -15,7 +15,8 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, u32);
 	__type(value, u32);
-	__uint(max_entries, 1024);
+	__uint(max_entries, 4194304);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } pid_tree SEC(".maps");
 
@@ -25,6 +26,27 @@ struct {
 	__type(value, int);
 	__uint(max_entries, 4096);
 } uprobes_counters SEC(".maps");
+
+// Per-(function, raw pid) hit counts, additive alongside uprobes_counters
+// above - that map is global (keyed only by cookie == function index,
+// aggregating every process that hits the uprobe, since it's attached
+// pid=-1/system-wide) and is also read by tracer/src/manager.rs's own
+// end-of-run dump with a plain int key, so its shape can't change without
+// breaking that reader. This map exists purely so callers (sunflower.py)
+// can tell WHICH node actually produced a given function's coverage
+// increase, not just that some node did. Sized generously (not origin-
+// resolved pid - see handle_uprobe() below) because every process_kill
+// restart across a sweep adds fresh entries for whatever that new pid
+// goes on to call.
+struct uprobe_pid_key { u64 cookie; u32 pid; };
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__type(key, struct uprobe_pid_key);
+	__type(value, int);
+	__uint(max_entries, 1048576);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
+} uprobes_counters_by_pid SEC(".maps");
 
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
@@ -138,6 +160,18 @@ int handle_uprobe(struct pt_regs *ctx) {
 	}else{
 		int zero = 0;
 		bpf_map_update_elem(&uprobes_counters,&cookie,&zero,BPF_ANY);
+	}
+
+	// Per-pid attribution, additive - see uprobes_counters_by_pid's own
+	// comment above. Never touches the map above.
+	struct uprobe_pid_key pk = { cookie, pid };
+	int *pid_counter = bpf_map_lookup_elem(&uprobes_counters_by_pid,&pk);
+	if (pid_counter){
+		int new_pid_counter = *pid_counter + 1;
+		bpf_map_update_elem(&uprobes_counters_by_pid,&pk,&new_pid_counter,BPF_ANY);
+	}else{
+		int one = 1;
+		bpf_map_update_elem(&uprobes_counters_by_pid,&pk,&one,BPF_ANY);
 	}
 
     return 0;

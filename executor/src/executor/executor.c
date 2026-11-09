@@ -34,6 +34,13 @@
 #include <fault_schedule.h>
 #include <aux.h>
 #include <sys/wait.h>
+#include <stdarg.h>
+
+// Only meant to catch a genuinely hung setup script (e.g. a wedged compile or
+// `docker compose up`) - generous on purpose, never expected to fire on a
+// realistic compile or image pull. Deliberately separate from
+// plan->setup.duration, which is an unrelated post-completion warm-up sleep.
+#define SETUP_SCRIPT_TIMEOUT_SEC 300
 
 void process_counter(const struct event *event,int stateinfo);
 int process_tc(const struct event*);
@@ -52,6 +59,7 @@ void get_fd_of_maps (struct aux_bpf *bpf);
 static int handle_event(void *ctx,void *data,long unsigned int data_sz);
 void run_setup();
 void collect_container_pids();
+void apply_node_latency();
 void print_output(void* args);
 void start_workload();
 void restart_process(void* args);
@@ -73,6 +81,7 @@ void start_lazyfs_handler(void* args);
 void setup_uprobes();
 void start_lazyfs();
 void start_pre_workload();
+static void abort_run(const char *stage, const char *fmt, ...);
 static void terminate_children(void);
 
 const char *argp_program_version = "Tool for FI 0.01";
@@ -132,6 +141,18 @@ static void sig_handler(int sig){exiting = true;}
 
 int main()
 {
+	// stdout is fully block-buffered (not line-buffered) whenever it's
+	// redirected to a file instead of a tty - which is how this binary
+	// always runs in practice (sunflower.py/run_schedule.sh redirect it
+	// to a log file). Without this, printf() output - including every
+	// cleanup-path message below (STARTING CLEANUP, KILLING NODES,
+	// WAITING FOR TRACER, etc) - sits in an in-process buffer and is
+	// silently lost if the process is ever killed before it exits
+	// normally (SIGKILL, or a crash), making the log file lie about
+	// whether cleanup code actually ran. Force line buffering so the
+	// log always reflects real-time execution.
+	setvbuf(stdout, NULL, _IOLBF, 0);
+
     print_block("ROSE STARTED");
 	bump_memlock_rlimit();
 	bump_file_rlimit();
@@ -169,6 +190,7 @@ int main()
 
 	print_block("SETTING UP NODES");
 	collect_container_pids();
+	apply_node_latency();
 	setup_node_scripts();
 	collect_container_processes();
 
@@ -245,7 +267,7 @@ int main()
 
 		if (plan->workload.pid){
 		    printf("KILLING WORKLOAD(PID:%d)\n",plan->workload.pid);
-			kill(-plan->workload.pid,SIGTERM);
+			kill(plan->workload.pid,SIGTERM);
 			// Wait for it to exit
             int status;
             if (waitpid(plan->workload.pid, &status, 0) == -1) {
@@ -343,12 +365,31 @@ int main()
 			if (fault.timestamp > 0){
 				int fault_nr = fault.fault_nr;
 				int target = fault.target;
+				// `target` only means a nodes[] index for a STATICALLY
+				// scheduled fault (schedule_parser/faults.py sets it to
+				// node.node_nr, or -1/-2 for primary/majority). A fault
+				// armed dynamically via RoseInjector.inject_fault() (the
+				// only kind sunflower.py's coverage-fixed mode ever uses)
+				// has no access to executor's nodes[] array at all and
+				// defaults target to the fault's own real PID instead -
+				// confirmed via a core dump: target=17661 (a live pid,
+				// not a node index) crashed this exact fprintf's %s on
+				// nodes[17661].name, deep out of bounds of the NODE_COUNT
+				// (5) nodes[] array, every single run under sunflower.py.
+				// Bounds-check before indexing nodes[] and fall back to
+				// printing the raw target so a dynamically-injected
+				// fault's history line stays informative instead of
+				// crashing the whole cleanup path.
+				if (fault_nr < 0 || fault_nr >= FAULT_COUNT)
+					continue;
 				if (target == -2)
 					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:%s,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n","majority",faults[fault_nr].name,fault.timestamp,fault.fault_nr);
-				if (target == -1)
+				else if (target == -1)
 					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:%s,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n","leader",faults[fault_nr].name,fault.timestamp,fault.fault_nr);
-				if (target >= 0)
+				else if (target >= 0 && target < NODE_COUNT)
 					fprintf(fptr,"Node:%s,Pid:0,Tid:0,event_type:Fault,event_name:%s,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n",nodes[target].name,faults[fault_nr].name,fault.timestamp,fault.fault_nr);
+				else
+					fprintf(fptr,"Node:pid_%d,Pid:0,Tid:0,event_type:Fault,event_name:%s,ret:0,time:%llu,arg1:%d,arg2:0,arg3:0,arg4:0,arg5:na\n",target,faults[fault_nr].name,fault.timestamp,fault.fault_nr);
 			}
 		}
 		fclose(fptr);
@@ -399,8 +440,8 @@ int main()
                 printf("CLOSED SETUP PIPE\n");
     }
 
-	if(plan->lazyfs.script){
-	    printf("KILLING LAZYFS(PID:%d)\n",plan->setup.pid);
+	if(plan->lazyfs.pid > 0){
+	    printf("KILLING LAZYFS(PID:%d)\n",plan->lazyfs.pid);
 	    kill(plan->lazyfs.pid,SIGTERM);
 		//kill_child_processes(plan->lazyfs.pid);
 	}
@@ -534,6 +575,34 @@ static void terminate_children(void) {
 	kill_child_processes(getpid());
 }
 
+// Aborts the run with a clear, loud diagnostic instead of silently continuing
+// past a setup that never finished or a fault that was never actually armed
+// (see the run_setup()/setup_uprobes() call sites below). Both of those run
+// before `nodes`/`faults`/`NODE_COUNT`/`fault_inject_bpf`/the ring buffer are
+// declared in main(), and are separate functions from main() besides, so
+// `goto cleanup;` isn't available here - this is the equivalent loud-failure
+// idiom for that earlier phase. Kills whatever children this executor has
+// already spawned and best-effort runs the schedule's cleanup script, then
+// terminates.
+static void abort_run(const char *stage, const char *fmt, ...) {
+	va_list args;
+	fprintf(stderr, "\n  [%s]  FATAL: ", stage);
+	va_start(args, fmt);
+	vfprintf(stderr, fmt, args);
+	va_end(args);
+	fprintf(stderr, "\n  [%s]  aborting run.\n", stage);
+
+	// Callers run before setup_tc_progs(), so no TC procs exist yet.
+	terminate_children();
+
+	if (plan && strlen(plan->cleanup.script)) {
+		printf("  [%s]  running cleanup script before exit: %s\n", stage, plan->cleanup.script);
+		system(plan->cleanup.script);
+	}
+
+	exit(EXIT_FAILURE);
+}
+
 void run_setup(){
     print_block("SETTING UP EXPERIENCE");
 	if(!plan)
@@ -585,7 +654,7 @@ void run_setup(){
 
 		args->fp= fp;
 		args->pid = &(plan->workload.pid);
-		pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+		//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 	}
 
 	if(strlen(plan->lazyfs.script)){
@@ -610,14 +679,55 @@ void run_setup(){
 
     	args->fp= fp;
     	args->pid = &(plan->lazyfs.pid);
-    	pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+    	//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 	}
 	//Start setup
 	if(strlen(plan->setup.script)){
 	    sleep_for_ms(10);
     	kill(plan->setup.pid,SIGUSR1);
+
+    	// Wait for the setup script to actually finish (e.g. the executor-side
+    	// `go test -race -c` rebuild in unit-test/violet schedules, or
+    	// `docker compose up -d` in live-cluster schedules) instead of just
+    	// sleeping and hoping it's done - a broken/incomplete setup used to
+    	// proceed silently and show up later only as "0 FAULT", indistinguishable
+    	// from the target syscall never being reached.
+    	printf("  [setup]  waiting for setup script (pid=%d) to complete...\n", plan->setup.pid);
+    	int status;
+    	int elapsed = 0;
+    	pid_t wp;
+    	while ((wp = waitpid(plan->setup.pid, &status, WNOHANG)) == 0) {
+    	    if (elapsed >= SETUP_SCRIPT_TIMEOUT_SEC) {
+    	        abort_run("setup",
+    	            "setup script pid=%d ('%s') did not complete within %ds - likely hung.",
+    	            plan->setup.pid, plan->setup.script, SETUP_SCRIPT_TIMEOUT_SEC);
+    	    }
+    	    sleep(1);
+    	    elapsed++;
+    	}
+    	if (wp == -1) {
+    	    perror("  [setup]  waitpid failed");
+    	    abort_run("setup", "waitpid on setup pid=%d failed", plan->setup.pid);
+    	} else if (WIFEXITED(status)) {
+    	    int exit_code = WEXITSTATUS(status);
+    	    if (exit_code != 0) {
+    	        abort_run("setup",
+    	            "setup script pid=%d ('%s') exited with status %d - the target "
+    	            "binary/cluster was not correctly prepared.",
+    	            plan->setup.pid, plan->setup.script, exit_code);
+    	    }
+    	    printf("  ✓ setup  pid=%d  exit_status=%d\n", plan->setup.pid, exit_code);
+    	} else if (WIFSIGNALED(status)) {
+    	    abort_run("setup", "setup script pid=%d killed by signal %d",
+    	        plan->setup.pid, WTERMSIG(status));
+    	} else {
+    	    printf("  ? setup  pid=%d  ended (unknown reason)\n", plan->setup.pid);
+    	}
 	}
-	//Sleep while we wait for setup to start
+	//Sleep to let the started services/containers stabilize (unchanged) - for
+	//live-cluster schedules the setup script itself (docker compose up -d)
+	//already returns quickly, well before the cluster is actually ready, so
+	//this warm-up sleep is still needed independent of the waitpid above.
 	if(plan->setup.duration > 0){
 	   printf("  [setup]  waiting for setup to start...\n");
 	   sleep(plan->setup.duration);
@@ -672,8 +782,22 @@ void start_lazyfs(){
 
 //TODO: Collect container pids, waits until they start
 void collect_container_pids(){
+	// Bounded retry with backoff: an earlier version of this loop had no
+	// sleep and no limit at all, spinning as fast as fork/exec allows
+	// (shelling out to `docker inspect` on every single iteration) whenever
+	// even one container was briefly not yet inspectable right after
+	// `docker compose up` reports "Started" - a real, observed Docker
+	// timing gap, not hypothetical. That produced tens of thousands of
+	// "no such object" errors per minute and never gave up, hanging the
+	// whole run (confirmed: had to force-kill the executor process tree
+	// after it spun long past the schedule's own maximum_time). 100ms
+	// between attempts, up to 30s total, matches the timescale containers
+	// actually need to become inspectable and fails loudly instead of
+	// silently hanging forever.
 	int node_count = 0;
-	while (node_count != NODE_COUNT){
+	int attempts = 0;
+	const int max_attempts = 300; // 300 * 100ms = 30s
+	while (node_count != NODE_COUNT && attempts < max_attempts){
 		node_count = 0;
 		for(int i=0; i < NODE_COUNT;i++){
 			if (nodes[i].container){
@@ -695,8 +819,58 @@ void collect_container_pids(){
 				node_count++;
 			}
 		}
+		if (node_count != NODE_COUNT){
+			attempts++;
+			usleep(100000);
+		}
 	}
+	if (node_count != NODE_COUNT){
+		fprintf(stderr, "  [collect_container_pids]  ERROR: only %d/%d containers became inspectable after 30s - continuing anyway, but node PIDs for the rest are 0/invalid\n", node_count, NODE_COUNT);
+	}
+}
 
+// Applies each node's optional baseline network latency (nodes[i].latency_ms/
+// jitter_ms, from the schedule's `nodes.*.latency_ms`/`jitter_ms` - see
+// schedule_parser/nodes.py) via `tc qdisc ... netem` inside the container's
+// own network namespace - the SAME nsenter-into-container-netns pattern
+// setup_tc_progs()'s BLOCK_IPS handling already uses (network_manager
+// relies on the identical fact: Docker always numbers a fresh container's
+// own interface ifindex 2/"eth0" inside its netns). Deliberately NOT a
+// fault: this is a permanent environmental property applied once here,
+// before any node script is launched, living for the whole run - no
+// condition-gating, no duration tracking, no removal logic. Destroyed
+// automatically when `docker compose down` tears the container down at the
+// start of the next run.
+void apply_node_latency(){
+	for (int i = 0; i < NODE_COUNT; i++){
+		if (!nodes[i].container || nodes[i].latency_ms <= 0){
+			continue;
+		}
+		if (!nodes[i].container_pid){
+			fprintf(stderr, "  [latency]  node=%s  skipped - no container_pid\n", nodes[i].name);
+			continue;
+		}
+
+		char target[16];
+		snprintf(target, sizeof(target), "%d", nodes[i].container_pid);
+		char delay[16];
+		snprintf(delay, sizeof(delay), "%dms", nodes[i].latency_ms);
+		char jitter[16];
+		snprintf(jitter, sizeof(jitter), "%dms", nodes[i].jitter_ms);
+
+		char *args[] = {"nsenter", "--target", target, "--net", "--",
+			"tc", "qdisc", "add", "dev", "eth0", "root", "netem", "delay", delay, jitter, NULL};
+
+		pid_t pid;
+		FILE *fp = custom_popen("nsenter", args, NULL, 'r', &pid, 1);
+		if (fp){
+			int status;
+			waitpid(pid, &status, 0);
+			fclose(fp);
+		}
+
+		printf("  [latency]  node=%s  delay=%s  jitter=%s\n", nodes[i].name, delay, jitter);
+	}
 }
 
 void setup_node_scripts(){
@@ -903,28 +1077,16 @@ FILE* start_target_process(int node_number, int *pid){
 	args_script[pos]= NULL;
 
 	//Create ENV variables
-	char *token_env = strtok(nodes[node_number].env," ");
-	env_script[0]=(char*)malloc(STRING_SIZE*sizeof(char));
-
-	int pos_env = 1;
-
-	if(token_env != NULL){
-		strcpy(env_script[0],token_env);
-		pos_env = 0;
+	// strtok mutates its input and this runs again on every relaunch, so
+	// tokenize a private copy. An empty env yields just the NULL terminator.
+	char *env_copy = strdup(nodes[node_number].env);
+	char *env_save = NULL;
+	int pos_env = 0;
+	for (char *token_env = strtok_r(env_copy," ",&env_save); token_env != NULL && pos_env < STRING_SIZE-1; token_env = strtok_r(NULL," ",&env_save)){
+		env_script[pos_env++] = strdup(token_env);
 	}
-
-	token_env = strtok(NULL," ");
-
-	while(token_env != NULL ) {
-		env_script[pos_env]=(char*)malloc(STRING_SIZE*sizeof(char));
-		strcpy(env_script[pos_env],token_env);
-
-		//printf("Added %s to env of %s",env_script[pos_env],nodes[node_number].name);
-
-		token_env = strtok(NULL," ");
-		pos_env++;
-   	}
    	env_script[pos_env]= NULL;
+	free(env_copy);
 
 	FILE *fp = custom_popen(script,args_script,env_script,'r',pid,0);
 
@@ -940,7 +1102,10 @@ FILE* start_target_process(int node_number, int *pid){
 
 	args->fp= fp;
 	args->pid = pid;
-	//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+	// Relay a non-container node's stdout into the executor's stdout (-> run_schedule.log).
+	// violet's unit-test node prints its VIOLET_RESULT line there and reads it back via
+	// read_violet_result(); without this drain the pipe is never read and that line is lost.
+	pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 
 	return fp;
 
@@ -959,9 +1124,9 @@ FILE* start_target_process_in_container(int node_number,int *pid){
 
 	int index;
 	if (nodes[node_number].container_type == CONTAINER_TYPE_DOCKER) {
-    	nsenter_args[9] = token;
+    	nsenter_args[10] = token;
 
-    	index = 9;
+    	index = 10;
 	}
 	if (nodes[node_number].container_type == CONTAINER_TYPE_LXC) {
     	nsenter_args[10] = token;
@@ -980,31 +1145,34 @@ FILE* start_target_process_in_container(int node_number,int *pid){
 	nsenter_args[index] = NULL;
 
 	//Create ENV variables
-	char *token_env = strtok(nodes[node_number].env," ");
-	env_script[0]=(char*)malloc(STRING_SIZE*sizeof(char));
-
-	int pos_env = 1;
-	if(token_env != NULL){
-		strcpy(env_script[0],token_env);
-		pos_env = 0;
+	// strtok mutates its input and this runs again on every relaunch, so
+	// tokenize a private copy. An empty env yields just the NULL terminator.
+	char *env_copy = strdup(nodes[node_number].env);
+	char *env_save = NULL;
+	int pos_env = 0;
+	for (char *token_env = strtok_r(env_copy," ",&env_save); token_env != NULL && pos_env < STRING_SIZE-1; token_env = strtok_r(NULL," ",&env_save)){
+		env_script[pos_env++] = strdup(token_env);
 	}
-	token_env = strtok(NULL," ");
-	while(token_env != NULL ) {
-		env_script[pos_env]=(char*)malloc(STRING_SIZE*sizeof(char));
-		strcpy(env_script[pos_env],token_env);
-		token_env = strtok(NULL," ");
-		pos_env++;
-   	}
    	env_script[pos_env]= NULL;
+	free(env_copy);
+
+	// Migrate the about-to-be-launched process into this container's own
+	// cgroup (derived from the container's real host pid) right before
+	// nsenter runs - nsenter --mount alone does not change cgroup
+	// membership, which tidb-server/pd-server need correct at process-init
+	// time (see migrate_self_into_container_cgroup()'s comment in aux.c).
+	// Only for Docker; LXC safely no-ops (pid 0).
+	pid_t cgroup_container_pid = (nodes[node_number].container_type == CONTAINER_TYPE_DOCKER)
+		? nodes[node_number].container_pid : 0;
 
 	FILE *fp;
 	if(nodes[node_number].running){
-		fp = custom_popen("nsenter",nodes[node_number].args,env_script,'r',pid,0);
+		fp = custom_popen_cgroup("nsenter",nodes[node_number].args,env_script,'r',pid,0,cgroup_container_pid);
 		fclose(nodes[node_number].read_end);
 		nodes[node_number].read_end = fp;
 	}
 	else{
-		fp = custom_popen("nsenter",nsenter_args,env_script,'r',pid,0);
+		fp = custom_popen_cgroup("nsenter",nsenter_args,env_script,'r',pid,0,cgroup_container_pid);
 		nodes[node_number].read_end = fp;
 		nodes[node_number].running = 1;
 		nodes[node_number].args = nsenter_args;
@@ -1020,7 +1188,7 @@ FILE* start_target_process_in_container(int node_number,int *pid){
 	struct process_args *args = (struct process_args*)malloc(sizeof(struct process_args));
 	args->fp= fp;
 	args->pid = pid;
-	pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+	//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 	return fp;
 }
 
@@ -1165,8 +1333,14 @@ void setup_uprobes(){
 					printf("  [uprobe]  attached  %s  in %s\n",user_function.symbol,combined_path);
 
 					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,combined_path,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.mode,0,user_function.offset,user_function.absolute_offset);
+					if (!faults[i].list_of_functions[user_func_cond_nr]) {
+						abort_run("uprobe", "failed to attach uprobe for fault %d: symbol='%s' binary='%s'", i, user_function.symbol, combined_path);
+					}
 				}else{
 					faults[i].list_of_functions[user_func_cond_nr] = uprobe(pid,user_function.symbol,user_function.binary_location,FAULT_COUNT,user_func_cond_nr+STATE_PROPERTIES_COUNT,constants.mode,0,user_function.offset,user_function.absolute_offset);
+					if (!faults[i].list_of_functions[user_func_cond_nr]) {
+						abort_run("uprobe", "failed to attach uprobe for fault %d: symbol='%s' binary='%s'", i, user_function.symbol, user_function.binary_location);
+					}
 				}
 				user_func_cond_nr++;
 			}
@@ -1188,8 +1362,14 @@ void setup_uprobes(){
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
 					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.mode, 1,0,false);
+					if (!nodes[i].leader_probe) {
+						abort_run("uprobe", "failed to attach leader uprobe for node '%s': symbol='%s' binary='%s'", nodes[i].name, nodes[i].leader_symbol, combined_path);
+					}
 				}else{
 					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].leader_symbol,FAULT_COUNT,0,constants.mode, 1,0,false);
+					if (!nodes[i].leader_probe) {
+						abort_run("uprobe", "failed to attach leader uprobe for node '%s': symbol='%s'", nodes[i].name, nodes[i].leader_symbol);
+					}
 				}
 			}
 		}
@@ -1209,9 +1389,15 @@ void setup_uprobes(){
 					char* combined_path = (char*)malloc(MAX_FILE_LOCATION_LEN * sizeof(char));
 					snprintf(combined_path, MAX_FILE_LOCATION_LEN, "%s%s", dir, nodes[i].binary);
 					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,combined_path,FAULT_COUNT,0,constants.mode, 1,0,false);
+					if (!nodes[i].leader_probe) {
+						abort_run("uprobe", "failed to attach leader uprobe for node '%s': symbol='%s' binary='%s'", nodes[i].name, nodes[i].leader_symbol, combined_path);
+					}
 
 				}else{
 					nodes[i].leader_probe = uprobe(nodes[i].pid,nodes[i].leader_symbol,nodes[i].binary,FAULT_COUNT,0,constants.mode, 1,0,false);
+					if (!nodes[i].leader_probe) {
+						abort_run("uprobe", "failed to attach leader uprobe for node '%s': symbol='%s' binary='%s'", nodes[i].name, nodes[i].leader_symbol, nodes[i].binary);
+					}
 				}
 
 			}
@@ -1279,6 +1465,15 @@ void add_faults_to_bpf(){
 		new_fault.relevant_conditions = faults[i].relevant_conditions;
 		new_fault.fault_nr = i;
 		new_fault.repeat = faults[i].repeat;
+		// "any" target (-3)/dynamic-group CAS gate - see bpf_shared.h's
+		// comment above `claimed`/`group_leader_fault_nr`. Statically
+		// compiled faults are never part of a dynamic reserved-slot group
+		// (that's sunflower/rose_injector.py's own runtime-only concept),
+		// so group_leader_fault_nr must be the explicit "not grouped" -1,
+		// not left as stack garbage - state_processor.bpf.h's gate treats
+		// any non-negative value as "look up and CAS on that other slot".
+		new_fault.claimed = 0;
+		new_fault.group_leader_fault_nr = -1;
 
 		for(int k = 0; k < (STATE_PROPERTIES_COUNT+MAX_FUNCTIONS); k++){
 			new_fault.initial.conditions_match[k] = 0;
@@ -1328,48 +1523,22 @@ void add_faults_to_bpf(){
 		if (faults[i].category == SYSCALL_FAULT){
 			new_fault.return_value = faults[i].fault_details.syscall.return_value;
 		}
-		if(faults[i].category == FILE_SYS_OP){
-
-			int error;
-			int pid = nodes[faults[i].traced].pid;
-
-			file_system_operation file_system_op;
-
-			file_system_op = faults[i].fault_details.file_system_op;
-
-			int syscall_nr = file_system_op.syscall_condition;
-
-			struct file_info_simple file_info = {};
-			if (strlen(file_system_op.file_name)){
-				//memset(file_info.filename,'\0',sizeof(file_system_op.file_name));
-				strcpy(file_info.filename,file_system_op.file_name);
-				file_info.size = strlen(file_info.filename);
-				printf("  [fault]  file=%s  size=%d  syscall=%d\n",file_info.filename,file_info.size,syscall_nr);
+		if (faults[i].category == KERNEL_FAULT){
+			// Reuses the generic return_value slot to carry the truncated byte
+			// count (or, for TORN_READ_FAULT, the corruption offset) through to
+			// the BPF map, the same way SYSCALL_FAULT reuses it for its own
+			// per-category meaning. Read back by state_processor.
+			// bpf.h's inject_fault() to arm the matching rose.ko kfunc.
+			if (faults[i].fault_type == PARTIAL_WRITE_FAULT){
+				new_fault.return_value = faults[i].fault_details.partial_write_fault.count;
+				new_fault.corrupt_buffer = faults[i].fault_details.partial_write_fault.corrupt_buffer;
 			}
-
-
-			struct info_key info_key = {
-				pid,
-				syscall_nr
-			};
-
-			//Add name of file to eBPF
-			error = bpf_map_update_elem(constants.files,&info_key,&file_info,BPF_ANY);
-			if (error){
-				printf("  ✗ map update (files) err=%d  file=%s\n",error,file_info.filename);
+			if (faults[i].fault_type == PARTIAL_READ_FAULT){
+				new_fault.return_value = faults[i].fault_details.partial_read_fault.count;
 			}
-
-			//Init relevant fd struct for this pid
-			struct relevant_fds relevant_fd_init = {};
-
-			relevant_fd_init.size = 0;
-
-			error = bpf_map_update_elem(constants.relevant_fd,&pid,&relevant_fd_init,BPF_ANY);
-			if (error){
-				printf("  ✗ map update (fd) err=%d  pid=%d\n",error,pid);
+			if (faults[i].fault_type == TORN_READ_FAULT){
+				new_fault.return_value = faults[i].fault_details.torn_read_fault.offset;
 			}
-
-			new_fault.return_value = file_system_op.return_value;
 		}
 
 		//TODO GO OVER FAULT DETAILS
@@ -1495,7 +1664,7 @@ int setup_tc_progs(){
 
 			args->fp= fp;
 			args->pid = &nodes[target].pid_tc_out;
-			pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
+			//pthread_create(&thread_id, NULL, (void *)print_output, (void*)args);
 
 			tc_ebpf_progs_counter++;
 
@@ -1633,6 +1802,17 @@ void count_time(){
 
 }
 
+// Appends "::key=value" to msg (bounded by msg_size) if value is non-empty. Builds up
+// LazyFS pipe commands (lazyfs::torn-op::..., lazyfs::torn-seq::...) from only the
+// fields the schedule YAML actually set, matching LazyFS's `key=value` pipe protocol.
+static void append_lazyfs_param(char *msg, size_t msg_size, const char *key, const char *value){
+	if (value[0] == '\0'){
+		return;
+	}
+	size_t len = strlen(msg);
+	snprintf(msg + len, msg_size - len, "::%s=%s", key, value);
+}
+
 //Handles events received from ringbuffer (eBPF)
 int handle_event(void *ctx,void *data,long unsigned int data_sz)
 {
@@ -1741,6 +1921,16 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
 		}
         case TORN_OP:{
    	        printf("  [event]  TORN_OP\n");
+			struct fault *fault = &faults[fault_nr];
+			lazyfs_fault *lf = &(fault->fault_details.lazyfs_fault);
+
+			char msg[2048];
+			snprintf(msg, sizeof(msg), "lazyfs::torn-op");
+			append_lazyfs_param(msg, sizeof(msg), "file", lf->file);
+			append_lazyfs_param(msg, sizeof(msg), "parts", lf->parts);
+			append_lazyfs_param(msg, sizeof(msg), "parts_bytes", lf->parts_bytes);
+			append_lazyfs_param(msg, sizeof(msg), "persist", lf->persist);
+
     		FILE *file;
             file = fopen(plan->lazyfs.pipe_location, "w");
 
@@ -1748,8 +1938,7 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
                 perror("Error opening file");
                 break;
             }
-            const char *msg = "lazyfs::torn-op";
-            size_t msg_len = sizeof("lazyfs::torn-op");
+            size_t msg_len = strlen(msg) + 1;
             ssize_t _written = write(fileno(file), msg, msg_len);
             if (_written == -1) {
                 perror("write failed");
@@ -1757,14 +1946,22 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
 
             fclose(file);
 
-            printf("  ✓ lazyfs pipe written (torn-op)\n");
-            struct fault *fault = &faults[fault_nr];
+            printf("  ✓ lazyfs pipe written (torn-op): %s\n", msg);
             fault->done++;
 
             break;
         }
         case TORN_SEQ:{
    	        printf("  [event]  TORN_SEQ\n");
+			struct fault *fault = &faults[fault_nr];
+			lazyfs_fault *lf = &(fault->fault_details.lazyfs_fault);
+
+			char msg[2048];
+			snprintf(msg, sizeof(msg), "lazyfs::torn-seq");
+			append_lazyfs_param(msg, sizeof(msg), "file", lf->file);
+			append_lazyfs_param(msg, sizeof(msg), "op", lf->fs_op);
+			append_lazyfs_param(msg, sizeof(msg), "persist", lf->persist);
+
       		FILE *file;
             file = fopen(plan->lazyfs.pipe_location, "w");
 
@@ -1772,8 +1969,7 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
                 perror("Error opening file");
                 break;
             }
-            const char *msg = "lazyfs::torn-seq";
-            size_t msg_len = sizeof("lazyfs::torn-seq");
+            size_t msg_len = strlen(msg) + 1;
             ssize_t _written = write(fileno(file), msg, msg_len);
             if (_written == -1) {
                 perror("write failed");
@@ -1781,14 +1977,55 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
 
             fclose(file);
 
-            printf("  ✓ lazyfs pipe written (torn-seq)\n");
-            struct fault *fault = &faults[fault_nr];
+            printf("  ✓ lazyfs pipe written (torn-seq): %s\n", msg);
             fault->done++;
 
             break;
         }
+        case PARTIAL_WRITE_FAULT:{
+			// rose.ko is armed synchronously, in-kernel, from within the same
+			// kprobe invocation that detected the fault's conditions were met
+			// (state_processor.bpf.h's inject_fault() calls rose.c's
+			// bpf_rose_arm_partial_write() kfunc directly) - by the time this
+			// event reaches userspace, arming has already happened. This case
+			// only exists for the same bookkeeping/logging every other fault
+			// type does on its ring-buffer event.
+			struct fault *fault = &faults[fault_nr];
+			partial_write_fault *pwf = &(fault->fault_details.partial_write_fault);
+			printf("  [event]  PARTIAL_WRITE_FAULT  pid=%d  count=%d\n", e->pid, pwf->count);
+			fault->done++;
+			break;
+        }
+        case PARTIAL_READ_FAULT:{
+			// Same as PARTIAL_WRITE_FAULT above: rose.ko's read_pre_handler is
+			// already armed by the time this event reaches userspace.
+			struct fault *fault = &faults[fault_nr];
+			partial_read_fault *prf = &(fault->fault_details.partial_read_fault);
+			printf("  [event]  PARTIAL_READ_FAULT  pid=%d  count=%d\n", e->pid, prf->count);
+			fault->done++;
+			break;
+        }
+        case TORN_READ_FAULT:{
+			// Same as PARTIAL_WRITE_FAULT above: rose.ko's torn_read_krp
+			// kretprobe is already armed by the time this event reaches
+			// userspace.
+			struct fault *fault = &faults[fault_nr];
+			torn_read_fault *trf = &(fault->fault_details.torn_read_fault);
+			printf("  [event]  TORN_READ_FAULT  pid=%d  offset=%d\n", e->pid, trf->offset);
+			fault->done++;
+			break;
+        }
         case CRASH_FS:{
             printf("  [event]  CRASH_FS\n");
+            struct fault *fault = &faults[fault_nr];
+            lazyfs_fault *lf = &(fault->fault_details.lazyfs_fault);
+
+            char msg[2048];
+            snprintf(msg, sizeof(msg), "lazyfs::crash");
+            append_lazyfs_param(msg, sizeof(msg), "op", lf->fs_op);
+            append_lazyfs_param(msg, sizeof(msg), "from_rgx", lf->from_rgx);
+            append_lazyfs_param(msg, sizeof(msg), "to_rgx", lf->to_rgx);
+
       		FILE *file;
             file = fopen(plan->lazyfs.pipe_location, "w");
 
@@ -1796,8 +2033,7 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
                 perror("Error opening file");
                 break;
             }
-            const char *msg = "lazyfs::crash";
-            size_t msg_len = sizeof("lazyfs::crash");
+            size_t msg_len = strlen(msg) + 1;
             ssize_t _written = write(fileno(file), msg, msg_len);
             if (_written == -1) {
                 perror("write failed");
@@ -1805,8 +2041,7 @@ int handle_event(void *ctx,void *data,long unsigned int data_sz)
 
             fclose(file);
 
-            printf("  ✓ lazyfs pipe written (crash)\n");
-            struct fault *fault = &faults[fault_nr];
+            printf("  ✓ lazyfs pipe written (crash): %s\n", msg);
             fault->done++;
             break;
         }
@@ -1895,13 +2130,33 @@ void restart_process(void* args){
 //Gets the child of the child pid we started with popen.
 //This assumes a sh script, which uses exec -a "$0" to start the node process
 void retrieve_new_pid_container(int node_nr,int nsenter_pid){
+	// Bounded retry with a small backoff, not an unconditional busy-spin:
+	// same class of risk as collect_container_pids() (see its comment) -
+	// if the expected child never appears (nsenter failed, the target
+	// process died, etc.) this must not burn a full CPU core forever with
+	// no way out.
+	int attempts = 0;
+	const int max_attempts = 300; // 300 * 10ms = 3s
 	int child_pid = get_children_pids(nsenter_pid);
-	while(!child_pid){
+	while(!child_pid && attempts < max_attempts){
+		usleep(10000);
+		attempts++;
 		child_pid = get_children_pids(nsenter_pid);
 	}
+	if (!child_pid) {
+		fprintf(stderr, "  [retrieve_new_pid_container]  ERROR: node[%d] nsenter_pid=%d never got a child after 3s\n", node_nr, nsenter_pid);
+		return;
+	}
+	attempts = 0;
 	int script_pid = get_children_pids(child_pid);
-	while(!script_pid){
+	while(!script_pid && attempts < max_attempts){
+		usleep(10000);
+		attempts++;
 		script_pid = get_children_pids(child_pid);
+	}
+	if (!script_pid) {
+		fprintf(stderr, "  [retrieve_new_pid_container]  ERROR: node[%d] child_pid=%d never got its own child after 3s\n", node_nr, child_pid);
+		return;
 	}
 	nodes[node_nr].current_pid = script_pid;
 	printf("  [pid]  node[%d]  %d -> %d\n",node_nr,nsenter_pid,script_pid);
@@ -1914,6 +2169,17 @@ void retrieve_new_pid_container(int node_nr,int nsenter_pid){
 void update_node_pid_ebpf(int node_nr,int new_pid,int boot_pid,int old_pid){
     printf("  [pid]  pid_tree   child=%d  parent=%d\n",new_pid,old_pid);
 	printf("  [pid]  translate  new=%d  boot=%d\n",new_pid,boot_pid);
+
+	// TEMPORARY timing instrumentation - catching a conflicting write to
+	// the SAME translator key close in time (same clock source as the
+	// kernel side's bpf_ktime_get_ns() - CLOCK_MONOTONIC), to confirm/
+	// refute the suspected nodes_pid_translator race. Revert after
+	// diagnosis.
+	struct timespec dbgxlat_ts;
+	clock_gettime(CLOCK_MONOTONIC, &dbgxlat_ts);
+	printf("DBGXLAT: ts=%llu USERSPACE_RESTART key=%d origin=%d\n",
+	       (unsigned long long)dbgxlat_ts.tv_sec * 1000000000ULL + dbgxlat_ts.tv_nsec,
+	       new_pid, boot_pid);
 
 	int one = 1;
 	//Insert in the map which is a pid_tree

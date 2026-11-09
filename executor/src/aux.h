@@ -24,6 +24,9 @@ void pause_process(void* args);
 void print_block(char*);
 pid_t get_lxc_container_pid(const char *container_name);
 pid_t get_docker_container_pid(const char *container_name);
+char *get_docker_container_id(const char *container_name);
+char *get_container_cgroup_dir(pid_t container_pid);
+void migrate_self_into_container_cgroup(pid_t container_pid);
 char* get_lxc_container_location(const char* container_name);
 char* get_docker_container_location(const char* container_name);
 void sleep_for_ms(long milliseconds);
@@ -39,4 +42,5 @@ char **build_nsenter_args(const char *pid_str,int container_type);
 long long get_nanoseconds();
 void print_output(void* args);
 FILE * custom_popen(char* command,char** args,char** env, char type, pid_t* pid,int container_process);
+FILE * custom_popen_cgroup(char* command,char** args,char** env, char type, pid_t* pid,int container_process, pid_t cgroup_container_pid);
 #endif /* __AUX_H */

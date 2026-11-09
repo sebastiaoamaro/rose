@@ -15,7 +15,8 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__type(key, u32);
 	__type(value, u32);
-	__uint(max_entries, 1024);
+	__uint(max_entries, 4194304);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 } pid_tree SEC(".maps");
 

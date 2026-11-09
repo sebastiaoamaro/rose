@@ -6,6 +6,13 @@ use tracer::rw_tracer;
 use tracer::statistics_tracer;
 use tracer::sys_all_tracer;
 
+// CLI: tracer <tracing_type,mode> <functions_file> <binary_path> <node_and_pid_file> [iface]
+//
+// functions_file lines are `name,offset` or `name,offset,binary_path` (see
+// manager::parse_file_to_pairs) - the optional 3rd field overrides the
+// binary_path argument for that one function, so a single run can attach
+// uprobes across multiple binaries/.so files instead of just the one
+// passed on the command line.
 fn main() {
     let new_limit = rlimit {
         rlim_cur: 65356, // Soft limit

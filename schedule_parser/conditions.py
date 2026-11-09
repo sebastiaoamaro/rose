@@ -287,6 +287,10 @@ def get_cond_type_nr(type, condition):
                     return "CONNECT_STATE"
                 case "stat":
                     return "STAT_STATE"
+                case "lstat":
+                    return "LSTAT_STATE"
+                case "rename":
+                    return "RENAME_STATE"
                 case "lseek":
                     return "LSEEK_STATE"
                 case "unlink":
@@ -295,5 +299,65 @@ def get_cond_type_nr(type, condition):
                     return "SYNC_FILE_RANGE_STATE"
                 case "bind":
                     return "BIND_STATE"
+                case "clone":
+                    return "CLONE_STATE"
+                case "dup":
+                    return "DUP_STATE"
+                case "mmap":
+                    return "MMAP_STATE"
+                case "epoll_create1":
+                    return "EPOLL_CREATE1_STATE"
+                case "epoll_ctl":
+                    return "EPOLL_CTL_STATE"
+                case "epoll_pwait":
+                    return "EPOLL_PWAIT_STATE"
+                case "eventfd2":
+                    return "EVENTFD2_STATE"
+                case "fcntl":
+                    return "FCNTL_STATE"
+                case "flock":
+                    return "FLOCK_STATE"
+                case "fstat":
+                    return "FSTAT_STATE"
+                case "ftruncate":
+                    return "FTRUNCATE_STATE"
+                case "getdents64":
+                    return "GETDENTS64_STATE"
+                case "getpeername":
+                    return "GETPEERNAME_STATE"
+                case "getsockname":
+                    return "GETSOCKNAME_STATE"
+                case "ioctl":
+                    return "IOCTL_STATE"
+                case "listen":
+                    return "LISTEN_STATE"
+                case "madvise":
+                    return "MADVISE_STATE"
+                case "mkdirat":
+                    return "MKDIRAT_STATE"
+                case "mprotect":
+                    return "MPROTECT_STATE"
+                case "pipe":
+                    return "PIPE_STATE"
+                case "prctl":
+                    return "PRCTL_STATE"
+                case "sched_getaffinity":
+                    return "SCHED_GETAFFINITY_STATE"
+                case "socket":
+                    return "SOCKET_STATE"
+                case "statfs":
+                    return "STATFS_STATE"
+                case "tgkill":
+                    return "TGKILL_STATE"
+                case "unlinkat":
+                    return "UNLINKAT_STATE"
+                case "msync":
+                    return "MSYNC_STATE"
+                case "renameat":
+                    return "RENAMEAT_STATE"
+                case "execve":
+                    return "EXECVE_STATE"
+                case "accept4":
+                    return "ACCEPT4_STATE"
         case 4:
             return 21

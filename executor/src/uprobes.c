@@ -106,8 +106,6 @@ static int attach_uprobes(struct uprobes_bpf *obj,char * binary_location,char *f
 	ret = 0;
 
 out_binary:
-	return 0;
-
 	return ret;
 }
 

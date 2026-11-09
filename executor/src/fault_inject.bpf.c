@@ -480,6 +480,38 @@ int BPF_KPROBE(__x64_sys_stat)
 	return 0;
 }
 
+SEC("kprobe/__x64_sys_lstat")
+int BPF_KPROBE(__x64_sys_lstat)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(LSTAT_STATE,LSTAT_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_rename")
+int BPF_KPROBE(__x64_sys_rename)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(RENAME_STATE,RENAME_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
 SEC("kprobe/__x64_sys_lseek")
 int BPF_KPROBE(__x64_sys_lseek)
 {
@@ -579,6 +611,12 @@ int BPF_KSYSCALL(clone,int flags)
 
 	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
 
+	// Independent from the THREADS_CREATED bookkeeping below - must fire
+	// before the thread-only guard so a "fail clone()" schedule also
+	// applies to ordinary (non-thread) process-creation clone() calls.
+	int fault_result = process_current_state(CLONE_STATE,CLONE_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
     int THREAD_FLAG = 0x10000;
 	if (!(flags & THREAD_FLAG)){
 		return 0;
@@ -599,6 +637,10 @@ int BPF_KSYSCALL(clone3,struct clone_args *cl_args)
 	__u32 tid = (__u32)pid_tgid;
 
 	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	// Same CLONE_STATE/CLONE_FAULT pair as clone()'s handler - see comment there.
+	int fault_result = process_current_state(CLONE_STATE,CLONE_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
 
     int THREAD_FLAG = 0x00010000;
 
@@ -793,6 +835,20 @@ int BPF_KPROBE(__x64_sys_accept,struct pt_regs *regs)
 }
 
 
+// Go (net.Listener.Accept), Rust/mio and grpc/libev servers call accept4,
+// not accept - same handler shape as accept above.
+SEC("ksyscall/accept4")
+int BPF_KPROBE(__x64_sys_accept4,struct pt_regs *regs)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+
+	process_current_state(ACCEPT4_STATE,ACCEPT4_FAULT,pid,fault_count,mode,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+	return 0;
+}
+
+
 SEC("ksyscall/connect")
 int BPF_KPROBE(__x64_sys_connect,struct pt_regs *regs)
 {
@@ -838,6 +894,454 @@ int BPF_KPROBE(__x64_sys_bind,struct pt_regs *regs)
 	};
 
 	process_current_state(sys_info.general_syscall_code,sys_info.general_fault_code,pid,sys_info.fault_count,sys_info.mode,&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_dup")
+int BPF_KPROBE(__x64_sys_dup)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(DUP_STATE,DUP_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_mmap")
+int BPF_KPROBE(__x64_sys_mmap)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(MMAP_STATE,MMAP_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_epoll_create1")
+int BPF_KPROBE(__x64_sys_epoll_create1)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(EPOLL_CREATE1_STATE,EPOLL_CREATE1_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_epoll_ctl")
+int BPF_KPROBE(__x64_sys_epoll_ctl)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(EPOLL_CTL_STATE,EPOLL_CTL_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_epoll_pwait")
+int BPF_KPROBE(__x64_sys_epoll_pwait)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(EPOLL_PWAIT_STATE,EPOLL_PWAIT_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_eventfd2")
+int BPF_KPROBE(__x64_sys_eventfd2)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(EVENTFD2_STATE,EVENTFD2_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_fcntl")
+int BPF_KPROBE(__x64_sys_fcntl)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(FCNTL_STATE,FCNTL_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_flock")
+int BPF_KPROBE(__x64_sys_flock)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(FLOCK_STATE,FLOCK_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_fstat")
+int BPF_KPROBE(__x64_sys_fstat)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(FSTAT_STATE,FSTAT_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_ftruncate")
+int BPF_KPROBE(__x64_sys_ftruncate)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(FTRUNCATE_STATE,FTRUNCATE_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_getdents64")
+int BPF_KPROBE(__x64_sys_getdents64)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(GETDENTS64_STATE,GETDENTS64_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_getpeername")
+int BPF_KPROBE(__x64_sys_getpeername)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(GETPEERNAME_STATE,GETPEERNAME_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_getsockname")
+int BPF_KPROBE(__x64_sys_getsockname)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(GETSOCKNAME_STATE,GETSOCKNAME_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_ioctl")
+int BPF_KPROBE(__x64_sys_ioctl)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(IOCTL_STATE,IOCTL_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_listen")
+int BPF_KPROBE(__x64_sys_listen)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(LISTEN_STATE,LISTEN_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_madvise")
+int BPF_KPROBE(__x64_sys_madvise)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(MADVISE_STATE,MADVISE_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_mkdirat")
+int BPF_KPROBE(__x64_sys_mkdirat)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(MKDIRAT_STATE,MKDIRAT_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_mprotect")
+int BPF_KPROBE(__x64_sys_mprotect)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(MPROTECT_STATE,MPROTECT_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_pipe")
+int BPF_KPROBE(__x64_sys_pipe)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(PIPE_STATE,PIPE_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_prctl")
+int BPF_KPROBE(__x64_sys_prctl)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(PRCTL_STATE,PRCTL_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_sched_getaffinity")
+int BPF_KPROBE(__x64_sys_sched_getaffinity)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(SCHED_GETAFFINITY_STATE,SCHED_GETAFFINITY_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_socket")
+int BPF_KPROBE(__x64_sys_socket)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(SOCKET_STATE,SOCKET_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_statfs")
+int BPF_KPROBE(__x64_sys_statfs)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(STATFS_STATE,STATFS_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_tgkill")
+int BPF_KPROBE(__x64_sys_tgkill)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(TGKILL_STATE,TGKILL_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_unlinkat")
+int BPF_KPROBE(__x64_sys_unlinkat)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(UNLINKAT_STATE,UNLINKAT_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_msync")
+int BPF_KPROBE(__x64_sys_msync)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(MSYNC_STATE,MSYNC_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_renameat")
+int BPF_KPROBE(__x64_sys_renameat)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(RENAMEAT_STATE,RENAMEAT_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
+
+	return 0;
+}
+
+SEC("kprobe/__x64_sys_execve")
+int BPF_KPROBE(__x64_sys_execve)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
+
+	int origin_pid = get_origin_pid(pid, &nodes_pid_translator);
+
+	int result = process_current_state(EXECVE_STATE,EXECVE_FAULT,pid,fault_count,mode,
+		&relevant_state_info,&faults_specification,&faults,&rb,&auxiliary_info,&nodes_status,&nodes_pid_translator,(struct pt_regs *)ctx);
+
 
 	return 0;
 }
@@ -897,13 +1401,31 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
             if (start_pid){
                 //bpf_printk("Translated pid, current_pid is %d, old_pid is %d \n",pid,start_pid);
                 //bpf_printk("EXECUTOR EXEC : ADDED PID:%d, PARENT:%d \n",pid,start_pid);
-                bpf_map_update_elem(&nodes_pid_translator, &pid, &start_pid, BPF_ANY);
+                // start_pid is already an `int *` (bpf_map_lookup_elem's return) -
+                // bpf_map_update_elem needs a pointer to the int VALUE, not a
+                // pointer to this local pointer variable. &start_pid wrote the
+                // address of the stack slot holding the pointer (garbage,
+                // BPF-stack-relative) into the map instead of the real origin
+                // pid - confirmed via live trace_pipe: process_kill's restart
+                // chain fires once, then every subsequent restart's new pid
+                // translates to that garbage value, so relevant_state_info
+                // lookups under the real origin pid never match again and the
+                // fault can never re-fire for the rest of the sweep.
+                // TEMPORARY timing instrumentation - catching a conflicting
+                // write to the SAME translator key close in time, to
+                // confirm/refute the suspected nodes_pid_translator race.
+                // Revert after diagnosis.
+                bpf_printk("DBGXLAT: ts=%llu EXEC key=%d origin=%d (existing)\n",
+                           bpf_ktime_get_ns(), pid, *start_pid);
+                bpf_map_update_elem(&nodes_pid_translator, &pid, start_pid, BPF_ANY);
             }
             else{
                 //Temporary fix for all my tests that used exec -a
                 if (original_pid != 0){
                     //bpf_printk("Translated pid, current_pid is %d, old_pid is %d \n",pid,original_pid);
                     //bpf_printk("EXECUTOR EXEC: ADDED PID:%d, PARENT:%d \n",pid,original_pid);
+                    bpf_printk("DBGXLAT: ts=%llu EXEC key=%d origin=%d (fallback)\n",
+                               bpf_ktime_get_ns(), pid, original_pid);
                     bpf_map_update_elem(&nodes_pid_translator, &pid, &original_pid, BPF_ANY);
                 }
             }
@@ -951,13 +1473,23 @@ int handle_fork(struct trace_event_raw_sched_process_fork *ctx)
 
             if (start_pid){
                 //bpf_printk("EXECUTOR FORK: ADDED PID:%d, PARENT:%d \n",child_pid,start_pid);
-                bpf_map_update_elem(&nodes_pid_translator, &child_pid, &start_pid, BPF_ANY);
+                // see handle_exec's identical fix above - start_pid is already
+                // `int *`, so bpf_map_update_elem needs start_pid itself, not
+                // &start_pid (which wrote the stack address of the pointer
+                // variable, not the origin pid it points to).
+                // TEMPORARY timing instrumentation - see handle_exec's
+                // identical DBGXLAT comment above. Revert after diagnosis.
+                bpf_printk("DBGXLAT: ts=%llu FORK key=%d origin=%d (existing)\n",
+                           bpf_ktime_get_ns(), child_pid, *start_pid);
+                bpf_map_update_elem(&nodes_pid_translator, &child_pid, start_pid, BPF_ANY);
             }
             else{
                 //Temporary fix for all my tests that used exec -a
                 if (original_pid != 0){
                     //bpf_printk("Translated pid, current_pid is %d, old_pid is %d \n",pid,original_pid);
                     //bpf_printk("EXECUTOR FORK: ADDED PID:%d, PARENT:%d \n",child_pid,original_pid);
+                    bpf_printk("DBGXLAT: ts=%llu FORK key=%d origin=%d (fallback)\n",
+                               bpf_ktime_get_ns(), child_pid, original_pid);
                     bpf_map_update_elem(&nodes_pid_translator, &child_pid, &original_pid, BPF_ANY);
                 }
             }

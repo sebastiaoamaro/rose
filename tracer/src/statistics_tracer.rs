@@ -11,7 +11,7 @@ use std::mem::MaybeUninit;
 
 pub fn run_tracing(
     mode: String,
-    functions: Vec<(String, usize)>,
+    functions: Vec<(String, usize, Option<String>)>,
     binary_path: String,
     nodes_info: String,
     network_device: String,

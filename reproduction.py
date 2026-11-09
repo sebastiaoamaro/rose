@@ -1,4 +1,6 @@
+import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -96,35 +98,170 @@ def parse_bug_reproduction(filename: str):
     return bug_reproduction
 
 
-def run_reproduction(schedule: str):
-    command = ["/vagrant/run_schedule.sh", schedule]
+RUN_SCHEDULE_LOG = "/tmp/run_schedule.log"
+
+# Exit codes that mean the executor was killed by a fatal signal (128 + signo):
+# SIGILL 4, SIGABRT 6, SIGBUS 7, SIGFPE 8, SIGSEGV 11 -> 132, 134, 135, 136, 139.
+# 124 is our own sentinel for "run_schedule.sh timed out" (see _run_schedule_once).
+_CRASH_EXIT_CODES = frozenset({124, 132, 134, 135, 136, 139})
+_CRASH_LOG_MARKERS = ("Segmentation fault", "SIGSEGV", "core dumped", "Aborted (core")
+CRASH_RETRY_LIMIT = 3  # -> up to CRASH_RETRY_LIMIT + 1 attempts total
+CRASHED_SCHEDULES_LOG = "/tmp/crashed_schedules.txt"
+# Cap on the post-crash cleanup script (docker compose down + log collection).
+CLEANUP_TIMEOUT = 180
+# Hard cap on a single run_schedule.sh invocation. The schedule itself is bounded
+# by its maximum_time (~180s) plus build + server startup; this is a generous
+# outer bound so a wedged run can't stall the whole sweep forever.
+RUN_SCHEDULE_TIMEOUT = 1200
+
+
+def _kill_process_group(process) -> None:
+    """Best-effort SIGTERM-then-SIGKILL of the session started for run_schedule.sh.
+    A segfaulted executor leaves orphans (etcd, containers) that inherit our fds
+    and would otherwise wedge the next attempt / the output pipe.
+
+    run_schedule.sh's run_main() launches the real work via `sudo -E .../executor`,
+    so `executor` (and the `tracer` it spawns) run as root while staying in this
+    same process group. A plain os.killpg() from this (unprivileged) process can
+    only signal same-UID members - per POSIX semantics it still returns
+    successfully (it reached run_schedule.sh itself) while *silently* failing to
+    touch the root-owned executor/tracer, leaking them indefinitely. `sudo kill`
+    on the group grants the privilege needed to actually reach those too."""
     try:
-        with open("/tmp/run_schedule.log", "w", buffering=1) as file:  # Line buffering
-            with subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,  # Merge stderr into stdout
-                text=True,
-                bufsize=1,
-                errors="replace",
-            ) as process:
-                while True:
-                    line = process.stdout.readline()
-                    if not line:
-                        if process.poll() is not None:
-                            break
-                        continue
-                    file.write(line)
-                if process.returncode != 0:
-                    raise subprocess.CalledProcessError(process.returncode, command)
-    except subprocess.CalledProcessError as e:
-        print(f"  ✗ [run]  exit code {e.returncode}")
-    except Exception as e:
-        print(f"  ✗ [run]  unexpected error: {e}")
+        pgid = os.getpgid(process.pid)
+    except (ProcessLookupError, PermissionError):
+        return
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        subprocess.run(["sudo", "kill", f"-{int(sig)}", f"-{pgid}"], capture_output=True)
+        try:
+            process.wait(timeout=5)
+            break
+        except subprocess.TimeoutExpired:
+            continue
 
 
-def check_oracle(oracle: str, run: str, result_folder: str):
+def _run_schedule_once(schedule: str, timeout: int = RUN_SCHEDULE_TIMEOUT) -> int:
+    """Run /vagrant/run_schedule.sh once, redirecting merged stdout/stderr into
+    RUN_SCHEDULE_LOG (truncated each call), and return the process exit code.
+
+    stdout goes straight to the log file (not through a PIPE we drain by hand):
+    the executor's grandchildren - the etcd server, the r/w containers - inherit
+    the child's stdout, so on a segfault they keep a pipe write-end open and a
+    readline() relay loop blocks on it forever (never EOF, never a new line),
+    which is exactly the "got stuck, never retried" hang. With a real file there
+    is no pipe to keep open, and wait() returns as soon as run_schedule.sh exits.
+
+    The child runs in its own session so its orphans can be killed as a group on
+    timeout or on the way out; a timeout returns 124 (treated as a crash upstream
+    -> retried)."""
+    command = ["/vagrant/run_schedule.sh", schedule]
+    with open(RUN_SCHEDULE_LOG, "w") as file:
+        with subprocess.Popen(
+            command,
+            stdout=file,
+            stderr=subprocess.STDOUT,  # Merge stderr into stdout
+            text=True,
+            errors="replace",
+            start_new_session=True,
+        ) as process:
+            try:
+                process.wait(timeout=timeout)
+                return process.returncode
+            except subprocess.TimeoutExpired:
+                print(f"  ✗ [run]  run_schedule.sh exceeded {timeout}s; killing it")
+                _kill_process_group(process)
+                return 124
+            finally:
+                # Reap whatever the run left behind (a crashed executor's etcd /
+                # containers) so the next attempt starts from a clean box.
+                _kill_process_group(process)
+
+
+def _run_schedule_crashed(returncode: int) -> bool:
+    """True if the last run looks like the executor died on a fatal signal - by
+    exit code, by the run_schedule.sh EXECUTOR_EXIT sentinel, or by a crash
+    marker in RUN_SCHEDULE_LOG (fallback for when the shell exit code is masked)."""
+    if returncode in _CRASH_EXIT_CODES:
+        return True
+    try:
+        with open(RUN_SCHEDULE_LOG, "r", errors="replace") as f:
+            log = f.read()
+    except OSError:
+        return False
+    for line in log.splitlines():
+        if line.startswith("EXECUTOR_EXIT="):
+            try:
+                if int(line.split("=", 1)[1].strip()) in _CRASH_EXIT_CODES:
+                    return True
+            except ValueError:
+                pass
+    return any(marker in log for marker in _CRASH_LOG_MARKERS)
+
+
+def _run_schedule_cleanup(schedule: str) -> None:
+    """Run the schedule's execution_plan.cleanup.script (normally a
+    `docker compose down`). The executor runs this itself on a clean exit
+    (executor.c cleanup: label), but a segfault - or the SIGKILL we send on a
+    timeout - skips it, leaving the cluster containers and their servers running.
+    Best effort: a missing/broken schedule must never block the retry loop."""
+    try:
+        with open(schedule, "r") as f:
+            spec = yaml.safe_load(f) or {}
+        script = (
+            (spec.get("execution_plan") or {}).get("cleanup") or {}
+        ).get("script", "")
+    except (OSError, yaml.YAMLError) as e:
+        print(f"  ✗ [cleanup]  could not read {schedule}: {e}")
+        return
+    if not script:
+        return
+    print(f"  ⟳ [cleanup]  post-crash teardown: {script}")
+    run_cleanup(script, timeout=CLEANUP_TIMEOUT)
+
+
+def run_reproduction(schedule: str, max_crash_retries: int = CRASH_RETRY_LIMIT):
+    for attempt in range(max_crash_retries + 1):
+        try:
+            returncode = _run_schedule_once(schedule)
+        except Exception as e:
+            print(f"  ✗ [run]  unexpected error: {e}")
+            return
+
+        if not _run_schedule_crashed(returncode):
+            if returncode != 0:
+                print(f"  ✗ [run]  exit code {returncode}")
+            return
+
+        # The executor died before its own cleanup: label ran, so its
+        # docker-compose teardown was skipped - do it now so orphaned containers
+        # / servers don't wedge the next attempt (or linger after we give up).
+        _run_schedule_cleanup(schedule)
+
+        if attempt < max_crash_retries:
+            print(
+                f"  ⟳ [run]  executor crashed (exit {returncode}); "
+                f"rerun {attempt + 1}/{max_crash_retries}"
+            )
+            continue
+
+        print(
+            f"  ✗ [run]  executor crashed on every attempt "
+            f"({max_crash_retries + 1}×); giving up: {schedule}"
+        )
+        try:
+            with open(CRASHED_SCHEDULES_LOG, "a") as f:
+                f.write(
+                    f"{time.strftime('%Y-%m-%d %H:%M:%S')}\t{schedule}\trc={returncode}\n"
+                )
+        except OSError:
+            pass
+
+
+def check_oracle(oracle: str, run: str, result_folder: str, name_in_log: bool = True):
+    """`name_in_log=False` leaves the run name out of the clean/failed lines, for
+    callers that already announced the run (the bug banner always names it)."""
     command = ["sudo", oracle, run, result_folder]
+    who = f"{run}: " if name_in_log else ""
 
     buggy_run = False
     try:
@@ -135,18 +272,30 @@ def check_oracle(oracle: str, run: str, result_folder: str):
             text=True,  # Decode output as text
             check=True,  # Raise exception on non-zero exit code
         )
-        print(f"  [oracle]  {result.stdout.strip()}")
         if result.stdout != "\n":
             buggy_run = True
+            # Persist the oracle's own output (the evidence for the bug) next to the
+            # schedule/log files for this run, so it survives after this process exits -
+            # collect_history() already claims "<run>.txt" for the workload trace, so
+            # this uses a distinct suffix to avoid colliding with it.
+            bug_log_path = result_folder + run + ".oracle_log.txt"
+            with open(bug_log_path, "w") as f:
+                f.write(result.stdout)
+            print(f"  [oracle]  BUG CONFIRMED  ->  {run}")
+            print(f"  [oracle]  {result.stdout.strip()}")
+            print(f"  [oracle]  log -> {bug_log_path}")
+        else:
+            print(f"  [oracle]  {who}clean")
     except subprocess.CalledProcessError as e:
-        print(f"  ✗ [oracle]  {e.stderr.strip()}")
+        print(f"  ✗ [oracle]  {who}oracle failed -> {e.stderr.strip()}")
 
     return buggy_run
 
 
-def collect_history(trace_location: str, result_folder: str, run: str):
+def collect_history(trace_location: str, result_folder: str, run: str, announce: bool = True):
     location = result_folder + run + ".txt"
-    print(f"  [collect]  {trace_location}  ->  {location}")
+    if announce:
+        print(f"  [collect]  {trace_location}  ->  {location}")
     command = ["sudo", "mv", trace_location, location]
     try:
         # Start the process
@@ -157,14 +306,18 @@ def collect_history(trace_location: str, result_folder: str, run: str):
     return location
 
 
-def run_cleanup(cleanup: str):
+def run_cleanup(cleanup: str, timeout=None):
     if len(cleanup) == 0:
         return
 
     command = ["sh", cleanup]
     try:
         # Start the process
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            command, capture_output=True, text=True, check=True, timeout=timeout
+        )
+    except subprocess.TimeoutExpired:
+        print(f"  ✗ [cleanup]  timed out after {timeout}s: {cleanup}")
     except subprocess.CalledProcessError as e:
         print(f"  ✗ [cleanup]  {e.stderr.strip()}")
 

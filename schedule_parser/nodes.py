@@ -12,6 +12,12 @@ class Node:
     binary = ""
     leader_symbol = ""
     leader = 0
+    # Optional per-node baseline network latency (not a fault - a permanent
+    # environmental property applied once when the node's container comes
+    # up, via `tc qdisc ... netem` inside its own network namespace). See
+    # apply_node_latency() in executor.c. Default 0 = disabled.
+    latency_ms = 0
+    jitter_ms = 0
 
     def to_yaml(self):
         return {
@@ -88,6 +94,12 @@ def createNode(name, nodeconfig, node_nr):
     if "pid_file" in keys:
         node.pid_file = nodeconfig["pid_file"]
 
+    if "latency_ms" in keys:
+        node.latency_ms = int(nodeconfig["latency_ms"])
+
+    if "jitter_ms" in keys:
+        node.jitter_ms = int(nodeconfig["jitter_ms"])
+
     return node
 
 
@@ -103,7 +115,7 @@ def build_nodes_cfile(file, nodes):
 
     node_nr = 0
     for name, node in nodes.items():
-        build_node = """    create_node(&nodes[#nodenr],"#name",#pid,"#pid_file","#veth","#ip","#script","#env",#container,#container_type,"#binary","#leader_symbol",#leader);\n"""
+        build_node = """    create_node(&nodes[#nodenr],"#name",#pid,"#pid_file","#veth","#ip","#script","#env",#container,#container_type,"#binary","#leader_symbol",#leader,#latency_ms,#jitter_ms);\n"""
         build_node = build_node.replace("#nodenr", str(node_nr))
         build_node = build_node.replace("#name", node.name)
         build_node = build_node.replace("#veth", node.veth)
@@ -117,6 +129,8 @@ def build_nodes_cfile(file, nodes):
         build_node = build_node.replace("#binary", str(node.binary))
         build_node = build_node.replace("#leader_symbol", str(node.leader_symbol))
         build_node = build_node.replace("#leader", str(node.leader))
+        build_node = build_node.replace("#latency_ms", str(node.latency_ms))
+        build_node = build_node.replace("#jitter_ms", str(node.jitter_ms))
 
         file.write(build_node)
         node_nr += 1

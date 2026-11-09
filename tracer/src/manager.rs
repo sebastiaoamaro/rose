@@ -144,7 +144,7 @@ macro_rules! tracer_println {
 
 pub fn start_tracing(
     mode: String,
-    functions: Vec<(String, usize)>,
+    functions: Vec<(String, usize, Option<String>)>,
     binary_path: String,
     nodes_info: String,
     network_device: String,
@@ -245,7 +245,7 @@ pub fn trace_processes(
     skel: &mut SkelEnum,
     hashmap_pid_to_node: &mut HashMap<i32, String>,
     hashmap_links: &mut HashMap<i32, Vec<Link>>,
-    functions: Vec<(String, usize)>,
+    functions: Vec<(String, usize, Option<String>)>,
     binary_path: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut join_handles = vec![];
@@ -309,7 +309,7 @@ pub fn trace_processes_controlled(
     hashmap_pid_to_node: &mut HashMap<i32, String>,
     hashmap_node_to_pid: &mut HashMap<String, i32>,
     hashmap_links: &mut HashMap<i32, Vec<Link>>,
-    functions: Vec<(String, usize)>,
+    functions: Vec<(String, usize, Option<String>)>,
     binary_path: String,
 ) -> Result<()> {
     let mut join_handles = vec![];
@@ -397,7 +397,7 @@ pub fn start_tracing_process(
     pid: i32,
     container_name: String,
     hashmap_links: &mut HashMap<i32, Vec<Link>>,
-    functions: Vec<(String, usize)>,
+    functions: Vec<(String, usize, Option<String>)>,
     binary_path: String,
     skel: &mut SkelEnum,
     rx: Receiver<()>,
@@ -414,11 +414,12 @@ pub fn start_tracing_process(
     join_handles.push(handle);
 
     for (index_function, function) in functions.clone().iter().enumerate() {
+        let path = function.2.clone().unwrap_or_else(|| binary_path.clone());
         skel.attach_uprobe(
             index_function,
             &function.0,
             function.1,
-            binary_path.clone(),
+            path,
             pid,
             hashmap_links,
         );
@@ -429,7 +430,7 @@ pub fn trace_containers(
     skel: &mut SkelEnum<'_, 'static>,
     hashmap_pid_to_node: &mut HashMap<i32, String>,
     mut hashmap_links: &mut HashMap<i32, Vec<Link>>,
-    functions: Vec<(String, usize)>,
+    functions: Vec<(String, usize, Option<String>)>,
     binary_path: String,
 ) -> Result<()> {
     let mut join_handles = vec![];
@@ -471,11 +472,16 @@ pub fn trace_containers(
             let binary_location = format!("{}{}", container_location, binary_path);
             if !probes_attached {
                 for (index_function, function) in functions.clone().iter().enumerate() {
+                    let path = function
+                        .2
+                        .as_ref()
+                        .map(|p| format!("{}{}", container_location, p))
+                        .unwrap_or_else(|| binary_location.clone());
                     skel.attach_uprobe(
                         index_function,
                         &function.0,
                         function.1,
-                        binary_location.clone(),
+                        path,
                         pid,
                         hashmap_links,
                     );
@@ -546,7 +552,7 @@ pub fn trace_containers_controlled(
     hashmap_pid_to_node: &mut HashMap<i32, String>,
     hashmap_node_to_pid: &mut HashMap<String, i32>,
     hashmap_links: &mut HashMap<i32, Vec<Link>>,
-    functions: Vec<(String, usize)>,
+    functions: Vec<(String, usize, Option<String>)>,
     binary_path: String,
 ) -> Result<()> {
     let mut join_handles = vec![];
@@ -605,11 +611,16 @@ pub fn trace_containers_controlled(
                 let binary_location = format!("{}{}", container_location, binary_path);
                 if !probes_attached {
                     for (index_function, function) in functions.clone().iter().enumerate() {
+                        let path = function
+                            .2
+                            .as_ref()
+                            .map(|p| format!("{}{}", container_location, p))
+                            .unwrap_or_else(|| binary_location.clone());
                         skel.attach_uprobe(
                             index_function,
                             &function.0,
                             function.1,
-                            binary_location.clone(),
+                            path,
                             pid,
                             hashmap_links,
                         );
@@ -622,11 +633,16 @@ pub fn trace_containers_controlled(
                 controlled = false;
                 let binary_location = format!("{}{}", container_location, binary_path);
                 for (index_function, function) in functions.clone().iter().enumerate() {
+                    let path = function
+                        .2
+                        .as_ref()
+                        .map(|p| format!("{}{}", container_location, p))
+                        .unwrap_or_else(|| binary_location.clone());
                     skel.attach_uprobe(
                         index_function,
                         &function.0,
                         function.1,
-                        binary_location.clone(),
+                        path,
                         pid,
                         hashmap_links,
                     );
@@ -639,11 +655,16 @@ pub fn trace_containers_controlled(
                 let binary_location = format!("{}{}", container_location, binary_path);
                 if !probes_attached {
                     for (index_function, function) in functions.clone().iter().enumerate() {
+                        let path = function
+                            .2
+                            .as_ref()
+                            .map(|p| format!("{}{}", container_location, p))
+                            .unwrap_or_else(|| binary_location.clone());
                         skel.attach_uprobe(
                             index_function,
                             &function.0,
                             function.1,
-                            binary_location.clone(),
+                            path,
                             pid,
                             hashmap_links,
                         );
@@ -719,7 +740,7 @@ pub fn start_tracing_container(
     container_type: i32,
     container_name: String,
     hashmap_links: &mut HashMap<i32, Vec<Link>>,
-    functions: Vec<(String, usize)>,
+    functions: Vec<(String, usize, Option<String>)>,
     binary_path: String,
     skel: &mut SkelEnum<'_, 'static>,
     rx: Receiver<()>,
@@ -771,7 +792,7 @@ pub fn end_trace(
     history_delays: &libbpf_rs::Map,
     history: &libbpf_rs::Map,
     hashmap_pid_to_node: &mut HashMap<i32, String>,
-    functions: &Vec<(String, usize)>,
+    functions: &Vec<(String, usize, Option<String>)>,
 ) {
     create_pid_tree(pid_tree, hashmap_pid_to_node);
 
@@ -791,8 +812,8 @@ pub fn end_trace(
 
 pub fn bump_memlock_rlimit() -> Result<()> {
     let rlimit = libc::rlimit {
-        rlim_cur: 128 << 20,
-        rlim_max: 128 << 20,
+        rlim_cur: libc::RLIM_INFINITY,
+        rlim_max: libc::RLIM_INFINITY,
     };
 
     if unsafe { libc::setrlimit(libc::RLIMIT_MEMLOCK, &rlimit) } != 0 {
@@ -1137,7 +1158,7 @@ pub fn create_pid_tree(pids: &libbpf_rs::Map, hashmap_pid_to_node: &mut HashMap<
 
 pub fn collect_events(
     called_functions: &libbpf_rs::Map,
-    functions: Vec<(String, usize)>,
+    functions: Vec<(String, usize, Option<String>)>,
     hashmap_pid_to_node: &mut HashMap<i32, String>,
     filenames: &mut HashMap<FdData, Vec<NameAtTimestamp>>,
 ) {
@@ -1218,6 +1239,33 @@ pub fn collect_events(
                             filename,
                         );
                     }
+                    // Short write (arg1 = fd, arg2 = requested, ret = written). Own
+                    // event type + name so trace_analysis.py neither replays it as a
+                    // sys_exit fault nor counts it towards the syscall's own name.
+                    if event.event_type == 6 {
+                        let mut filename = "na".to_string();
+
+                        if SYSCALLS_WITH_FD.contains(&event.id) {
+                            filename = find_filename(event, filenames);
+                        }
+
+                        let pid = event.pid as i32;
+                        let event_name = format!("{}_short", get_syscall_name(event.id));
+                        let node_name = match hashmap_pid_to_node.get(&pid) {
+                            Some(name) => name,
+                            None => {
+                                *unmapped_pids.entry(pid).or_insert(0) += 1;
+                                continue;
+                            }
+                            };
+                        write_event_to_history(
+                            event,
+                            node_name.clone(),
+                            "sys_exit_short".to_string(),
+                            event_name,
+                            filename,
+                        );
+                    }
                     if event.event_type == 3 {
                         let pid = event.pid as i32;
                         let node_name = match hashmap_pid_to_node.get(&pid) {
@@ -1230,7 +1278,7 @@ pub fn collect_events(
                         let event_name = functions.get(event.id as usize);
 
                         let event_name = match event_name {
-                            Some((name, offset)) => &(name.clone(), *offset),
+                            Some((name, offset, _)) => &(name.clone(), *offset),
                             None => &("unknown".to_string(), 0 as usize),
                         };
 
@@ -1268,7 +1316,7 @@ pub fn collect_events(
 
 pub fn process_uprobes_counters_map(
     uprobes_counters_map: &libbpf_rs::Map,
-    functions: &Vec<(String, usize)>,
+    functions: &Vec<(String, usize, Option<String>)>,
 ) {
     let keys = uprobes_counters_map.keys();
 
@@ -1313,7 +1361,7 @@ pub fn process_uprobes_counters_map(
 
 pub fn process_syscall_counters_map(
     syscall_counters_map: &libbpf_rs::Map,
-    functions: &Vec<(String, usize)>,
+    functions: &Vec<(String, usize, Option<String>)>,
 ) {
     let keys = syscall_counters_map.keys();
 
@@ -1872,7 +1920,7 @@ pub fn find_filename(
     return filename;
 }
 
-pub fn parse_file_to_pairs(filename: &str) -> Vec<(String, usize)> {
+pub fn parse_file_to_pairs(filename: &str) -> Vec<(String, usize, Option<String>)> {
     tracer_println!("  [parse]  function pairs from: {}", filename);
     let file = File::open(filename).expect("Failed to open file");
     let reader = io::BufReader::new(file);
@@ -1886,16 +1934,21 @@ pub fn parse_file_to_pairs(filename: &str) -> Vec<(String, usize)> {
                 return None;
             }
             let parts: Vec<&str> = trimmed.split(',').map(|s| s.trim()).collect();
-            // Ensure we have exactly 2 parts
-            if parts.len() != 2 {
+            // Accept 2 fields (name,offset) or 3 (name,offset,binary_path) -
+            // the 3rd field overrides the binary this one function is
+            // traced against, for schedules that uprobe multiple binaries.
+            if parts.len() != 2 && parts.len() != 3 {
                 tracer_println!(
-                    "  ✗ [parse]  invalid format '{}' (expected string,number)",
+                    "  ✗ [parse]  invalid format '{}' (expected name,offset[,binary_path])",
                     trimmed
                 );
                 return None;
             }
             match parts[1].parse::<usize>() {
-                Ok(number) => Some((parts[0].to_string(), number)),
+                Ok(number) => {
+                    let binary_override = parts.get(2).map(|s| s.to_string());
+                    Some((parts[0].to_string(), number, binary_override))
+                }
                 Err(e) => {
                     tracer_println!("  ✗ [parse]  number '{}': {}", parts[1], e);
                     None

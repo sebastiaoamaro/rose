@@ -23,6 +23,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <string.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <bpf/bpf.h>
 #include <dirent.h>
@@ -318,6 +319,91 @@ pid_t get_docker_container_pid(const char *container_name) {
     return pid;
 }
 
+// Returns a malloc'd, newline-stripped full container ID, or NULL on failure.
+// Caller must free().
+char *get_docker_container_id(const char *container_name) {
+    char command[256];
+    snprintf(command, sizeof(command), "sudo docker inspect --format='{{.Id}}' %s", container_name);
+
+    FILE *fp = popen(command, "r");
+    if (fp == NULL) {
+        return NULL;
+    }
+    char output[128];
+    if (fgets(output, sizeof(output), fp) == NULL) {
+        pclose(fp);
+        return NULL;
+    }
+    pclose(fp);
+    output[strcspn(output, "\n")] = '\0';
+    if (output[0] == '\0') {
+        return NULL;
+    }
+    return strdup(output);
+}
+
+// Reads /proc/<container_pid>/cgroup ("0::/some/path" for the cgroup v2
+// unified hierarchy) and returns the absolute host path to that cgroup's
+// directory under /sys/fs/cgroup, malloc'd (caller frees). NULL on failure.
+// Deliberately derived from the container's own real host cgroup rather than
+// assuming any particular slice/scope naming.
+char *get_container_cgroup_dir(pid_t container_pid) {
+    char proc_path[64];
+    snprintf(proc_path, sizeof(proc_path), "/proc/%d/cgroup", container_pid);
+    FILE *f = fopen(proc_path, "r");
+    if (!f) return NULL;
+    char line[512];
+    char *result = NULL;
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "0::", 3) == 0) {
+            char *rel = line + 3;
+            rel[strcspn(rel, "\n")] = '\0';
+            char full[600];
+            snprintf(full, sizeof(full), "/sys/fs/cgroup%s", rel);
+            result = strdup(full);
+            break;
+        }
+    }
+    fclose(f);
+    return result;
+}
+
+// Migrates the calling process into the given container's own cgroup, right
+// before execvp() replaces it - tidb-server/pd-server FATAL-crash reading
+// their own cgroup's memory.max at Go package-init time; nsenter --mount
+// alone does not change cgroup membership (confirmed: without this,
+// tidb-server's crash message shows the EXECUTOR's own host session-scope
+// cgroup path, not the container's - only `docker exec` migrates
+// automatically). Polls briefly for cgroup.procs to become writable (the
+// container's cgroup directory can lag container start by a few ms under
+// load). See build_nsenter_args()'s comment for why this must be paired with
+// nsenter --cgroup to actually work.
+void migrate_self_into_container_cgroup(pid_t container_pid) {
+    if (container_pid <= 0) return;
+    char *dir = get_container_cgroup_dir(container_pid);
+    if (!dir) return;
+    char procs_path[700];
+    snprintf(procs_path, sizeof(procs_path), "%s/cgroup.procs", dir);
+
+    int fd = -1;
+    for (int i = 0; i < 50; i++) {  // 50 * 100ms = 5s
+        fd = open(procs_path, O_WRONLY);
+        if (fd >= 0) break;
+        usleep(100000);
+    }
+    if (fd < 0) {
+        free(dir);
+        return;
+    }
+
+    char pidbuf[16];
+    int len = snprintf(pidbuf, sizeof(pidbuf), "%d", getpid());
+    write(fd, pidbuf, len);
+    close(fd);
+    free(dir);
+}
+
+
 pid_t get_lxc_container_pid(const char *container_name) {
     FILE *fp;
     char command[256];
@@ -577,6 +663,36 @@ char **build_nsenter_args(const char *pid_str,int container_type) {
     }
 
     if (container_type == CONTAINER_TYPE_DOCKER) {
+        // NOTE on cgroups: a bare `nsenter --mount` (without --cgroup) does
+        // NOT change cgroup membership - `docker exec` does that
+        // automatically, this doesn't. A prior fix attempt migrated the
+        // process's real cgroup membership (write PID into the container's
+        // cgroup.procs - see migrate_self_into_container_cgroup() in this
+        // file, called from custom_popen_cgroup() before execvp) but left
+        // nsenter as --mount-only, reasoning `--cgroup` "didn't help" in an
+        // earlier test. That earlier test never combined it with a working
+        // migration, so it never actually diagnosed the real problem: after
+        // `--mount` alone, /sys/fs/cgroup inside the new mount namespace is
+        // ALREADY cgroup-namespace-virtualized to the container's own cgroup
+        // as "/" (baked into the mount at container-creation time) - but
+        // /proc/self/cgroup for a process that only joined the MOUNT
+        // namespace still reports the real, host-absolute path (e.g.
+        // "/docker/<id>"). Go's (and other runtimes') cgroup-v2 self-
+        // detection naively concatenates /sys/fs/cgroup + that reported path
+        // + "/memory.max" - producing a doubled, non-existent path
+        // regardless of how correct the underlying migration is. Confirmed
+        // directly: `nsenter --mount` only, migrated correctly, still
+        // produces ENOENT on the exact doubled path; adding `--cgroup` SO
+        // THE PROCESS ALSO JOINS THE CGROUP NAMESPACE (after migrating, so
+        // real membership already matches that namespace) makes
+        // /proc/self/cgroup correctly report "/", matching what the
+        // already-virtualized mount expects - confirmed working manually
+        // (cat /sys/fs/cgroup/memory.max succeeds) and via a real
+        // run_schedule.sh TiDB run. Migration must still happen (see
+        // custom_popen_cgroup) - `--cgroup` alone, without migration, only
+        // joins the namespace and shows a namespace-relative "../.."
+        // escape path (real membership still outside), which is what the
+        // earlier, unmigrated test actually saw.
         nsenter_args[0] = "nsenter";
         nsenter_args[1] = "--target";
         nsenter_args[2] = (char *)pid_str;
@@ -585,8 +701,9 @@ char **build_nsenter_args(const char *pid_str,int container_type) {
         nsenter_args[5] = "--ipc";
         nsenter_args[6] = "--net";
         nsenter_args[7] = "--pid";
-        nsenter_args[8] = "--";
-        nsenter_args[9] = NULL;
+        nsenter_args[8] = "--cgroup";
+        nsenter_args[9] = "--";
+        nsenter_args[10] = NULL;
     }
     if (container_type == CONTAINER_TYPE_LXC) {
         nsenter_args[0] = "nsenter";
@@ -620,7 +737,7 @@ static void sig_handler(int signum){
     ready = 1;
 }
 
-FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid, int container_process)
+static FILE * custom_popen_impl(char* command, char **args, char **env,char type, pid_t* pid, int container_process, pid_t cgroup_container_pid)
 {
     pid_t child_pid;
     int fd[2];
@@ -655,6 +772,15 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
                 sleep_for_ms(10);
             }
         }
+        if (cgroup_container_pid > 0) {
+            migrate_self_into_container_cgroup(cgroup_container_pid);
+        }
+        // execvp inherits this process's environment, so node `env:` entries
+        // (KEY=VALUE) must be put into it here - they were parsed and passed
+        // down but never applied.
+        for (int i = 0; env != NULL && env[i] != NULL; i++){
+            putenv(env[i]);
+        }
         int err = execvp(command,args);
         if (err < 0)
             printf("COMMAND:%s, Err in execvp: %s (errno=%d)\n", command, strerror(errno), errno);
@@ -679,4 +805,14 @@ FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid
     }
 
     return fdopen(fd[1], "w");
+}
+
+FILE * custom_popen(char* command, char **args, char **env,char type, pid_t* pid, int container_process)
+{
+    return custom_popen_impl(command, args, env, type, pid, container_process, 0);
+}
+
+FILE * custom_popen_cgroup(char* command, char **args, char **env,char type, pid_t* pid, int container_process, pid_t cgroup_container_pid)
+{
+    return custom_popen_impl(command, args, env, type, pid, container_process, cgroup_container_pid);
 }
