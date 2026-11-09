@@ -102,11 +102,10 @@ int main(int,char **argv)
 		sleep(1);
 	}
 
-	struct bpf_tc_opts det_opts = {};
-	det_opts.handle = tc_opts.handle;
-	det_opts.priority = tc_opts.priority;
-
-	det_opts.flags = det_opts.prog_fd = det_opts.prog_id = 0;
+	// DECLARE_LIBBPF_OPTS sets .sz; a plain `= {}` leaves it 0 and libbpf
+	// rejects the detach with -EINVAL ("bpf_tc_opts size (0) is too small").
+	DECLARE_LIBBPF_OPTS(bpf_tc_opts, det_opts,
+		.handle = tc_opts.handle, .priority = tc_opts.priority);
 	err = bpf_tc_detach(&tc_hook, &det_opts);
 	if (err) {
 		fprintf(stderr, "Failed to detach TC: %d\n", err);

@@ -73,6 +73,7 @@ void start_lazyfs_handler(void* args);
 void setup_uprobes();
 void start_lazyfs();
 void start_pre_workload();
+static void terminate_children(void);
 
 const char *argp_program_version = "Tool for FI 0.01";
 const char *argp_program_bug_address = "sebastiao.amaro@ŧecnico.ulisboa.pt";
@@ -270,6 +271,39 @@ int main()
 		}
 	}
 
+	// Ask the TC programs (network_manager) to detach BEFORE both the cleanup
+	// script (which may destroy the containers/interfaces they are attached to,
+	// making the detach fail with ENODEV) and the child sweep (SIGKILL would
+	// give them no chance to run their SIGINT handler, leaving filters/progs on
+	// any interface that outlives the run).
+	{
+		pid_t tc_pids[2 * NODE_COUNT];
+		int tc_count = 0;
+		for(int i =0; i< NODE_COUNT;i++){
+			if(nodes[i].pid_tc_in > 0)  tc_pids[tc_count++] = nodes[i].pid_tc_in;
+			if(nodes[i].pid_tc_out > 0) tc_pids[tc_count++] = nodes[i].pid_tc_out;
+		}
+		for(int i = 0; i < tc_count; i++)
+			kill(tc_pids[i], SIGINT);
+		// network_manager polls its exit flag once per second; allow ~5s.
+		for(int waited = 0; waited < 50 && tc_count > 0; waited++){
+			int remaining = 0;
+			for(int i = 0; i < tc_count; i++){
+				if(tc_pids[i] > 0){
+					pid_t r = waitpid(tc_pids[i], NULL, WNOHANG);
+					if(r == 0) remaining++;
+					else tc_pids[i] = 0; // exited, or not our child anymore
+				}
+			}
+			if(!remaining) break;
+			usleep(100000);
+		}
+		for(int i =0; i< NODE_COUNT;i++){
+			nodes[i].pid_tc_in = 0;
+			nodes[i].pid_tc_out = 0;
+		}
+	}
+
 	printf("SLEEPING: %d, BEFORE CLEANUP\n",plan->cleanup.duration);
 	if(plan->cleanup.duration)
 	    sleep(plan->cleanup.duration);
@@ -336,8 +370,8 @@ int main()
 	if(!rb)
 		ring_buffer__free(rb);
 
-	// printf("REAPING CHILD PROCESSES\n");
-	kill_child_processes(getpid());
+	// Reap whatever direct children are left (node-script wrappers, lazyfs, ...).
+	terminate_children();
 
 	printf("KILLING NODES and TC PROGS\n");
 	for(int i =0; i< NODE_COUNT;i++){
@@ -346,15 +380,6 @@ int main()
 			//kill(nodes[i].current_pid,SIGTERM);
 			waitpid(nodes[i].current_pid,NULL,0);
 			printf("KILLED PID: %d\n",nodes[i].current_pid);
-		}
-
-		if(nodes[i].pid_tc_in > 0){
-			kill(nodes[i].pid_tc_in,SIGINT);
-			//waitpid(nodes[i].pid_tc_in,NULL,0);
-		}
-		if(nodes[i].pid_tc_out > 0){
-			kill(nodes[i].pid_tc_out,SIGINT);
-			//waitpid(nodes[i].pid_tc_in,NULL,0);
 		}
 	}
 
@@ -493,6 +518,21 @@ void get_fd_of_maps (struct aux_bpf *bpf){
 
 
 };
+
+// Stops every direct child of this executor: SIGTERM, wait up to ~3s for them
+// to exit, then SIGKILL stragglers. Scans /proc rather than using stored node
+// pids, which are not reliably direct children (container nodes get their pid
+// overwritten with the real process's host pid). Callers that own children
+// needing a specific signal (the TC network_manager procs want SIGINT so they
+// can detach) must stop those first.
+static void terminate_children(void) {
+	signal_child_processes(getpid(), SIGTERM);
+	for(int waited = 0; waited < 30 && count_live_children(getpid()) > 0; waited++)
+		usleep(100000);
+	if(count_live_children(getpid()) > 0)
+		printf("CHILDREN STILL ALIVE AFTER SIGTERM, SENDING SIGKILL\n");
+	kill_child_processes(getpid());
+}
 
 void run_setup(){
     print_block("SETTING UP EXPERIENCE");

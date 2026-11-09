@@ -30,6 +30,8 @@ void sleep_for_ms(long milliseconds);
 int send_signal(int pid, int signal,char*);
 long get_children_pids(pid_t pid);
 void kill_child_processes(pid_t parent_pid);
+void signal_child_processes(pid_t parent_pid, int sig);
+int count_live_children(pid_t parent_pid);
 void bump_memlock_rlimit(void);
 void bump_file_rlimit(void);
 pid_t find_host_pid_for_container_pid(pid_t target_pid);

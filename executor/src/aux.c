@@ -444,38 +444,56 @@ long get_children_pids(pid_t pid) {
 	return child_pid;
 }
 
-void kill_child_processes(pid_t parent_pid) {
-    DIR *dir;
-    struct dirent *entry;
-    char path[256];
-    FILE *fp;
-    char cmdline[256];
+// Parse state and ppid from /proc/<pid>/stat. comm (field 2) may contain
+// spaces/parens, so parse from after the LAST ')'. Returns 0 on success.
+static int read_proc_state_ppid(pid_t pid, char *state, pid_t *ppid) {
+    char path[64], buf[1024];
+    snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+    FILE *fp = fopen(path, "r");
+    if (!fp) return -1;
+    char *ok = fgets(buf, sizeof(buf), fp);
+    fclose(fp);
+    if (!ok) return -1;
+    char *p = strrchr(buf, ')');
+    if (!p) return -1;
+    return sscanf(p + 1, " %c %d", state, ppid) == 2 ? 0 : -1;
+}
 
-    // Open the /proc directory
-    if ((dir = opendir("/proc")) == NULL) {
+// Calls fn(pid) for every direct child of parent_pid (skips zombies if live_only).
+static int for_each_child(pid_t parent_pid, int sig, int live_only) {
+    DIR *dir = opendir("/proc");
+    if (dir == NULL) {
         perror("opendir");
-        return;
+        return 0;
     }
-
+    int count = 0;
+    struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_type == DT_DIR) {
-            pid_t pid = atoi(entry->d_name);
-            if (pid > 0) {
-                snprintf(path, sizeof(path), "/proc/%d/stat", pid);
-                fp = fopen(path, "r");
-                if (fp) {
-                    pid_t ppid;
-                    fscanf(fp, "%*d %*s %*c %d", &ppid);
-                    fclose(fp);
-
-                    if (ppid == parent_pid) {
-                        kill(pid, SIGKILL);
-                    }
-                }
-            }
-        }
+        if (entry->d_type != DT_DIR) continue;
+        pid_t pid = atoi(entry->d_name);
+        if (pid <= 0) continue;
+        char state; pid_t ppid;
+        if (read_proc_state_ppid(pid, &state, &ppid) != 0 || ppid != parent_pid) continue;
+        if (live_only && state == 'Z') continue;
+        if (sig) kill(pid, sig);
+        count++;
     }
     closedir(dir);
+    return count;
+}
+
+// Send `sig` to every direct child of parent_pid.
+void signal_child_processes(pid_t parent_pid, int sig) {
+    for_each_child(parent_pid, sig, 0);
+}
+
+// Number of direct children of parent_pid that are not zombies (not reaped).
+int count_live_children(pid_t parent_pid) {
+    return for_each_child(parent_pid, 0, 1);
+}
+
+void kill_child_processes(pid_t parent_pid) {
+    signal_child_processes(parent_pid, SIGKILL);
 }
 
 pid_t find_host_pid_for_container_pid(pid_t target_pid) {

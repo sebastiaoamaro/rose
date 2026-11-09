@@ -229,6 +229,12 @@ pub fn start_tracing(
         )
         .expect("Failed to trace processes controlled");
     }
+    // Detach every probe/tracepoint BEFORE snapshotting pid_tree: the pid->node
+    // table is built once from that snapshot, so anything that forks/execs
+    // afterwards (e.g. Redis BGSAVE children while containers are still up)
+    // would produce events for pids the table has never seen.
+    hashmap_links.clear();
+
     skel_enum.end_trace(skel_maps, hashmap_pid_to_node, functions);
 
     Ok(())
@@ -1079,19 +1085,31 @@ pub fn create_pid_tree(pids: &libbpf_rs::Map, hashmap_pid_to_node: &mut HashMap<
             temp_parent = new_parent;
         }
 
-        let node_name = hashmap_pid_to_node
+        let node_name = match hashmap_pid_to_node
             .get(&origin_pid.try_into().unwrap_or(0))
-            .expect(format!("Did not find an origin node for this pid {}", origin_pid).as_str());
+            .cloned()
+        {
+            Some(name) => name,
+            None => {
+                tracer_println!(
+                    "  ⚠ no origin node for pid {} (origin {}), leaving it unmapped",
+                    first_pid,
+                    origin_pid
+                );
+                continue;
+            }
+        };
 
-        hashmap_pid_to_node.insert(first_pid.try_into().unwrap_or(0), node_name.clone());
+        hashmap_pid_to_node.insert(first_pid.try_into().unwrap_or(0), node_name);
     }
 
     let mut origin_pids: Vec<(u32, String)> = vec![];
 
     for (&pid, parent_pid) in &pid_parent_map {
-        let node_name = hashmap_pid_to_node
-            .get(&pid.try_into().unwrap_or(0))
-            .expect(format!("Did not find an origin node for this pid {}", pid).as_str());
+        let node_name = match hashmap_pid_to_node.get(&pid.try_into().unwrap_or(0)) {
+            Some(name) => name,
+            None => continue, // already reported above
+        };
 
         let parent = pid_parent_map.get(&pid);
         match parent {
@@ -1126,6 +1144,10 @@ pub fn collect_events(
     let keys = called_functions.keys();
     //Use later
     let mut history: Vec<&Event> = vec![];
+    // Events whose pid is not in hashmap_pid_to_node (should not happen once the
+    // probes are detached before the pid_tree snapshot, but never lose the whole
+    // history over it): skipped and reported once at the end.
+    let mut unmapped_pids: HashMap<i32, u64> = HashMap::new();
 
     for key in keys {
         let result = called_functions.lookup(&key, MapFlags::ANY);
@@ -1153,9 +1175,13 @@ pub fn collect_events(
                         //tracer_println!("Added sys_enter with ret {}",event.ret);
                         let pid = event.pid as i32;
                         let event_name = get_syscall_name(event.id);
-                        let node_name = hashmap_pid_to_node
-                            .get(&pid)
-                            .expect(&format!("Failed to find node-name for pid {}", event.pid));
+                        let node_name = match hashmap_pid_to_node.get(&pid) {
+                            Some(name) => name,
+                            None => {
+                                *unmapped_pids.entry(pid).or_insert(0) += 1;
+                                continue;
+                            }
+                            };
                         write_event_to_history(
                             event,
                             node_name.clone(),
@@ -1177,9 +1203,13 @@ pub fn collect_events(
 
                         let pid = event.pid as i32;
                         let event_name = get_syscall_name(event.id);
-                        let node_name = hashmap_pid_to_node
-                            .get(&pid)
-                            .expect(&format!("Failed to node-name for pid {}", event.pid));
+                        let node_name = match hashmap_pid_to_node.get(&pid) {
+                            Some(name) => name,
+                            None => {
+                                *unmapped_pids.entry(pid).or_insert(0) += 1;
+                                continue;
+                            }
+                            };
                         write_event_to_history(
                             event,
                             node_name.clone(),
@@ -1190,9 +1220,13 @@ pub fn collect_events(
                     }
                     if event.event_type == 3 {
                         let pid = event.pid as i32;
-                        let node_name = hashmap_pid_to_node
-                            .get(&pid)
-                            .expect(&format!("Failed to node-name for pid {}", event.pid));
+                        let node_name = match hashmap_pid_to_node.get(&pid) {
+                            Some(name) => name,
+                            None => {
+                                *unmapped_pids.entry(pid).or_insert(0) += 1;
+                                continue;
+                            }
+                            };
                         let event_name = functions.get(event.id as usize);
 
                         let event_name = match event_name {
@@ -1217,6 +1251,18 @@ pub fn collect_events(
                 tracer_println!("  ✗ map lookup: {:?}", e);
             }
         }
+    }
+
+    if !unmapped_pids.is_empty() {
+        let total: u64 = unmapped_pids.values().sum();
+        let mut pids: Vec<_> = unmapped_pids.keys().copied().collect();
+        pids.sort();
+        tracer_println!(
+            "  ⚠ skipped {} events from {} pid(s) with no node mapping: {:?}",
+            total,
+            pids.len(),
+            pids
+        );
     }
 }
 
