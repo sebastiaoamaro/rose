@@ -137,14 +137,14 @@ export PATH=/usr/local/bin:$PATH
 
 # --- Kernel module deps + dwarves build ---
 log "Setting up kernel module dependencies..."
-cd /vagrant/executor/kernelmodule
+cd /vagrant/executor/kernel_module
 apt_install -qq libdw1 dwarves elfutils libdw-dev pahole libdwarf-dev
 
 sudo cp /sys/kernel/btf/vmlinux "/usr/lib/modules/$(uname -r)/build/"
 
 log "Building dwarves..."
 cd dwarves
-git config --global --add safe.directory /rose/executor/kernelmodule/dwarves
+git config --global --add safe.directory /vagrant/executor/kernel_module/dwarves
 git submodule update --init --recursive
 mkdir -p build
 cd build

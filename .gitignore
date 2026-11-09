@@ -72,9 +72,11 @@ rose.egg-info
 __pycache__
 rsync.sh
 lazyfs
+!schedules/lazyfs
 rw/jepsen
 schedules/lazy_fs/
 schedules/reproduced_bugs/tendermint/setup/repository
 !schedules/reproduced_bugs/schedules/redisraft/setup/redisraft_binaries/*.so
 !schedules/reproduced_bugs/redpanda/lxc/binaries/redpanda
 auxiliary_scripts/personal
+poster

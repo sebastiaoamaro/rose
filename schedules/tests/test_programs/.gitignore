@@ -1,0 +1,5 @@
+# Compiled test programs (see build.sh) - one binary per same-named .c source.
+*
+!*.c
+!*.sh
+!.gitignore

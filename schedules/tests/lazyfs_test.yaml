@@ -4,7 +4,7 @@ execution_plan:
     script: /toexfi/bug_exploration/redis/setup/start_cluster.sh
     duration: 10
   workload:
-    script: /toexfi/bug_exploration/redis/setup/start_workload_standard.sh
+    script: /toexfi/bug_exploration/redis/setup/start_workload_elle.sh
   cleanup:
     script: /toexfi/bug_exploration/redis/setup/cleanup.sh
   lazyfs:
@@ -42,6 +42,9 @@ faults:
     target: node1
     details:
       operation: torn_seq
+      file: /data/appendonly.aof
+      op: write
+      persist: [1, 4]
     begin_conditions:
       - condition1:
           type: time
@@ -51,6 +54,9 @@ faults:
     target: node1
     details:
       operation: torn_op
+      file: /data/appendonly.aof
+      parts: 4
+      persist: [1, 3]
     begin_conditions:
       - condition1:
           type: time
@@ -69,6 +75,8 @@ faults:
     target: node1
     details:
       operation: crash_fs
+      op: fsync
+      from_rgx: "/data/.*\\.log"
     begin_conditions:
       - condition1:
           type: time

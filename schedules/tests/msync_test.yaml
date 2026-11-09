@@ -1,0 +1,33 @@
+execution_plan:
+  maximum_time: 25
+  setup:
+    script: /vagrant/schedules/tests/test_programs/build.sh
+  cleanup:
+    duration: 5
+  tracer:
+    tracer_location: /vagrant/tracer/target/release/tracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
+
+nodes:
+  msyncer:
+    container: false
+    script: /vagrant/schedules/tests/test_programs/msync_demo
+
+faults:
+  # Exercises get_fault_type_nr()/check_if_syscall_supported() (faults.py) and
+  # the new __x64_sys_msync kprobe (fault_inject.bpf.c): fail the demo's 5th
+  # msync() call (~5s in) with -EIO. msync_demo prints each call's rc/errno,
+  # so a HIT shows up directly as "msync[N] -> rc=-1 errno=5 (Input/output error)".
+  msync_error:
+    type: syscall
+    details:
+      name: msync
+      return_value: -5   # -EIO
+    target: msyncer
+    traced: msyncer
+    occurrences: 1
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 4500

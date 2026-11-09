@@ -3,6 +3,8 @@ set -euo pipefail
 set -x
 
 PART="/dev/sda3"
+DISK="/dev/sda"
+PARTNUM="3"
 LV="/dev/ubuntu-vg/ubuntu-lv"
 
 # Basic checks
@@ -17,11 +19,28 @@ if [[ ! -e "$LV" ]]; then
   exit 1
 fi
 
+for cmd in sgdisk growpart; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "Error: required command not found: $cmd" >&2
+    exit 1
+  fi
+done
+
 echo "Before:"
 sudo pvs || true
 sudo vgs || true
 sudo lvs || true
 df -h / || true
+
+# Growing the underlying virtual disk (e.g. vagrant-disksize) only resizes the disk
+# image itself - it doesn't touch the guest's GPT table or partition sizes, so without
+# these two steps pvresize below finds no extra space to work with and the whole
+# chain silently caps out at whatever the partition's original size was.
+echo "Repairing GPT table on ${DISK} to use the full (possibly grown) disk..."
+sudo sgdisk -e "$DISK"
+
+echo "Growing partition ${PARTNUM} on ${DISK} into any free space..."
+sudo growpart "$DISK" "$PARTNUM"
 
 echo "Resizing LVM PV on ${PART}..."
 sudo pvresize "$PART"

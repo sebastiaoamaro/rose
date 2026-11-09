@@ -8,8 +8,8 @@ silent() { "$@" > /dev/null 2>&1; }
 
 build_module() {
     (cd "$KERNEL_DIR" && make)
-    silent sudo rmmod rose || true
-    silent sudo insmod "$KERNEL_DIR/rose.ko"
+     sudo rmmod rose || true
+     sudo insmod "$KERNEL_DIR/rose.ko"
 }
 
 clean_tmp() {
@@ -37,6 +37,9 @@ if [[ $# -eq 1 ]]; then
     clean_tmp
     build_schedule "$1"
     run_main
+    run_rc=$?
+    echo "EXECUTOR_EXIT=$run_rc"
+    exit "$run_rc"
 fi
 
 # --- Folder mode: run all schedules in a directory ---

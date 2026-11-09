@@ -1,0 +1,127 @@
+execution_plan:
+  maximum_time: 60
+  setup:
+    script: /toexfi/bug_exploration/redis/setup/start_cluster.sh
+    duration: 10
+  workload:
+    script: /toexfi/bug_exploration/redis/setup/start_workload_elle.sh
+  cleanup:
+    script: /toexfi/bug_exploration/redis/setup/cleanup.sh
+  # pre_workload:
+  #   script: /toexfi/bug_exploration/redis/setup/init_cluster.sh
+  tracer:
+    #functions_file: /vagrant/profiler/redis/functions.txt
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: sys_all_trace,container_controlled
+nodes:
+  node1:
+    container: true
+    script: /scripts/start_redis.sh
+    binary: /usr/local/bin/redis-server
+    ip: 172.38.0.11
+  node2:
+    container: true
+    script: /scripts/start_redis.sh
+    binary: /usr/local/bin/redis-server
+    ip: 172.38.0.12
+  node3:
+    container: true
+    script: /scripts/start_redis.sh
+    binary: /usr/local/bin/redis-server
+    ip: 172.38.0.13
+  node4:
+    container: true
+    script: /scripts/start_redis.sh
+    binary: /usr/local/bin/redis-server
+    ip: 172.38.0.14
+  node5:
+    container: true
+    script: /scripts/start_redis.sh
+    binary: /usr/local/bin/redis-server
+    ip: 172.38.0.15
+  node6:
+    container: true
+    script: /scripts/start_redis.sh
+    binary: /usr/local/bin/redis-server
+    ip: 172.38.0.16
+
+faults:
+  fault_a:
+    type: syscall
+    details:
+      name: execve
+      return_value: -5
+    target: node1
+    traced: node1
+    occurrences: 5
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 100
+
+  fault_b:
+    type: syscall
+    details:
+      name: execve
+      return_value: -5
+    target: node2
+    traced: node2
+    occurrences: 5
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 100
+
+  fault_c:
+    type: syscall
+    details:
+      name: execve
+      return_value: -5
+    target: node3
+    traced: node3
+    occurrences: 5
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 100
+
+  fault_d:
+    type: syscall
+    details:
+      name: execve
+      return_value: -5
+    target: node4
+    traced: node4
+    occurrences: 5
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 100
+
+  fault_e:
+    type: syscall
+    details:
+      name: execve
+      return_value: -5
+    target: node5
+    traced: node5
+    occurrences: 5
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 100
+
+  fault_f:
+    type: syscall
+    details:
+      name: execve
+      return_value: -5
+    target: node6
+    traced: node6
+    occurrences: 5
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 100

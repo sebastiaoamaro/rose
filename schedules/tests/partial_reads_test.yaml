@@ -1,0 +1,53 @@
+execution_plan:
+  maximum_time: 60
+  setup:
+    script: /vagrant/schedules/tests/test_programs/build.sh
+  cleanup:
+    duration: 5
+  tracer:
+    tracer_location: /vagrant/tracer/target/release/tracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
+
+nodes:
+  reader:
+    container: false
+    script: /vagrant/schedules/tests/test_programs/partial_read_demo
+
+faults:
+  # Truncates reader's real read() to 16 bytes - a genuine short read, not a
+  # faked return value (see rose.c's read_pre_handler). Buffer beyond byte 16
+  # is left untouched (still the demo's placeholder '?'), unlike
+  # TORN_READ_FAULT (torn_reads_test.yaml) which corrupts within a report of
+  # full success instead of truncating the count. See partial_writes_test.yaml
+  # for the full rationale behind using a user_function uprobe (arms rose.ko
+  # synchronously, in-kernel, via a kfunc call from state_processor.bpf.h's
+  # inject_fault() - no timing-race workaround needed).
+  #
+  # symbol/offset point the uprobe at the *exact instruction* of the real
+  # target read() call: `objdump -dl -M intel partial_read_demo
+  # --disassemble=main` on the compiled binary shows main at file offset
+  # 0x1229 and its `call read@plt` at 0x1396, so offset: 365 (0x16d) lands
+  # the probe precisely there.
+  #
+  # CAUTION: this offset is tied to exactly how gcc -O0 laid out main()'s
+  # stack frame when this was computed (on this dev host, not necessarily the
+  # target VM) - ANY edit to partial_read_demo.c can shift it, regardless of
+  # where in the file the edit is (see partial_writes_test.yaml's longer
+  # explanation of why). Re-run the objdump command above against the binary
+  # actually built by setup.script on the VM you're testing on and update
+  # this offset before trusting it.
+  partial_read:
+    type: partial_read
+    target: reader
+    traced: reader
+    details:
+      count: 16
+    begin_conditions:
+      - condition1:
+          type: user_function
+          binary_location: /vagrant/schedules/tests/test_programs/partial_read_demo
+          symbol: main
+          offset: 365
+          absolute_offset: false
+          call_count: 1

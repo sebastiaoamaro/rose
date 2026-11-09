@@ -1,0 +1,61 @@
+execution_plan:
+  maximum_time: 60
+  setup:
+    script: /vagrant/schedules/tests/test_programs/build.sh
+  cleanup:
+    duration: 5
+  tracer:
+    tracer_location: /vagrant/tracer/target/release/tracer
+    pipe_location: /tmp/containerpid
+    tracing_type: production_trace,process_controlled
+
+nodes:
+  writer:
+    container: false
+    script: /vagrant/schedules/tests/test_programs/partial_write_demo
+
+faults:
+  # Truncates writer's real write() to 16 bytes and corrupts the buffer's
+  # tail (see rose.c's corrupt_write_tail) - a genuine short write, not a
+  # faked return value. Uses a user_function uprobe as the begin_condition
+  # instead of a time/syscall condition: a syscall-based condition can't work
+  # here because rose.ko's own kprobe checks target_pid synchronously,
+  # in-kernel, on the very same syscall the executor uses to notice the
+  # condition is satisfied - so whichever syscall the demo makes to trigger
+  # arming can never be the one that gets corrupted (this no longer needs a
+  # big timing margin, though, since state_processor.bpf.h's inject_fault()
+  # now arms rose.ko via a direct kfunc call - see rose.c's
+  # bpf_rose_arm_partial_write() - instead of an async ring-buffer/userspace
+  # round trip).
+  # symbol/offset point the uprobe at the *exact instruction* of the real
+  # target write() call (not just somewhere inside main): `objdump -dl -M
+  # intel partial_write_demo --disassemble=main` on the compiled binary shows
+  # main at file offset 0x1249 and its `call write@plt` at 0x12fa, so
+  # offset: 177 (0xb1) lands the probe precisely there.
+  #
+  # CAUTION: this offset is tied to exactly how gcc -O0 laid out main()'s
+  # stack frame when this was computed (on this dev host, not necessarily the
+  # target VM) - it has already shifted several times from unrelated edits
+  # (147 -> 177 -> 271 -> 177), each time because a local variable's
+  # addition/removal grew or shrank main()'s whole stack frame (the
+  # `sub rsp, N` in the prologue), which shifts every instruction after it -
+  # including ones declared/added well *after* the write() call in the
+  # source. ANY edit to partial_write_demo.c can shift it again, regardless
+  # of where in the file the edit is. Re-run the objdump command above
+  # against the binary actually built by setup.script on the VM you're
+  # testing on and update this offset before trusting it - never assume it's
+  # still correct after touching the source.
+  partial_write:
+    type: partial_write
+    target: writer
+    traced: writer
+    details:
+      count: 16
+    begin_conditions:
+      - condition1:
+          type: user_function
+          binary_location: /vagrant/schedules/tests/test_programs/partial_write_demo
+          symbol: main
+          offset: 177
+          absolute_offset: false
+          call_count: 1

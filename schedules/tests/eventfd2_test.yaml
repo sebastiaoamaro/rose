@@ -1,0 +1,57 @@
+execution_plan:
+  maximum_time: 60
+  setup:
+    script: /toexfi/bug_exploration/redis/setup/start_cluster.sh
+    duration: 10
+  workload:
+    script: /toexfi/bug_exploration/redis/setup/start_workload_elle.sh
+  cleanup:
+    script: /toexfi/bug_exploration/redis/setup/cleanup.sh
+  tracer:
+    tracer_location: "/vagrant/tracer/target/release/tracer"
+    pipe_location: "/tmp/containerpid"
+    binary_to_examine: "/usr/local/bin/redis-server"
+    tracing_type: sys_all_trace,container_controlled
+nodes:
+  node1:
+    container: true
+    script: /scripts/start_redis.sh
+    binary: /usr/local/bin/redis-server
+    ip: 172.38.0.11
+  node2:
+    container: true
+    script: /scripts/start_redis.sh
+    binary: /usr/local/bin/redis-server
+    ip: 172.38.0.12
+
+faults:
+  # Exercises get_fault_type_nr()/check_if_syscall_supported() (faults.py):
+  # inject a eventfd2() failure directly on a time trigger.
+  fault_a:
+    type: syscall
+    details:
+      name: eventfd2
+      return_value: -24   # -EMFILE
+    target: node1
+    traced: node1
+    occurrences: 5
+    begin_conditions:
+      - condition0:
+          type: time
+          time: 100
+
+  # Exercises get_cond_type_nr() (conditions.py): only fires once node2 has
+  # made 3 eventfd2() calls, instead of on a timer.
+  fault_b:
+    type: syscall
+    details:
+      name: eventfd2
+      return_value: -24   # -EMFILE
+    target: node2
+    traced: node2
+    occurrences: 5
+    begin_conditions:
+      - condition0:
+          type: syscall
+          syscall_name: eventfd2
+          call_count: 3

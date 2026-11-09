@@ -11,12 +11,11 @@ nodes:
 
 faults:
   write_fail:
-    type: file_system_operation
+    type: syscall
     details:
       name: read
-      file_name: snapshot.0
       return_value: -1
-      success: False
+      repeatable: 0
     target: zookeeper
     traced: zookeeper
     begin_conditions:
